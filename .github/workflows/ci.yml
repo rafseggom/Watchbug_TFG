@@ -1,0 +1,56 @@
+name: CI & Code Quality
+
+on:
+  push:
+    branches: [ "main", "develop", "release" ]
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  quality-and-tests:
+    name: Lint, Test & Sonar
+    runs-on: ubuntu-latest 
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: 'pip'
+
+      # 1. Linter
+      - name: Install Ruff
+        run: pip install ruff
+
+      - name: Run Ruff (Linting & Formatting)
+        run: |
+          ruff check .
+          ruff format --check .
+
+      # 2. PRUEBAS UNITARIAS Y COBERTURA
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pytest pytest-cov
+
+      - name: Run tests with Coverage
+        run: pytest --cov=watchbug --cov-report=xml tests/
+
+      # 3. ANÁLISIS DE SONAR
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.python.coverage.reportPaths=coverage.xml
