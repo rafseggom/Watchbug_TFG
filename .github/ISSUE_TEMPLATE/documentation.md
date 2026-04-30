@@ -12,7 +12,7 @@ Detallar el objetivo de la investigación o el apartado específico de la memori
 ### Contexto y Relevancia
 Explicar cómo se integra este trabajo en el documento final o en el marco teórico del proyecto.
 
-### Entregables Esperados
+### Contenido esperado
 - [ ] Lectura y análisis de bibliografía (citar fuentes preliminares si se conocen).
 - [ ] Generación de diagramas técnicos (UML, arquitectura, flujo de datos) si son necesarios.
 - [ ] Redacción del borrador del capítulo/sección correspondiente.
