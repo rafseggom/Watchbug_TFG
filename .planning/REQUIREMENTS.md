@@ -15,12 +15,14 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **SDK-04**: SDK bundle ≤45 KB gzipped — verified in CI with `npm run check:size`
 - [ ] **SDK-05**: All `fetch()` calls use `credentials: 'omit'` — never sends host app cookies/tokens
 - [ ] **SDK-06**: i18n support — widget text available in English and Spanish
+- [ ] **SDK-07**: Lighthouse performance score impact ≤2 points when SDK is injected on a test page
 
 ### Capture Engine
 
 - [ ] **CAP-01**: Screenshot capture via Canvas API — viewport-only, max 1280px width, 500ms timeout
 - [ ] **CAP-02**: Metadata collection — URL, User-Agent, screen resolution, viewport size, timestamp
 - [ ] **CAP-03**: JavaScript console log capture — intercept `console.*` calls with redaction filter for secrets
+- [ ] **CAP-06**: Incident type distinction — Bug reports require consoleLogs, Feedback reports allow sending without consoleLogs
 - [ ] **CAP-04**: Auto-sanitization — mask `input[type=password]`, `data-watchbug-sensitive`, credit card patterns
 - [ ] **CAP-05**: Event batching — queue events in memory with configurable flush interval, graceful degradation
 
@@ -34,6 +36,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [ ] **TRN-01**: HTTP/JSON report payload — image (Base64 PNG) + metadata JSON sent to backend API
 - [ ] **TRN-02**: Payload validation — client-side schema validation before send, retry on network failure
+- [ ] **TRN-04**: Payload schema enforces `consoleLogs` required for type=Bug, optional for type=Feedback (CA-01)
 - [ ] **TRN-03**: Consent API — `Watchbug.setConsent(boolean)` to control capture behavior per host app requirements
 
 ### Backend API
@@ -83,6 +86,13 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **DEP-03**: Named Docker volume — PostgreSQL data persistence, documented `-v` behavior
 - [ ] **DEP-04**: `.env.example` — all required environment variables documented
 - [ ] **DEP-05**: PostgreSQL version pinned — specific minor version to prevent upgrade breakage
+
+### Testing & Verification
+
+- [ ] **TST-01**: Unit tests — coverage on date formatters, canvas pixel matrix manipulation, i18n formatters (`npm run test:unit`)
+- [ ] **TST-02**: Integration tests — strict JSON schema validation of incident payload on `/api/incidents` (`npm run test:integration`)
+- [ ] **TST-03**: E2E tests — inject SDK in HTML with aggressive CSS (`* { display: none !important; }`) and verify widget is functional (`npm run test:e2e`)
+- [ ] **TST-04**: Bundle size check — build fails if SDK exceeds 45 KB gzipped (`npm run check:size`)
 
 ## v2 Requirements
 
@@ -136,17 +146,20 @@ Deferred to future release. Tracked but not in current roadmap.
 | SDK-04 | Phase 1 | Pending |
 | SDK-05 | Phase 1 | Pending |
 | SDK-06 | Phase 1 | Pending |
+| SDK-07 | Phase 1 | Pending |
 | CAP-01 | Phase 1 | Pending |
 | CAP-02 | Phase 1 | Pending |
 | CAP-03 | Phase 1 | Pending |
 | CAP-04 | Phase 1 | Pending |
 | CAP-05 | Phase 1 | Pending |
+| CAP-06 | Phase 1 | Pending |
 | EDT-01 | Phase 1 | Pending |
 | EDT-02 | Phase 1 | Pending |
 | EDT-03 | Phase 1 | Pending |
 | TRN-01 | Phase 1 | Pending |
 | TRN-02 | Phase 1 | Pending |
 | TRN-03 | Phase 1 | Pending |
+| TRN-04 | Phase 2 | Pending |
 | API-01 | Phase 2 | Pending |
 | API-02 | Phase 2 | Pending |
 | API-03 | Phase 2 | Pending |
@@ -177,12 +190,16 @@ Deferred to future release. Tracked but not in current roadmap.
 | DEP-03 | Phase 4 | Pending |
 | DEP-04 | Phase 4 | Pending |
 | DEP-05 | Phase 4 | Pending |
+| TST-01 | Phase 1 | Pending |
+| TST-02 | Phase 2 | Pending |
+| TST-03 | Phase 1 | Pending |
+| TST-04 | Phase 1 | Pending |
 
 **Coverage:**
-- v1 requirements: 47 total
-- Mapped to phases: 47
+- v1 requirements: 55 total
+- Mapped to phases: 55
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-08-29*
-*Last updated: 2026-08-29 after roadmap creation — 47/47 mapped to 4 phases*
+*Last updated: 2026-08-29 — added SDK-07, CAP-06, TRN-04, TST-01..04 to close gaps with mission brief and mentorship pack*

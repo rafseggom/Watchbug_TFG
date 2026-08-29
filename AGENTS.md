@@ -1,6 +1,6 @@
 # Agent Instructions
 
-> **This file is the entry point for any agent working on this project.**  
+> **This file is the entry point for any agent working on this project.**
 > Read it fully once. For detailed governing documents, see the referenced files in `documentation/`.
 
 ---
