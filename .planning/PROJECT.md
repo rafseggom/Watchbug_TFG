@@ -50,7 +50,6 @@ A lightweight, fully isolated widget that captures bugs with full visual context
 
 - **Ecosystem**: Error monitoring space (Sentry, Bugsnag, LogRocket) — Watchbug differentiates on self-hosted + visual feedback + lightweight
 - **Target users**: Developers who want error visibility without sending data to third parties
-- **Technical environment**: Python 3.10 (FastAPI), vanilla JS/TS client SDK, PostgreSQL, Docker
 - **Deployment model**: Single `docker-compose.yml` — zero external service dependencies
 - **Security posture**: GDPR-conscious, no host credential leakage, destructive data masking
 
@@ -59,21 +58,16 @@ A lightweight, fully isolated widget that captures bugs with full visual context
 - **Bundle size**: SDK ≤45 KB gzipped — no heavy dependencies, async load required
 - **Isolation**: Shadow DOM closed mode — zero CSS/JS leakage to/from host app
 - **Self-hosted**: No managed cloud offering — all infra in user's docker-compose
-- **Security**: bcrypt/Argon2 password hashing, JWT short TTL, HttpOnly/SameSite/Secure cookies
-- **Compatibility**: ES2020 target, IIFE+ESM dual format
+- **Security**: Secure password hashing, JWT with short TTL, secure cookies — per mentorship pack
 - **i18n**: English + Spanish from day one
 
 ## Key Decisions
 
+Decisions are made during phase planning and logged here as they are confirmed.
+
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Shadow DOM closed mode | Maximum isolation from host CSS/JS | — Pending |
-| FastAPI backend | Async Python, auto-docs, Pydantic validation | — Pending |
-| PostgreSQL database | Relational integrity for incidents, mature ecosystem | — Pending |
-| Vanilla TS/JS SDK (no framework) | Minimal bundle, maximum compatibility | — Pending |
-| Single docker-compose.yml | One-command deployment, zero external deps | — Pending |
-| Destructive canvas masking | GDPR compliance — pixel alteration before Base64, no CSS overlays | — Pending |
-| PROJECT_KEY (public, write-only) | SDK never needs admin secrets | — Pending |
+| | | |
 
 ## Evolution
 

@@ -101,3 +101,22 @@ Stop autonomous work and request human decision when:
 - DB schema changes / migrations
 - Choosing blob storage (FS vs S3/MinIO vs DB)
 - Adding non-permissive licenses or uncertain GDPR edge cases
+
+---
+
+## Continuity Pack — Write As You Go
+
+When you hit a dead end (rejected library, failed approach, incompatible pattern), **write it down immediately** in `documentation/continuity-pack.md` before trying the next thing.
+
+Format for each dead-end:
+
+```markdown
+### Dead-End: [what you tried]
+- **What**: [library/pattern/approach]
+- **Why rejected**: [specific reason]
+- **Evidence**: [test result, error message, measurement]
+- **Phase**: [which phase]
+- **Date**: [when]
+```
+
+This is your logbook. The next agent (or you after a session reset) reads it to avoid re-exploring failed paths. Without it, context is lost and time is wasted.
