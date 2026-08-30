@@ -1,5 +1,9 @@
 import { createConsoleBuffer, startConsoleCapture, type ConsoleBuffer } from './capture/console';
 import { EventBatcher, type ReportPayload } from './capture/batcher';
+import { sendReport } from './transport/sender';
+import { validatePayload } from './transport/validation';
+import { retrySend } from './transport/retry';
+import { saveDraft, getAllDrafts, removeDraft, getAllDraftsWithKeys } from './transport/draft';
 import './widget/WatchbugWidget';
 
 export type ConsoleEntry = {
@@ -21,6 +25,8 @@ export type WatchbugAPI = {
   setConsent(enabled: boolean): void;
   getConsoleLogs(): ConsoleEntry[];
   submitReport(report: ReportPayload): void;
+  getDrafts(): ReportPayload[];
+  retryDraft(key: string): Promise<{ success: boolean; error?: string }>;
   _initialized: boolean;
 };
 
@@ -30,10 +36,13 @@ let _config: WatchbugConfig | null = null;
 
 // Capture engine state — wired in Plan 02
 let _consoleBufferObj: ConsoleBuffer = createConsoleBuffer(50);
+let _rawBufferAdd: ConsoleBuffer['add'] | null = null;
 let _stopConsoleCapture: (() => void) | null = null;
 let _onErrorHandler: OnErrorEventHandler | null = null;
+let _prevOnError: OnErrorEventHandler | null = null;
 let _captureStarted = false;
 let _batcher: EventBatcher | null = null;
+let _rawBatcherEnqueue: ((report: ReportPayload) => void) | null = null;
 
 export function _getBatcher(): EventBatcher | null {
   return _batcher;
@@ -56,16 +65,19 @@ export function createWatchbug(): WatchbugAPI {
       _config = { ...config };
       _initialized = true;
 
+      const apiUrl = config.apiUrl ?? '';
+      const projectKey = config.key;
+
       // Wire capture engine (idempotent)
       if (!_captureStarted) {
         const size = config.bufferSize ?? 50;
         _consoleBufferObj = createConsoleBuffer(size);
+        _rawBufferAdd = _consoleBufferObj.add.bind(_consoleBufferObj);
         _stopConsoleCapture = startConsoleCapture(_consoleBufferObj);
         // Patch buffer.add to respect consent
-        const origAdd = _consoleBufferObj.add.bind(_consoleBufferObj);
         _consoleBufferObj.add = (entry) => {
           if (!_consentEnabled) return;
-          origAdd(entry);
+          _rawBufferAdd!(entry);
         };
 
         // window.onerror handler per D-04
@@ -85,7 +97,7 @@ export function createWatchbug(): WatchbugAPI {
           });
         };
         if (typeof window !== 'undefined') {
-          const prev = window.onerror;
+          _prevOnError = window.onerror;
           window.onerror = function (
             msg: string | Event,
             src?: string,
@@ -94,9 +106,9 @@ export function createWatchbug(): WatchbugAPI {
             err?: Error,
           ) {
             _onErrorHandler?.(msg, src, line, col, err);
-            if (typeof prev === 'function') {
+            if (typeof _prevOnError === 'function') {
               // @ts-ignore - prev is narrowed to function via typeof check
-              return prev(msg, src, line, col, err);
+              return _prevOnError(msg, src, line, col, err);
             }
             return false;
           } as OnErrorEventHandler;
@@ -104,16 +116,37 @@ export function createWatchbug(): WatchbugAPI {
         _captureStarted = true;
       }
 
-      // Event batcher per D-07 — idempotent
+      // Event batcher per D-07 + TRN-01/02 + D-08 — idempotent
       if (!_batcher) {
-        _batcher = new EventBatcher(
-          async (batch) => {
-            // Placeholder flushFn — Plan 04 will replace with real transport sender
-            // For now, log batch to console (redacted logs already handled)
-            console.log('[Watchbug] flushing batch', batch.length);
-          },
-          { batchSize: 5, flushIntervalMs: 3000 },
-        );
+        const flushFn = async (batch: ReportPayload[]) => {
+          for (const report of batch) {
+            const validation = validatePayload(report as unknown);
+            if (!validation.valid) {
+              console.error('[Watchbug] invalid payload', validation.errors);
+              continue;
+            }
+            const result = await retrySend(() => sendReport(apiUrl, projectKey, report));
+            if (!result.success) {
+              try {
+                saveDraft(report);
+              } catch {}
+            } else {
+              try {
+                if (typeof document !== 'undefined') {
+                  const evt = new CustomEvent('watchbug:toast', { detail: { message: 'Report sent' } });
+                  window.dispatchEvent(evt);
+                }
+              } catch {}
+            }
+          }
+        };
+        _batcher = new EventBatcher(flushFn, { batchSize: 5, flushIntervalMs: 3000 });
+        // Patch enqueue to respect consent per TRN-03
+        _rawBatcherEnqueue = _batcher.enqueue.bind(_batcher);
+        _batcher.enqueue = (report: ReportPayload) => {
+          if (!_consentEnabled) return;
+          _rawBatcherEnqueue!(report);
+        };
         _batcher.start();
       }
 
@@ -136,7 +169,49 @@ export function createWatchbug(): WatchbugAPI {
     },
 
     setConsent(enabled: boolean): void {
-      _consentEnabled = Boolean(enabled);
+      const next = Boolean(enabled);
+      if (next === _consentEnabled) return;
+      _consentEnabled = next;
+      if (!next) {
+        if (_stopConsoleCapture) {
+          try {
+            _stopConsoleCapture();
+          } catch {}
+          _stopConsoleCapture = null;
+        }
+        if (typeof window !== 'undefined' && _onErrorHandler) {
+          try {
+            window.onerror = _prevOnError;
+          } catch {}
+        }
+      } else {
+        if (!_stopConsoleCapture && _rawBufferAdd) {
+          _stopConsoleCapture = startConsoleCapture(_consoleBufferObj);
+          // Re-apply consent-aware patch (ensure _rawBufferAdd is still the unwrapped original)
+          const raw = _rawBufferAdd;
+          _consoleBufferObj.add = (entry) => {
+            if (!_consentEnabled) return;
+            raw(entry);
+          };
+        }
+        if (typeof window !== 'undefined' && _onErrorHandler) {
+          _prevOnError = window.onerror;
+          window.onerror = function (
+            msg: string | Event,
+            src?: string,
+            line?: number,
+            col?: number,
+            err?: Error,
+          ) {
+            _onErrorHandler?.(msg, src, line, col, err);
+            if (typeof _prevOnError === 'function') {
+              // @ts-ignore
+              return _prevOnError(msg, src, line, col, err);
+            }
+            return false;
+          } as OnErrorEventHandler;
+        }
+      }
     },
 
     getConsoleLogs(): ConsoleEntry[] {
@@ -144,17 +219,51 @@ export function createWatchbug(): WatchbugAPI {
     },
 
     submitReport(report: ReportPayload): void {
+      if (!_consentEnabled) return;
       if (!_batcher) {
-        // If init not yet called, create batcher lazily
-        _batcher = new EventBatcher(
-          async (batch) => {
-            console.log('[Watchbug] flushing batch', batch.length);
-          },
-          { batchSize: 5, flushIntervalMs: 3000 },
-        );
+        const cfg = _config;
+        const apiUrl = cfg?.apiUrl ?? '';
+        const projectKey = cfg?.key ?? '';
+        const flushFn = async (batch: ReportPayload[]) => {
+          for (const r of batch) {
+            const v = validatePayload(r as unknown);
+            if (!v.valid) {
+              console.error('[Watchbug] invalid payload', v.errors);
+              continue;
+            }
+            const res = await retrySend(() => sendReport(apiUrl, projectKey, r));
+            if (!res.success) {
+              try { saveDraft(r); } catch {}
+            }
+          }
+        };
+        _batcher = new EventBatcher(flushFn, { batchSize: 5, flushIntervalMs: 3000 });
+        _rawBatcherEnqueue = _batcher.enqueue.bind(_batcher);
+        _batcher.enqueue = (r: ReportPayload) => {
+          if (!_consentEnabled) return;
+          _rawBatcherEnqueue!(r);
+        };
         _batcher.start();
       }
       _batcher.enqueue(report);
+    },
+
+    getDrafts(): ReportPayload[] {
+      return getAllDrafts();
+    },
+
+    async retryDraft(key: string): Promise<{ success: boolean; error?: string }> {
+      const drafts = getAllDraftsWithKeys();
+      const found = drafts.find((d) => d.key === key);
+      if (!found) return { success: false, error: 'draft not found' };
+      const cfg = _config;
+      const apiUrl = cfg?.apiUrl ?? '';
+      const projectKey = cfg?.key ?? '';
+      const result = await retrySend(() => sendReport(apiUrl, projectKey, found.report));
+      if (result.success) {
+        try { removeDraft(key); } catch {}
+      }
+      return result;
     },
   };
 
@@ -190,9 +299,12 @@ export function _resetForTesting(): void {
     } catch {}
     _stopConsoleCapture = null;
   }
-  if (typeof window !== 'undefined' && _onErrorHandler) {
-    window.onerror = null;
+  if (typeof window !== 'undefined') {
+    try {
+      window.onerror = _prevOnError ?? null;
+    } catch {}
     _onErrorHandler = null;
+    _prevOnError = null;
   }
   if (_batcher) {
     try {
@@ -200,8 +312,21 @@ export function _resetForTesting(): void {
     } catch {}
     _batcher = null;
   }
+  _rawBatcherEnqueue = null;
   _captureStarted = false;
   _consoleBufferObj = createConsoleBuffer(50);
+  _rawBufferAdd = _consoleBufferObj.add.bind(_consoleBufferObj);
+  // Clear drafts for test isolation
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const toRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('watchbug_draft_')) toRemove.push(k);
+      }
+      toRemove.forEach((k) => localStorage.removeItem(k));
+    }
+  } catch {}
   const existing = document.querySelector('watchbug-widget');
   if (existing) {
     existing.remove();

@@ -30,8 +30,8 @@ describe('Watchbug SDK entry point', () => {
     const wb = (window as unknown as Record<string, unknown>).Watchbug as Record<string, unknown>;
     expect(wb).toBeDefined();
     const keys = Object.keys(wb).sort();
-    // _initialized is a getter/setter, so it appears as a key; submitReport added in 01-02
-    expect(keys).toEqual(['_initialized', 'getConsoleLogs', 'init', 'setConsent', 'submitReport']);
+    // _initialized is a getter/setter, so it appears as a key; submitReport added in 01-02, getDrafts/retryDraft added in 01-04
+    expect(keys).toEqual(['_initialized', 'getConsoleLogs', 'getDrafts', 'init', 'retryDraft', 'setConsent', 'submitReport']);
   });
 
   it('init() without key throws or returns error', () => {
