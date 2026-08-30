@@ -1,4 +1,5 @@
 import { createConsoleBuffer, startConsoleCapture, type ConsoleBuffer } from './capture/console';
+import { EventBatcher, type ReportPayload } from './capture/batcher';
 import './widget/WatchbugWidget';
 
 export type ConsoleEntry = {
@@ -19,6 +20,7 @@ export type WatchbugAPI = {
   init(config: WatchbugConfig): void;
   setConsent(enabled: boolean): void;
   getConsoleLogs(): ConsoleEntry[];
+  submitReport(report: ReportPayload): void;
   _initialized: boolean;
 };
 
@@ -31,6 +33,11 @@ let _consoleBufferObj: ConsoleBuffer = createConsoleBuffer(50);
 let _stopConsoleCapture: (() => void) | null = null;
 let _onErrorHandler: OnErrorEventHandler | null = null;
 let _captureStarted = false;
+let _batcher: EventBatcher | null = null;
+
+export function _getBatcher(): EventBatcher | null {
+  return _batcher;
+}
 
 export function createWatchbug(): WatchbugAPI {
   const api: WatchbugAPI = {
@@ -88,12 +95,26 @@ export function createWatchbug(): WatchbugAPI {
           ) {
             _onErrorHandler?.(msg, src, line, col, err);
             if (typeof prev === 'function') {
-              return (prev as OnErrorEventHandler)(msg, src, line, col, err);
+              // @ts-ignore - prev is narrowed to function via typeof check
+              return prev(msg, src, line, col, err);
             }
             return false;
           } as OnErrorEventHandler;
         }
         _captureStarted = true;
+      }
+
+      // Event batcher per D-07 — idempotent
+      if (!_batcher) {
+        _batcher = new EventBatcher(
+          async (batch) => {
+            // Placeholder flushFn — Plan 04 will replace with real transport sender
+            // For now, log batch to console (redacted logs already handled)
+            console.log('[Watchbug] flushing batch', batch.length);
+          },
+          { batchSize: 5, flushIntervalMs: 3000 },
+        );
+        _batcher.start();
       }
 
       // Mount widget to document.body — avoid duplicate mounts
@@ -120,6 +141,20 @@ export function createWatchbug(): WatchbugAPI {
 
     getConsoleLogs(): ConsoleEntry[] {
       return _consoleBufferObj.getAll() as ConsoleEntry[];
+    },
+
+    submitReport(report: ReportPayload): void {
+      if (!_batcher) {
+        // If init not yet called, create batcher lazily
+        _batcher = new EventBatcher(
+          async (batch) => {
+            console.log('[Watchbug] flushing batch', batch.length);
+          },
+          { batchSize: 5, flushIntervalMs: 3000 },
+        );
+        _batcher.start();
+      }
+      _batcher.enqueue(report);
     },
   };
 
@@ -158,6 +193,12 @@ export function _resetForTesting(): void {
   if (typeof window !== 'undefined' && _onErrorHandler) {
     window.onerror = null;
     _onErrorHandler = null;
+  }
+  if (_batcher) {
+    try {
+      _batcher.stop();
+    } catch {}
+    _batcher = null;
   }
   _captureStarted = false;
   _consoleBufferObj = createConsoleBuffer(50);

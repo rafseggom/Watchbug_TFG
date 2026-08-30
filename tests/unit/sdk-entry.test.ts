@@ -24,15 +24,14 @@ describe('Watchbug SDK entry point', () => {
     expect(document.body.contains(el)).toBe(true);
   });
 
-  it('window.Watchbug has only init, setConsent, getConsoleLogs, _initialized', async () => {
+  it('window.Watchbug has only init, setConsent, getConsoleLogs, submitReport, _initialized', async () => {
     // Ensure the module's side-effect (window assignment) has run
     await import('../../sdk/src/index');
     const wb = (window as unknown as Record<string, unknown>).Watchbug as Record<string, unknown>;
     expect(wb).toBeDefined();
     const keys = Object.keys(wb).sort();
-    // _initialized is a getter/setter, so it appears as a key
-    // Check that only expected keys exist
-    expect(keys).toEqual(['_initialized', 'getConsoleLogs', 'init', 'setConsent']);
+    // _initialized is a getter/setter, so it appears as a key; submitReport added in 01-02
+    expect(keys).toEqual(['_initialized', 'getConsoleLogs', 'init', 'setConsent', 'submitReport']);
   });
 
   it('init() without key throws or returns error', () => {
