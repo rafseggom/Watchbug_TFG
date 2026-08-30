@@ -8,15 +8,16 @@ export default {
       file: 'dist/watchbug.js',
       format: 'iife',
       name: 'Watchbug',
-      sourcemap: true,
+      sourcemap: false,
       plugins: [terser()],
     },
     {
       file: 'dist/watchbug.esm.js',
-      format: 'esm',
-      sourcemap: true,
+      format: 'es',
+      sourcemap: false,
     },
   ],
+  external: [],
   plugins: [
     typescript({
       tsconfig: './tsconfig.json',
