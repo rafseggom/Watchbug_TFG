@@ -13,7 +13,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **SDK-02**: Widget renders inside Shadow DOM (`mode: 'closed'`) — immune to host CSS/JS interference
 - [x] **SDK-03**: Single global entry point `window.Watchbug` with `init()` method — no prototype pollution
 - [ ] **SDK-04**: SDK bundle ≤45 KB gzipped — verified in CI with `npm run check:size`
-- [ ] **SDK-05**: All `fetch()` calls use `credentials: 'omit'` — never sends host app cookies/tokens
+- [x] **SDK-05**: All `fetch()` calls use `credentials: 'omit'` — never sends host app cookies/tokens
 - [x] **SDK-06**: i18n support — widget text available in English and Spanish
 - [ ] **SDK-07**: Lighthouse performance score impact ≤2 points when SDK is injected on a test page
 
@@ -34,10 +34,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Transport
 
-- [ ] **TRN-01**: HTTP/JSON report payload — image (Base64 PNG) + metadata JSON sent to backend API
-- [ ] **TRN-02**: Payload validation — client-side schema validation before send, retry on network failure
-- [ ] **TRN-04**: Payload schema enforces `consoleLogs` required for type=Bug, optional for type=Feedback (CA-01)
-- [ ] **TRN-03**: Consent API — `Watchbug.setConsent(boolean)` to control capture behavior per host app requirements
+- [x] **TRN-01**: HTTP/JSON report payload — image (Base64 PNG) + metadata JSON sent to backend API
+- [x] **TRN-02**: Payload validation — client-side schema validation before send, retry on network failure
+- [x] **TRN-04**: Payload schema enforces `consoleLogs` required for type=Bug, optional for type=Feedback (CA-01)
+- [x] **TRN-03**: Consent API — `Watchbug.setConsent(boolean)` to control capture behavior per host app requirements
 
 ### Backend API
 
@@ -144,7 +144,7 @@ Deferred to future release. Tracked but not in current roadmap.
 | SDK-02 | Phase 1 | Complete |
 | SDK-03 | Phase 1 | Complete |
 | SDK-04 | Phase 1 | Pending |
-| SDK-05 | Phase 1 | Pending |
+| SDK-05 | Phase 1 | Complete |
 | SDK-06 | Phase 1 | Complete |
 | SDK-07 | Phase 1 | Pending |
 | CAP-01 | Phase 1 | Complete |
@@ -156,10 +156,10 @@ Deferred to future release. Tracked but not in current roadmap.
 | EDT-01 | Phase 1 | Complete |
 | EDT-02 | Phase 1 | Complete |
 | EDT-03 | Phase 1 | Complete |
-| TRN-01 | Phase 1 | Pending |
-| TRN-02 | Phase 1 | Pending |
-| TRN-03 | Phase 1 | Pending |
-| TRN-04 | Phase 1 | Pending |
+| TRN-01 | Phase 1 | Complete |
+| TRN-02 | Phase 1 | Complete |
+| TRN-03 | Phase 1 | Complete |
+| TRN-04 | Phase 1 | Complete |
 | API-01 | Phase 2 | Pending |
 | API-02 | Phase 2 | Pending |
 | API-03 | Phase 2 | Pending |

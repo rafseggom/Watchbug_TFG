@@ -3,16 +3,16 @@ gsd_state_version: 1.0
 current_phase: 01
 current_phase_name: SDK Core
 status: executing
-stopped_at: Completed 01-sdk-core-03-PLAN.md
-last_updated: "2026-08-30T14:55:31.301Z"
+stopped_at: Completed 01-sdk-core-04-PLAN.md
+last_updated: "2026-08-30T17:21:00Z"
 last_activity: 2026-08-30
-last_activity_desc: Phase 01 execution started
-state_head: a406ffabbe455415c65305a1c8e02d3308655dcd
+last_activity_desc: Completed 01-04 transport layer
+state_head: 876f86616b6b0df152a406ffa
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 5
-  completed_plans: 3
+  completed_plans: 4
   percent: 0
 ---
 
@@ -61,6 +61,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01-sdk-core P01 | 17min | 3 tasks | 11 files |
 | Phase 01-sdk-core P02 | 12min | 3 tasks | 10 files |
 | Phase 01-sdk-core P03 | 12min | 3 tasks | 11 files |
+| Phase 01-sdk-core P04 | 14min | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -79,6 +80,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 01]: Add submitReport to WatchbugAPI via EventBatcher - updated sdk-entry keys test
 - [Phase 01]: Canvas editor with 5 tools using per-tool factories and destructive maskRegion via getImageData/putImageData
 - [Phase 01]: Auto-sanitizer masks password, sensitive and credit-card patterns before screenshot encode, integrated in screenshot.ts
+- [Phase 01]: Transport sender with credentials omit, validation TRN-04, retry exponential backoff, draft localStorage, consent via isEnabled, widget submit flow with toast/retry per D-07/D-08/CAP-06
 
 ### Pending Todos
 
@@ -98,6 +100,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-08-30T14:55:31.274Z
-Stopped at: Completed 01-sdk-core-03-PLAN.md
+Last session: 2026-08-30T17:21:00Z
+Stopped at: Completed 01-sdk-core-04-PLAN.md
 Resume file: None

@@ -26,7 +26,7 @@ Watchbug ships as four vertical slices: a client SDK that captures bugs with ful
   4. Canvas editor allows drawing pencil annotations, arrows, and text on the screenshot
   5. Sensitive data (password fields, credit card patterns, `data-watchbug-sensitive` elements) is pixel-masked before Base64 encoding — masking is irreversible
 
-**Plans:** 3/5 plans executed
+**Plans:** 4/5 plans executed
 
 Plans:
 **Wave 1**
@@ -43,7 +43,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 01-04-PLAN.md — Transport layer: HTTP sender, validation, retry, consent API
+- [x] 01-04-PLAN.md — Transport layer: HTTP sender, validation, retry, consent API
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -102,7 +102,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. SDK Core | 3/5 | In Progress|  |
+| 1. SDK Core | 4/5 | In Progress|  |
 | 2. Backend API | 0/TBD | Not started | - |
 | 3. Admin Panel | 0/TBD | Not started | - |
 | 4. Docker Deployment | 0/TBD | Not started | - |
