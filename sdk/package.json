@@ -1,0 +1,26 @@
+{
+  "name": "@watchbug/sdk",
+  "version": "0.1.0",
+  "description": "Watchbug SDK - lightweight visual feedback widget",
+  "type": "module",
+  "main": "dist/watchbug.js",
+  "module": "dist/watchbug.esm.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "rollup -c",
+    "test": "vitest run",
+    "check:size": "node ../scripts/check-size.js"
+  },
+  "keywords": ["watchbug", "sdk", "widget", "bug-reporting"],
+  "license": "MIT",
+  "devDependencies": {
+    "@rollup/plugin-terser": "^0.4.4",
+    "@rollup/plugin-typescript": "^11.1.6",
+    "@types/node": "^22.0.0",
+    "jsdom": "^25.0.0",
+    "rollup": "^4.20.0",
+    "tslib": "^2.8.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  }
+}
