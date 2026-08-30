@@ -107,6 +107,9 @@ export function _resetForTesting(): void {
   }
 }
 
+// Ensure widget is registered (side-effect import) — must be bundled with SDK
+import './widget/WatchbugWidget';
+
 // Assign to window — single global entry point per INV-02
 const watchbugInstance = createWatchbug();
 
