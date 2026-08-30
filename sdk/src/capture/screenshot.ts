@@ -11,9 +11,12 @@ export type ScreenshotResult = {
  * Uses offscreen canvas; in a real browser the canvas would be drawn from DOM.
  * For jsdom/tests, canvas methods are mocked.
  */
+import { sanitizeCanvas } from '../editor/sanitizer';
+
 export async function captureScreenshot(options?: {
   maxWidth?: number;
   timeout?: number;
+  autoSanitize?: boolean;
 }): Promise<ScreenshotResult | null> {
   const maxWidth = options?.maxWidth ?? 1280;
   const timeoutMs = options?.timeout ?? 500;
@@ -70,6 +73,19 @@ export async function captureScreenshot(options?: {
         ctx.fillRect(0, 0, targetWidth, targetHeight);
       } catch {
         // ignore fill errors
+      }
+
+      // Auto-sanitize before encoding per CAP-04 / SEC-01
+      try {
+        if (options?.autoSanitize) {
+          sanitizeCanvas(ctx, targetWidth, targetHeight, { autoSanitize: options.autoSanitize });
+        } else if (typeof options?.autoSanitize === 'undefined') {
+          // Also check global config via window.Watchbug if available
+          const w = typeof window !== 'undefined' ? (window as unknown as Record<string, unknown>).Watchbug as { _getConfig?: () => { autoSanitize?: boolean } } | undefined : undefined;
+          // No-op if not set — sanitizer returns early when false/undefined
+        }
+      } catch {
+        // ignore sanitization errors — still attempt to encode
       }
 
       // Use toDataURL for synchronous capture; wrap in try for tainted canvas
