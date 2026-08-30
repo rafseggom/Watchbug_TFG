@@ -59,7 +59,10 @@ export function createConsoleBuffer(maxEntries: number = 50): ConsoleBuffer {
 
 type ConsoleMethod = 'log' | 'warn' | 'error' | 'info';
 
-export function startConsoleCapture(buffer: ConsoleBuffer): () => void {
+export function startConsoleCapture(
+  buffer: ConsoleBuffer,
+  isEnabled?: () => boolean,
+): () => void {
   const original: Record<ConsoleMethod, typeof console.log> = {
     log: console.log,
     warn: console.warn,
@@ -70,16 +73,20 @@ export function startConsoleCapture(buffer: ConsoleBuffer): () => void {
   const wrap = (level: ConsoleMethod): typeof console.log => {
     return (...args: unknown[]) => {
       try {
-        const message = args
-          .map((arg) => (typeof arg === 'string' ? arg : String(arg)))
-          .join(' ');
-        const redacted = redactSecrets(message);
-        const entry: ConsoleEntry = {
-          level,
-          message: redacted,
-          timestamp: new Date().toISOString(),
-        };
-        buffer.add(entry);
+        if (isEnabled && !isEnabled()) {
+          // Consent disabled — skip buffer but still call original
+        } else {
+          const message = args
+            .map((arg) => (typeof arg === 'string' ? arg : String(arg)))
+            .join(' ');
+          const redacted = redactSecrets(message);
+          const entry: ConsoleEntry = {
+            level,
+            message: redacted,
+            timestamp: new Date().toISOString(),
+          };
+          buffer.add(entry);
+        }
       } catch {
         // never break host app
       }

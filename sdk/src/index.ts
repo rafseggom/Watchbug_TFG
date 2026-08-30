@@ -73,8 +73,8 @@ export function createWatchbug(): WatchbugAPI {
         const size = config.bufferSize ?? 50;
         _consoleBufferObj = createConsoleBuffer(size);
         _rawBufferAdd = _consoleBufferObj.add.bind(_consoleBufferObj);
-        _stopConsoleCapture = startConsoleCapture(_consoleBufferObj);
-        // Patch buffer.add to respect consent
+        _stopConsoleCapture = startConsoleCapture(_consoleBufferObj, () => _consentEnabled);
+        // Patch buffer.add to respect consent for direct calls (onerror, _pushConsoleEntry)
         _consoleBufferObj.add = (entry) => {
           if (!_consentEnabled) return;
           _rawBufferAdd!(entry);
@@ -140,13 +140,11 @@ export function createWatchbug(): WatchbugAPI {
             }
           }
         };
-        _batcher = new EventBatcher(flushFn, { batchSize: 5, flushIntervalMs: 3000 });
-        // Patch enqueue to respect consent per TRN-03
-        _rawBatcherEnqueue = _batcher.enqueue.bind(_batcher);
-        _batcher.enqueue = (report: ReportPayload) => {
-          if (!_consentEnabled) return;
-          _rawBatcherEnqueue!(report);
-        };
+        _batcher = new EventBatcher(flushFn, {
+          batchSize: 5,
+          flushIntervalMs: 3000,
+          isEnabled: () => _consentEnabled,
+        });
         _batcher.start();
       }
 
@@ -164,6 +162,13 @@ export function createWatchbug(): WatchbugAPI {
       if (config.key) {
         el.setAttribute('data-key', config.key);
       }
+      if (apiUrl) {
+        el.setAttribute('data-api-url', apiUrl);
+      }
+      el.setAttribute('data-consent', String(_consentEnabled));
+      if (config.autoSanitize !== undefined) {
+        el.setAttribute('data-auto-sanitize', String(config.autoSanitize));
+      }
 
       document.body.appendChild(el);
     },
@@ -172,6 +177,11 @@ export function createWatchbug(): WatchbugAPI {
       const next = Boolean(enabled);
       if (next === _consentEnabled) return;
       _consentEnabled = next;
+      // Sync widget consent attribute for submit flow
+      try {
+        const w = document.querySelector('watchbug-widget');
+        if (w) w.setAttribute('data-consent', String(next));
+      } catch {}
       if (!next) {
         if (_stopConsoleCapture) {
           try {
@@ -186,8 +196,7 @@ export function createWatchbug(): WatchbugAPI {
         }
       } else {
         if (!_stopConsoleCapture && _rawBufferAdd) {
-          _stopConsoleCapture = startConsoleCapture(_consoleBufferObj);
-          // Re-apply consent-aware patch (ensure _rawBufferAdd is still the unwrapped original)
+          _stopConsoleCapture = startConsoleCapture(_consoleBufferObj, () => _consentEnabled);
           const raw = _rawBufferAdd;
           _consoleBufferObj.add = (entry) => {
             if (!_consentEnabled) return;
@@ -237,12 +246,11 @@ export function createWatchbug(): WatchbugAPI {
             }
           }
         };
-        _batcher = new EventBatcher(flushFn, { batchSize: 5, flushIntervalMs: 3000 });
-        _rawBatcherEnqueue = _batcher.enqueue.bind(_batcher);
-        _batcher.enqueue = (r: ReportPayload) => {
-          if (!_consentEnabled) return;
-          _rawBatcherEnqueue!(r);
-        };
+        _batcher = new EventBatcher(flushFn, {
+          batchSize: 5,
+          flushIntervalMs: 3000,
+          isEnabled: () => _consentEnabled,
+        });
         _batcher.start();
       }
       _batcher.enqueue(report);

@@ -12,6 +12,7 @@ export type ReportPayload = {
 export type BatcherOptions = {
   batchSize?: number;
   flushIntervalMs?: number;
+  isEnabled?: () => boolean;
 };
 
 export class EventBatcher {
@@ -20,14 +21,17 @@ export class EventBatcher {
   private readonly flushFn: (batch: ReportPayload[]) => Promise<void>;
   private readonly batchSize: number;
   private readonly flushIntervalMs: number;
+  private readonly isEnabled?: () => boolean;
 
   constructor(flushFn: (batch: ReportPayload[]) => Promise<void>, options?: BatcherOptions) {
     this.flushFn = flushFn;
     this.batchSize = options?.batchSize ?? 5;
     this.flushIntervalMs = options?.flushIntervalMs ?? 3000;
+    this.isEnabled = options?.isEnabled;
   }
 
   enqueue(report: ReportPayload): void {
+    if (this.isEnabled && !this.isEnabled()) return;
     this.queue.push(report);
     if (this.queue.length >= this.batchSize) {
       void this.flush();
