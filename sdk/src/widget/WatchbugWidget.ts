@@ -1,10 +1,12 @@
 import { WIDGET_CSS } from './styles';
 import { createI18n, type I18nInstance, type SupportedLanguage } from './i18n';
+import { CanvasEditor } from '../editor/CanvasEditor';
 
 export class WatchbugWidget extends HTMLElement {
   private _shadow: ShadowRoot | null = null;
   private _overlay: HTMLElement | null = null;
   private _i18n: I18nInstance = createI18n('en');
+  private _editor: CanvasEditor | null = null;
 
   constructor() {
     super();
@@ -110,16 +112,37 @@ export class WatchbugWidget extends HTMLElement {
 
     this._overlay = overlay;
 
+    const ensureEditor = (): void => {
+      if (this._editor) return;
+      if (!overlay) return;
+      const canvas = shadow.querySelector('#wb-canvas') as HTMLCanvasElement | null;
+      const toolbar = shadow.querySelector('.wb-toolbar') as HTMLElement | null;
+      if (!canvas || !toolbar) return;
+      try {
+        this._editor = new CanvasEditor(canvas, toolbar);
+      } catch {
+        // Canvas context not available in some test envs — keep null
+        this._editor = null;
+      }
+    };
+
     const showOverlay = (): void => {
       if (!overlay) return;
       overlay.hidden = false;
       overlay.setAttribute('aria-hidden', 'false');
+      ensureEditor();
     };
 
     const hideOverlay = (): void => {
       if (!overlay) return;
       overlay.hidden = true;
       overlay.setAttribute('aria-hidden', 'true');
+      if (this._editor) {
+        try {
+          this._editor.destroy();
+        } catch {}
+        this._editor = null;
+      }
     };
 
     reportBtn?.addEventListener('click', showOverlay);
@@ -140,11 +163,28 @@ export class WatchbugWidget extends HTMLElement {
     return this._shadow;
   }
 
+  /** Returns editor instance for testing */
+  _getEditor(): CanvasEditor | null {
+    return this._editor;
+  }
+
   /** Programmatically show overlay (for testing) */
   _showOverlay(): void {
     if (this._overlay) {
       this._overlay.hidden = false;
       this._overlay.setAttribute('aria-hidden', 'false');
+      // Mirror ensureEditor logic for test path
+      if (!this._editor && this._shadow) {
+        const canvas = this._shadow.querySelector('#wb-canvas') as HTMLCanvasElement | null;
+        const toolbar = this._shadow.querySelector('.wb-toolbar') as HTMLElement | null;
+        if (canvas && toolbar) {
+          try {
+            this._editor = new CanvasEditor(canvas, toolbar);
+          } catch {
+            this._editor = null;
+          }
+        }
+      }
     }
   }
 
@@ -153,6 +193,12 @@ export class WatchbugWidget extends HTMLElement {
     if (this._overlay) {
       this._overlay.hidden = true;
       this._overlay.setAttribute('aria-hidden', 'true');
+      if (this._editor) {
+        try {
+          this._editor.destroy();
+        } catch {}
+        this._editor = null;
+      }
     }
   }
 
