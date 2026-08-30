@@ -23,7 +23,14 @@ Watchbug ships as four vertical slices: a client SDK that captures bugs with ful
   3. Developer can trigger a report that captures screenshot (via Canvas API), URL, User-Agent, screen resolution, and console logs
   4. Canvas editor allows drawing pencil annotations, arrows, and text on the screenshot
   5. Sensitive data (password fields, credit card patterns, `data-watchbug-sensitive` elements) is pixel-masked before Base64 encoding — masking is irreversible
-**Plans**: TBD
+**Plans:** 5 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Project scaffold + Shadow DOM widget + i18n foundation
+- [ ] 01-02-PLAN.md — Capture engine: screenshot, metadata, console logs, batching
+- [ ] 01-03-PLAN.md — Canvas editor with drawing tools and destructive pixel masking
+- [ ] 01-04-PLAN.md — Transport layer: HTTP sender, validation, retry, consent API
+- [ ] 01-05-PLAN.md — Build pipeline, bundle size check, E2E tests, final verification
 
 ### Phase 2: Backend API
 **Goal**: Incidents captured by the SDK are securely ingested, stored in PostgreSQL, and retrievable with authenticated access
@@ -69,7 +76,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. SDK Core | 0/TBD | Not started | - |
+| 1. SDK Core | 0/5 | Not started | - |
 | 2. Backend API | 0/TBD | Not started | - |
 | 3. Admin Panel | 0/TBD | Not started | - |
 | 4. Docker Deployment | 0/TBD | Not started | - |
