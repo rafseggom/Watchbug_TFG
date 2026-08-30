@@ -9,12 +9,12 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### SDK Core
 
-- [ ] **SDK-01**: Client SDK injectable via single `<script>` tag, loads async without blocking main thread
-- [ ] **SDK-02**: Widget renders inside Shadow DOM (`mode: 'closed'`) — immune to host CSS/JS interference
-- [ ] **SDK-03**: Single global entry point `window.Watchbug` with `init()` method — no prototype pollution
+- [x] **SDK-01**: Client SDK injectable via single `<script>` tag, loads async without blocking main thread
+- [x] **SDK-02**: Widget renders inside Shadow DOM (`mode: 'closed'`) — immune to host CSS/JS interference
+- [x] **SDK-03**: Single global entry point `window.Watchbug` with `init()` method — no prototype pollution
 - [ ] **SDK-04**: SDK bundle ≤45 KB gzipped — verified in CI with `npm run check:size`
 - [ ] **SDK-05**: All `fetch()` calls use `credentials: 'omit'` — never sends host app cookies/tokens
-- [ ] **SDK-06**: i18n support — widget text available in English and Spanish
+- [x] **SDK-06**: i18n support — widget text available in English and Spanish
 - [ ] **SDK-07**: Lighthouse performance score impact ≤2 points when SDK is injected on a test page
 
 ### Capture Engine
@@ -140,12 +140,12 @@ Deferred to future release. Tracked but not in current roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SDK-01 | Phase 1 | Pending |
-| SDK-02 | Phase 1 | Pending |
-| SDK-03 | Phase 1 | Pending |
+| SDK-01 | Phase 1 | Complete |
+| SDK-02 | Phase 1 | Complete |
+| SDK-03 | Phase 1 | Complete |
 | SDK-04 | Phase 1 | Pending |
 | SDK-05 | Phase 1 | Pending |
-| SDK-06 | Phase 1 | Pending |
+| SDK-06 | Phase 1 | Complete |
 | SDK-07 | Phase 1 | Pending |
 | CAP-01 | Phase 1 | Pending |
 | CAP-02 | Phase 1 | Pending |
@@ -196,6 +196,7 @@ Deferred to future release. Tracked but not in current roadmap.
 | TST-04 | Phase 1 | Pending |
 
 **Coverage:**
+
 - v1 requirements: 55 total
 - Mapped to phases: 55
 - Unmapped: 0 ✓

@@ -3,16 +3,16 @@ gsd_state_version: 1.0
 current_phase: 01
 current_phase_name: SDK Core
 status: executing
-stopped_at: Phase 1 context gathered
-last_updated: "2026-08-30T13:52:30.049Z"
-last_activity: 2026-08-29
-last_activity_desc: Roadmap created
-state_head: 2a64bf35e213780c074486c371870be941dda094
+stopped_at: Completed 01-sdk-core-01-PLAN.md
+last_updated: "2026-08-30T14:30:54.750Z"
+last_activity: 2026-08-30
+last_activity_desc: Phase 01 execution started
+state_head: fb3891db92a29558a56327a4896801aa248865f7
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 5
-  completed_plans: 0
+  completed_plans: 1
   percent: 0
 ---
 
@@ -23,14 +23,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-29)
 
 **Core value:** A lightweight, fully isolated widget that captures bugs with full visual context (screenshot + metadata) without breaking or leaking into the host application.
-**Current focus:** Phase 1 — SDK Core
+**Current focus:** Phase 01 — SDK Core
 
 ## Current Position
 
-Phase: 01 (SDK Core) — READY TO EXECUTE
-Plan: 0 of TBD in current phase
+Phase: 01 (SDK Core) — EXECUTING
+Plan: 2 of 5
 Status: Ready to execute
-Last activity: 2026-08-29 — Roadmap created
+Last activity: 2026-08-30 — Phase 01 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -54,6 +54,11 @@ Progress: [░░░░░░░░░░] 0%
 - Trend: -
 
 *Updated after each plan completion*
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 01-sdk-core P01 | 17min | 3 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -63,6 +68,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 - [Roadmap]: 4-phase structure — SDK → Backend → Panel → Docker — each phase delivers vertical slice
 - [Roadmap]: Phase 1 tackles hardest risks first (Shadow DOM isolation, bundle size, destructive masking)
+- [Phase 01]: Use closed Shadow DOM with connectedCallback for ARIA to avoid jsdom constructor attribute error
+- [Phase 01]: Root package.json required for vitest at project root alongside sdk/package.json
+- [Phase 01]: Widget bundled via side-effect import in entry point to ensure customElements registration
 
 ### Pending Todos
 
@@ -82,6 +90,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-08-30T02:17:12.693Z
-Stopped at: Phase 1 context gathered
-Resume file: E:/Proyectos Github/Watchbug_TFG/.planning/phases/01-sdk-core/01-CONTEXT.md
+Last session: 2026-08-30T14:30:54.728Z
+Stopped at: Completed 01-sdk-core-01-PLAN.md
+Resume file: None
