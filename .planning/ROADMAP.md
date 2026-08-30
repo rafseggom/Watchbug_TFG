@@ -6,7 +6,7 @@ Watchbug ships as four vertical slices: a client SDK that captures bugs with ful
 
 ## Phases
 
-- [ ] **Phase 1: SDK Core** - Client widget with Shadow DOM isolation, capture engine, canvas editor, and transport
+- [x] **Phase 1: SDK Core** - Client widget with Shadow DOM isolation, capture engine, canvas editor, and transport
 - [ ] **Phase 2: Backend API** - FastAPI ingestion, PostgreSQL storage, JWT auth, and security hardening
 - [ ] **Phase 3: Admin Panel** - Static SPA for incident listing, filtering, detail view, and status management
 - [ ] **Phase 4: Docker Deployment** - Single docker-compose.yml with multi-stage build and data persistence
@@ -102,7 +102,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. SDK Core | 5/5 | In Progress|  |
+| 1. SDK Core | 5/5 | Complete | 2026-08-30 |
 | 2. Backend API | 0/TBD | Not started | - |
 | 3. Admin Panel | 0/TBD | Not started | - |
 | 4. Docker Deployment | 0/TBD | Not started | - |
