@@ -16,7 +16,7 @@ Watchbug ships as four vertical slices: a client SDK that captures bugs with ful
 ### Phase 1: SDK Core
 **Goal**: Developers can inject a single script tag and capture bugs with screenshots, metadata, and console logs — fully isolated from the host application
 **Depends on**: Nothing (first phase)
-**Requirements**: SDK-01, SDK-02, SDK-03, SDK-04, SDK-05, SDK-06, CAP-01, CAP-02, CAP-03, CAP-04, CAP-05, EDT-01, EDT-02, EDT-03, TRN-01, TRN-02, TRN-03
+**Requirements**: SDK-01, SDK-02, SDK-03, SDK-04, SDK-05, SDK-06, SDK-07, CAP-01, CAP-02, CAP-03, CAP-04, CAP-05, CAP-06, EDT-01, EDT-02, EDT-03, TRN-01, TRN-02, TRN-03, TRN-04
 **Success Criteria** (what must be TRUE):
   1. Developer can add `<script>` tag and call `window.Watchbug.init()` — widget loads asynchronously without blocking the host page
   2. Widget renders inside Shadow DOM (`mode: 'closed'`) — host CSS cannot break widget styling, host JS cannot access widget internals

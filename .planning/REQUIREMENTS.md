@@ -159,7 +159,7 @@ Deferred to future release. Tracked but not in current roadmap.
 | TRN-01 | Phase 1 | Pending |
 | TRN-02 | Phase 1 | Pending |
 | TRN-03 | Phase 1 | Pending |
-| TRN-04 | Phase 2 | Pending |
+| TRN-04 | Phase 1 | Pending |
 | API-01 | Phase 2 | Pending |
 | API-02 | Phase 2 | Pending |
 | API-03 | Phase 2 | Pending |
