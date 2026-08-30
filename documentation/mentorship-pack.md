@@ -81,11 +81,36 @@ Todo desarrollo producido por el agente debe ser acompañado por baterías de pr
 ## 5. Operational Guardrails & Consultation Protocol
 
 ### 5.1 Protocolo de Registro de Caminos Sin Salida (Dead-Ends)
-El agente debe documentar en el **Continuity Pack** (`dead-ends`) cualquier enfoque técnico descartado durante la ejecución, incluyendo:
+
+**Regla de ejecución:** Después de cada intento fallido, **antes** de intentar la siguiente cosa, escribir al continuity-pack. No esperar al final de la tarea. No agrupar varios dead-ends en un solo momento. Cada dead-end se registra inmediatamente tras el fracaso.
+
+**Trigger concreto (el agente DEBE ejecutar esto):**
+```
+Si algo falla o se descarta:
+1. Documentar en documentation/continuity-pack.md (formato más abajo)
+2. Luego sí, continuar con el siguiente intento
+```
+
+**Formato por cada dead-end:**
+```markdown
+### Dead-End: [qué intentaste]
+- **What**: [librería/patrón/enfoque probado]
+- **Why rejected**: [razón específica — no "no funcionó", sino POR QUÉ]
+- **Evidence**: [test result, error message, measurement]
+- **Phase**: [fase número]
+- **Date**: [fecha ISO]
+```
+
+**Qué documentar (incluyendo pero no limitado a):**
 1. **Librerías/Dependencias evaluadas y rechazadas:** (Nombre, versión, motivo de rechazo: peso, licencia, falta de mantenimiento).
 2. **Algoritmos o patrones de código ineficientes:** (Pruebas de rendimiento fallidas, bloqueo del hilo principal, alta latencia).
 3. **Fallos de Aislamiento o Compatibilidad:** (Técnicas CSS/JS que no funcionaron en navegadores específicos o dentro del Shadow DOM).
 4. **Pruebas de infraestructura fallidas:** (Configuraciones de BD, Docker o red que generaron errores de concurrencia o persistencia).
+5. **Cualquier cambio de dirección técnica** que un agente futuro podría querer evitar repetir.
+
+**Ubicación del archivo:** `documentation/continuity-pack.md` (relativo a la raíz del proyecto).
+
+**Anti-patrón:** NOdocumentar dead-ends al final de la ejecución de una tarea. El contexto se pierde, los detalles se olvidan, y el siguiente agente repite el mismo error.
 
 ### 5.2 Disparadores de Consulta Obligatoria (Consultation Triggers)
 El agente **debe pausar la ejecución autónoma** y generar un **Consultation Request Pack** cuando detecte cualquiera de los siguientes escenarios:

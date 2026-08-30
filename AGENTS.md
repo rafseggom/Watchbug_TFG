@@ -108,15 +108,23 @@ Stop autonomous work and request human decision when:
 
 When you hit a dead end (rejected library, failed approach, incompatible pattern), **write it down immediately** in `documentation/continuity-pack.md` before trying the next thing.
 
+**Timing rule:** AFTER the failure, BEFORE the next attempt. Not at the end of the task. Not batched. Each dead-end is a separate entry written in the moment.
+
+**Executor-specific:** This applies to the gsd-executor agent during task execution. The executor has this as a hard constraint in its agent definition. If the executor encounters a failed approach (e.g., a library that doesn't work, a pattern that breaks Shadow DOM isolation, a test that consistently fails), it MUST:
+1. Write the dead-end to `documentation/continuity-pack.md`
+2. Then continue with the next approach
+
 Format for each dead-end:
 
 ```markdown
 ### Dead-End: [what you tried]
 - **What**: [library/pattern/approach]
-- **Why rejected**: [specific reason]
+- **Why rejected**: [specific reason — not "it didn't work", but WHY]
 - **Evidence**: [test result, error message, measurement]
 - **Phase**: [which phase]
 - **Date**: [when]
 ```
 
 This is your logbook. The next agent (or you after a session reset) reads it to avoid re-exploring failed paths. Without it, context is lost and time is wasted.
+
+**File location:** `documentation/continuity-pack.md` (relative to project root).
