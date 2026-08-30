@@ -23,14 +23,14 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **CAP-02**: Metadata collection — URL, User-Agent, screen resolution, viewport size, timestamp
 - [x] **CAP-03**: JavaScript console log capture — intercept `console.*` calls with redaction filter for secrets
 - [x] **CAP-06**: Incident type distinction — Bug reports require consoleLogs, Feedback reports allow sending without consoleLogs
-- [ ] **CAP-04**: Auto-sanitization — mask `input[type=password]`, `data-watchbug-sensitive`, credit card patterns
+- [x] **CAP-04**: Auto-sanitization — mask `input[type=password]`, `data-watchbug-sensitive`, credit card patterns
 - [x] **CAP-05**: Event batching — queue events in memory with configurable flush interval, graceful degradation
 
 ### Canvas Editor
 
-- [ ] **EDT-01**: Drawing tools — pencil (freehand), arrows, text annotations
-- [ ] **EDT-02**: Destructive pixel masking — `getImageData()` → modify `Uint8ClampedArray` → `putImageData()` before Base64
-- [ ] **EDT-03**: Masking is irreversible — no CSS overlays, pixels permanently altered in canvas before encoding
+- [x] **EDT-01**: Drawing tools — pencil (freehand), arrows, text annotations
+- [x] **EDT-02**: Destructive pixel masking — `getImageData()` → modify `Uint8ClampedArray` → `putImageData()` before Base64
+- [x] **EDT-03**: Masking is irreversible — no CSS overlays, pixels permanently altered in canvas before encoding
 
 ### Transport
 
@@ -150,12 +150,12 @@ Deferred to future release. Tracked but not in current roadmap.
 | CAP-01 | Phase 1 | Complete |
 | CAP-02 | Phase 1 | Complete |
 | CAP-03 | Phase 1 | Complete |
-| CAP-04 | Phase 1 | Pending |
+| CAP-04 | Phase 1 | Complete |
 | CAP-05 | Phase 1 | Complete |
 | CAP-06 | Phase 1 | Complete |
-| EDT-01 | Phase 1 | Pending |
-| EDT-02 | Phase 1 | Pending |
-| EDT-03 | Phase 1 | Pending |
+| EDT-01 | Phase 1 | Complete |
+| EDT-02 | Phase 1 | Complete |
+| EDT-03 | Phase 1 | Complete |
 | TRN-01 | Phase 1 | Pending |
 | TRN-02 | Phase 1 | Pending |
 | TRN-03 | Phase 1 | Pending |
