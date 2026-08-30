@@ -19,12 +19,12 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Capture Engine
 
-- [ ] **CAP-01**: Screenshot capture via Canvas API — viewport-only, max 1280px width, 500ms timeout
-- [ ] **CAP-02**: Metadata collection — URL, User-Agent, screen resolution, viewport size, timestamp
-- [ ] **CAP-03**: JavaScript console log capture — intercept `console.*` calls with redaction filter for secrets
-- [ ] **CAP-06**: Incident type distinction — Bug reports require consoleLogs, Feedback reports allow sending without consoleLogs
+- [x] **CAP-01**: Screenshot capture via Canvas API — viewport-only, max 1280px width, 500ms timeout
+- [x] **CAP-02**: Metadata collection — URL, User-Agent, screen resolution, viewport size, timestamp
+- [x] **CAP-03**: JavaScript console log capture — intercept `console.*` calls with redaction filter for secrets
+- [x] **CAP-06**: Incident type distinction — Bug reports require consoleLogs, Feedback reports allow sending without consoleLogs
 - [ ] **CAP-04**: Auto-sanitization — mask `input[type=password]`, `data-watchbug-sensitive`, credit card patterns
-- [ ] **CAP-05**: Event batching — queue events in memory with configurable flush interval, graceful degradation
+- [x] **CAP-05**: Event batching — queue events in memory with configurable flush interval, graceful degradation
 
 ### Canvas Editor
 
@@ -147,12 +147,12 @@ Deferred to future release. Tracked but not in current roadmap.
 | SDK-05 | Phase 1 | Pending |
 | SDK-06 | Phase 1 | Complete |
 | SDK-07 | Phase 1 | Pending |
-| CAP-01 | Phase 1 | Pending |
-| CAP-02 | Phase 1 | Pending |
-| CAP-03 | Phase 1 | Pending |
+| CAP-01 | Phase 1 | Complete |
+| CAP-02 | Phase 1 | Complete |
+| CAP-03 | Phase 1 | Complete |
 | CAP-04 | Phase 1 | Pending |
-| CAP-05 | Phase 1 | Pending |
-| CAP-06 | Phase 1 | Pending |
+| CAP-05 | Phase 1 | Complete |
+| CAP-06 | Phase 1 | Complete |
 | EDT-01 | Phase 1 | Pending |
 | EDT-02 | Phase 1 | Pending |
 | EDT-03 | Phase 1 | Pending |
