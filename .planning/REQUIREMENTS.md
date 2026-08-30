@@ -12,10 +12,10 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **SDK-01**: Client SDK injectable via single `<script>` tag, loads async without blocking main thread
 - [x] **SDK-02**: Widget renders inside Shadow DOM (`mode: 'closed'`) — immune to host CSS/JS interference
 - [x] **SDK-03**: Single global entry point `window.Watchbug` with `init()` method — no prototype pollution
-- [ ] **SDK-04**: SDK bundle ≤45 KB gzipped — verified in CI with `npm run check:size`
+- [x] **SDK-04**: SDK bundle ≤45 KB gzipped — verified in CI with `npm run check:size`
 - [x] **SDK-05**: All `fetch()` calls use `credentials: 'omit'` — never sends host app cookies/tokens
 - [x] **SDK-06**: i18n support — widget text available in English and Spanish
-- [ ] **SDK-07**: Lighthouse performance score impact ≤2 points when SDK is injected on a test page
+- [x] **SDK-07**: Lighthouse performance score impact ≤2 points when SDK is injected on a test page
 
 ### Capture Engine
 
@@ -89,10 +89,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Testing & Verification
 
-- [ ] **TST-01**: Unit tests — coverage on date formatters, canvas pixel matrix manipulation, i18n formatters (`npm run test:unit`)
+- [x] **TST-01**: Unit tests — coverage on date formatters, canvas pixel matrix manipulation, i18n formatters (`npm run test:unit`)
 - [ ] **TST-02**: Integration tests — strict JSON schema validation of incident payload on `/api/incidents` (`npm run test:integration`)
-- [ ] **TST-03**: E2E tests — inject SDK in HTML with aggressive CSS (`* { display: none !important; }`) and verify widget is functional (`npm run test:e2e`)
-- [ ] **TST-04**: Bundle size check — build fails if SDK exceeds 45 KB gzipped (`npm run check:size`)
+- [x] **TST-03**: E2E tests — inject SDK in HTML with aggressive CSS (`* { display: none !important; }`) and verify widget is functional (`npm run test:e2e`)
+- [x] **TST-04**: Bundle size check — build fails if SDK exceeds 45 KB gzipped (`npm run check:size`)
 
 ## v2 Requirements
 
@@ -143,10 +143,10 @@ Deferred to future release. Tracked but not in current roadmap.
 | SDK-01 | Phase 1 | Complete |
 | SDK-02 | Phase 1 | Complete |
 | SDK-03 | Phase 1 | Complete |
-| SDK-04 | Phase 1 | Pending |
+| SDK-04 | Phase 1 | Complete |
 | SDK-05 | Phase 1 | Complete |
 | SDK-06 | Phase 1 | Complete |
-| SDK-07 | Phase 1 | Pending |
+| SDK-07 | Phase 1 | Complete |
 | CAP-01 | Phase 1 | Complete |
 | CAP-02 | Phase 1 | Complete |
 | CAP-03 | Phase 1 | Complete |
@@ -190,10 +190,10 @@ Deferred to future release. Tracked but not in current roadmap.
 | DEP-03 | Phase 4 | Pending |
 | DEP-04 | Phase 4 | Pending |
 | DEP-05 | Phase 4 | Pending |
-| TST-01 | Phase 1 | Pending |
+| TST-01 | Phase 1 | Complete |
 | TST-02 | Phase 2 | Pending |
-| TST-03 | Phase 1 | Pending |
-| TST-04 | Phase 1 | Pending |
+| TST-03 | Phase 1 | Complete |
+| TST-04 | Phase 1 | Complete |
 
 **Coverage:**
 

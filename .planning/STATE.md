@@ -3,16 +3,16 @@ gsd_state_version: 1.0
 current_phase: 01
 current_phase_name: SDK Core
 status: executing
-stopped_at: Completed 01-sdk-core-04-PLAN.md
-last_updated: "2026-08-30T17:21:00Z"
+stopped_at: Completed 01-05-PLAN.md
+last_updated: "2026-08-30T15:41:54.182Z"
 last_activity: 2026-08-30
 last_activity_desc: Completed 01-04 transport layer
-state_head: 876f86616b6b0df152a406ffa
+state_head: 4355eec34f80d555ba72a65380d1c8af5836aa1e
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 5
-  completed_plans: 4
+  completed_plans: 5
   percent: 0
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 ## Current Position
 
 Phase: 01 (SDK Core) — EXECUTING
-Plan: 4 of 5
+Plan: 5 of 5
 Status: Ready to execute
 Last activity: 2026-08-30 — Phase 01 execution started
 
@@ -62,6 +62,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01-sdk-core P02 | 12min | 3 tasks | 10 files |
 | Phase 01-sdk-core P03 | 12min | 3 tasks | 11 files |
 | Phase 01-sdk-core P04 | 14min | 2 tasks | 10 files |
+| Phase 01 P05 | 8 min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -81,6 +82,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 01]: Canvas editor with 5 tools using per-tool factories and destructive maskRegion via getImageData/putImageData
 - [Phase 01]: Auto-sanitizer masks password, sensitive and credit-card patterns before screenshot encode, integrated in screenshot.ts
 - [Phase 01]: Transport sender with credentials omit, validation TRN-04, retry exponential backoff, draft localStorage, consent via isEnabled, widget submit flow with toast/retry per D-07/D-08/CAP-06
+- [Phase 01]: Plan 01-05: Finalized Rollup IIFE build with terser (8.85KB gzipped), bundle size gate check-size.js, E2E isolation tests proving Shadow DOM with aggressive CSS
 
 ### Pending Todos
 
@@ -100,6 +102,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-08-30T17:21:00Z
-Stopped at: Completed 01-sdk-core-04-PLAN.md
+Last session: 2026-08-30T15:41:54.158Z
+Stopped at: Completed 01-05-PLAN.md
 Resume file: None
