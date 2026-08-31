@@ -62,7 +62,20 @@ Plans:
   4. Status can be updated via `PATCH /api/incidents/:id/status` (Pending → In Progress → Resolved)
   5. Unauthenticated requests to protected endpoints return 401; CORS blocks unauthorized origins; rate limiting prevents abuse on `/api/incidents`
 
-**Plans**: TBD
+**Plans:** 4 plans
+
+Plans:
+**Wave 1**
+- [ ] 02-01-PLAN.md — Tracer scaffold + lifespan + health + DB + minimal ingest (proves BYTEA persistence)
+
+**Wave 2** *(blocked on Wave 1)*
+- [ ] 02-02-PLAN.md — JWT HttpOnly auth (bcrypt HS256, seeded admin, login/refresh/logout, protected wiring)
+
+**Wave 3** *(blocked on Wave 2)*
+- [ ] 02-03-PLAN.md — Ingest hardening: XSS sanitize, 100KB guard, split CORS, rate limiting per IP+key
+
+**Wave 4** *(blocked on Wave 3)*
+- [ ] 02-04-PLAN.md — Retrieval + status: paginated filtered GET, PATCH Any→Any, detail BYTEA re-encode, docs gating
 
 ### Phase 3: Admin Panel
 
