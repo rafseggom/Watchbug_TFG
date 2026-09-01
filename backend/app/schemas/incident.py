@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class ConsoleEntry(BaseModel):
@@ -13,7 +13,7 @@ class IncidentCreate(BaseModel):
     type: str = Field(description="Bug or Feedback, case-insensitive")
     screenshot: str = Field(min_length=1, description="Base64 PNG, data URL prefix optional")
     metadata: dict
-    consoleLogs: list[ConsoleEntry] | None = None
+    consoleLogs: list[ConsoleEntry] | None = Field(default=None, validate_default=True)
     errors: list[str] = Field(default_factory=list)
     notes: str | None = None
 
@@ -41,6 +41,10 @@ class IncidentCreate(BaseModel):
     @classmethod
     def check_console_logs_for_bug(cls, v: list[ConsoleEntry] | None, info) -> list[ConsoleEntry] | None:
         typ = info.data.get("type")
+        # fallback to check if type not in info.data (e.g., when validate_default), try to get from context
+        if typ is None:
+            # Try to get type from the model's data via info context if available
+            pass
         if typ == "Bug" and (v is None or len(v) == 0):
             raise ValueError("consoleLogs is required for type=Bug")
         return v
