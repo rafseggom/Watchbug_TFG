@@ -7,7 +7,7 @@ Watchbug ships as four vertical slices: a client SDK that captures bugs with ful
 ## Phases
 
 - [x] **Phase 1: SDK Core** - Client widget with Shadow DOM isolation, capture engine, canvas editor, and transport
-- [ ] **Phase 2: Backend API** - FastAPI ingestion, PostgreSQL storage, JWT auth, and security hardening
+- [x] **Phase 2: Backend API** - FastAPI ingestion, PostgreSQL storage, JWT auth, and security hardening (completed 2026-09-01)
 - [ ] **Phase 3: Admin Panel** - Static SPA for incident listing, filtering, detail view, and status management
 - [ ] **Phase 4: Docker Deployment** - Single docker-compose.yml with multi-stage build and data persistence
 
@@ -62,7 +62,7 @@ Plans:
   4. Status can be updated via `PATCH /api/incidents/:id/status` (Pending → In Progress → Resolved)
   5. Unauthenticated requests to protected endpoints return 401; CORS blocks unauthorized origins; rate limiting prevents abuse on `/api/incidents`
 
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans complete
 
 Plans:
 **Wave 1**
@@ -79,7 +79,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3)*
 
-- [ ] 02-04-PLAN.md — Retrieval + status: paginated filtered GET, PATCH Any→Any, detail BYTEA re-encode, docs gating
+- [x] 02-04-PLAN.md — Retrieval + status: paginated filtered GET, PATCH Any→Any, detail BYTEA re-encode, docs gating
 
 ### Phase 3: Admin Panel
 
@@ -120,6 +120,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. SDK Core | 5/5 | Complete | 2026-08-30 |
-| 2. Backend API | 3/4 | In Progress|  |
+| 2. Backend API | 4/4 | Complete    | 2026-09-01 |
 | 3. Admin Panel | 0/TBD | Not started | - |
 | 4. Docker Deployment | 0/TBD | Not started | - |

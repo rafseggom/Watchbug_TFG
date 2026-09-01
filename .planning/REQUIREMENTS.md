@@ -41,11 +41,11 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Backend API
 
-- [ ] **API-01**: FastAPI app with lifespan context manager, Pydantic Settings from `.env`
+- [x] **API-01**: FastAPI app with lifespan context manager, Pydantic Settings from `.env`
 - [x] **API-02**: Incident ingestion — `POST /api/incidents` accepts payload, validates schema, stores in PostgreSQL
-- [ ] **API-03**: Incident retrieval — `GET /api/incidents` with pagination, filter by type (Bug/Feedback), status
-- [ ] **API-04**: Status update — `PATCH /api/incidents/:id/status` (Pending → In Progress → Resolved)
-- [ ] **API-05**: Health check endpoint — `GET /api/health` returns DB connection status
+- [x] **API-03**: Incident retrieval — `GET /api/incidents` with pagination, filter by type (Bug/Feedback), status
+- [x] **API-04**: Status update — `PATCH /api/incidents/:id/status` (Pending → In Progress → Resolved)
+- [x] **API-05**: Health check endpoint — `GET /api/health` returns DB connection status
 
 ### Authentication
 
@@ -56,10 +56,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Database
 
-- [ ] **DB-01**: PostgreSQL schema — incidents table (id, type, status, payload JSONB, screenshot BYTEA, created_at, updated_at)
+- [x] **DB-01**: PostgreSQL schema — incidents table (id, type, status, payload JSONB, screenshot BYTEA, created_at, updated_at)
 - [x] **DB-02**: Users table — id, email, password_hash, created_at
-- [ ] **DB-03**: Projects table — id, name, api_key (public, write-only), created_at
-- [ ] **DB-04**: Alembic migrations — version-controlled schema changes
+- [x] **DB-03**: Projects table — id, name, api_key (public, write-only), created_at
+- [x] **DB-04**: Alembic migrations — version-controlled schema changes
 
 ### Security
 
@@ -160,19 +160,19 @@ Deferred to future release. Tracked but not in current roadmap.
 | TRN-02 | Phase 1 | Complete |
 | TRN-03 | Phase 1 | Complete |
 | TRN-04 | Phase 1 | Complete |
-| API-01 | Phase 2 | Pending |
+| API-01 | Phase 2 | Complete |
 | API-02 | Phase 2 | Complete |
-| API-03 | Phase 2 | Pending |
-| API-04 | Phase 2 | Pending |
-| API-05 | Phase 2 | Pending |
+| API-03 | Phase 2 | Complete |
+| API-04 | Phase 2 | Complete |
+| API-05 | Phase 2 | Complete |
 | AUTH-01 | Phase 2 | Complete |
 | AUTH-02 | Phase 2 | Complete |
 | AUTH-03 | Phase 2 | Complete |
 | AUTH-04 | Phase 2 | Complete |
-| DB-01 | Phase 2 | Pending |
+| DB-01 | Phase 2 | Complete |
 | DB-02 | Phase 2 | Complete |
-| DB-03 | Phase 2 | Pending |
-| DB-04 | Phase 2 | Pending |
+| DB-03 | Phase 2 | Complete |
+| DB-04 | Phase 2 | Complete |
 | SEC-01 | Phase 2 | Complete |
 | SEC-02 | Phase 2 | Complete |
 | SEC-03 | Phase 2 | Complete |
