@@ -1,0 +1,58 @@
+"""initial
+
+Revision ID: 001_initial
+Revises: 
+Create Date: 2026-09-01
+
+"""
+from typing import Sequence, Union
+
+from alembic import op
+import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
+
+# revision identifiers, used by Alembic.
+revision: str = "001_initial"
+down_revision: Union[str, Sequence[str], None] = None
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
+
+def upgrade() -> None:
+    op.create_table(
+        "projects",
+        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, nullable=False),
+        sa.Column("name", sa.String(length=255), nullable=False),
+        sa.Column("api_key", sa.String(length=64), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+    )
+    op.create_index(op.f("ix_projects_api_key"), "projects", ["api_key"], unique=True)
+
+    op.create_table(
+        "users",
+        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, nullable=False),
+        sa.Column("email", sa.String(length=255), nullable=False),
+        sa.Column("password_hash", sa.String(length=60), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+    )
+    op.create_index(op.f("ix_users_email"), "users", ["email"], unique=True)
+
+    op.create_table(
+        "incidents",
+        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, nullable=False),
+        sa.Column("type", sa.String(length=16), nullable=False),
+        sa.Column("status", sa.String(length=16), nullable=False, server_default="Pending"),
+        sa.Column("payload", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column("screenshot", sa.LargeBinary(), nullable=False),
+        sa.Column("project_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("projects.id"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+    )
+
+
+def downgrade() -> None:
+    op.drop_table("incidents")
+    op.drop_index(op.f("ix_users_email"), table_name="users")
+    op.drop_table("users")
+    op.drop_index(op.f("ix_projects_api_key"), table_name="projects")
+    op.drop_table("projects")
