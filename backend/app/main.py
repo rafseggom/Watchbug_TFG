@@ -4,20 +4,33 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.routers import health, incidents
+from app.routers import auth, health, incidents
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: seed placeholder (real seeding after DB migration)
-    # Import here to avoid circular deps
+    # Startup: seed admin and default project idempotently
     try:
-        from app.db import get_engine
+        from sqlalchemy.ext.asyncio import async_sessionmaker
 
-        # Try to seed if DB reachable; don't fail startup if DB down (health will show disconnected)
+        from app.db import get_engine
+        from app.services.auth_service import seed_admin
+        from app.services.project_service import seed_default_project
+
         settings = get_settings()
-        # Seed is deferred to explicit migration step for tracer; no-op here
-        _ = settings
+        engine = get_engine()
+        # Try to seed; don't fail startup if DB not yet migrated or unreachable
+        try:
+            async_session = async_sessionmaker(engine, expire_on_commit=False)
+            async with async_session() as session:
+                await seed_admin(session, settings.ADMIN_EMAIL, settings.ADMIN_PASSWORD)
+                # seed default project from DEFAULT_PROJECT_API_KEY
+                try:
+                    await seed_default_project(session, settings.DEFAULT_PROJECT_API_KEY)
+                except Exception:
+                    pass
+        except Exception:
+            pass
     except Exception:
         pass
     yield
@@ -55,6 +68,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health.router)
     app.include_router(incidents.router)
+    app.include_router(auth.router)
 
     return app
 
