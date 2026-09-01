@@ -49,15 +49,15 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Authentication
 
-- [ ] **AUTH-01**: JWT authentication — login with email/password, short-lived token, HttpOnly cookie
-- [ ] **AUTH-02**: Password hashing — bcrypt (never store plaintext)
-- [ ] **AUTH-03**: Protected routes — all `/api/incidents/*` endpoints require valid JWT, return 401 otherwise
-- [ ] **AUTH-04**: Logout — invalidate session, clear cookie
+- [x] **AUTH-01**: JWT authentication — login with email/password, short-lived token, HttpOnly cookie
+- [x] **AUTH-02**: Password hashing — bcrypt (never store plaintext)
+- [x] **AUTH-03**: Protected routes — all `/api/incidents/*` endpoints require valid JWT, return 401 otherwise
+- [x] **AUTH-04**: Logout — invalidate session, clear cookie
 
 ### Database
 
 - [ ] **DB-01**: PostgreSQL schema — incidents table (id, type, status, payload JSONB, screenshot BYTEA, created_at, updated_at)
-- [ ] **DB-02**: Users table — id, email, password_hash, created_at
+- [x] **DB-02**: Users table — id, email, password_hash, created_at
 - [ ] **DB-03**: Projects table — id, name, api_key (public, write-only), created_at
 - [ ] **DB-04**: Alembic migrations — version-controlled schema changes
 
@@ -67,7 +67,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **SEC-02**: Rate limiting — slowapi per IP + project key on `/api/incidents`
 - [ ] **SEC-03**: XSS sanitization — all user fields sanitized before storage and rendering
 - [ ] **SEC-04**: Payload size limit — 100KB max on API level
-- [ ] **SEC-05**: Zero secrets in code — `.env` only, `.env.example` committed with documentation
+- [x] **SEC-05**: Zero secrets in code — `.env` only, `.env.example` committed with documentation
 
 ### Admin Panel
 
@@ -165,19 +165,19 @@ Deferred to future release. Tracked but not in current roadmap.
 | API-03 | Phase 2 | Pending |
 | API-04 | Phase 2 | Pending |
 | API-05 | Phase 2 | Pending |
-| AUTH-01 | Phase 2 | Pending |
-| AUTH-02 | Phase 2 | Pending |
-| AUTH-03 | Phase 2 | Pending |
-| AUTH-04 | Phase 2 | Pending |
+| AUTH-01 | Phase 2 | Complete |
+| AUTH-02 | Phase 2 | Complete |
+| AUTH-03 | Phase 2 | Complete |
+| AUTH-04 | Phase 2 | Complete |
 | DB-01 | Phase 2 | Pending |
-| DB-02 | Phase 2 | Pending |
+| DB-02 | Phase 2 | Complete |
 | DB-03 | Phase 2 | Pending |
 | DB-04 | Phase 2 | Pending |
 | SEC-01 | Phase 2 | Pending |
 | SEC-02 | Phase 2 | Pending |
 | SEC-03 | Phase 2 | Pending |
 | SEC-04 | Phase 2 | Pending |
-| SEC-05 | Phase 2 | Pending |
+| SEC-05 | Phase 2 | Complete |
 | PAN-01 | Phase 3 | Pending |
 | PAN-02 | Phase 3 | Pending |
 | PAN-03 | Phase 3 | Pending |
