@@ -69,11 +69,12 @@ async def db_session():
     Session = async_sessionmaker(engine, expire_on_commit=False)
     async with Session() as session:
         yield session
-        # Cleanup: for sqlite memory, drop; for pg, truncate incidents/projects
+        # Cleanup: truncate tables for isolation
         try:
             from sqlalchemy import text
             await session.execute(text("DELETE FROM incidents"))
             await session.execute(text("DELETE FROM projects"))
+            await session.execute(text("DELETE FROM users"))
             await session.commit()
         except:
             pass
@@ -118,3 +119,15 @@ def valid_screenshot(with_prefix=False):
 
 def valid_metadata():
     return {"url": "https://example.com", "userAgent": "test-agent", "timestamp": "2026-08-31T00:00:00Z"}
+
+
+async def login_helper(client, email="admin@watchbug.local", password="Admin123!"):
+    """Helper to login and return cookie dict."""
+    resp = await client.post("/api/auth/login", json={"email": email, "password": password})
+    return resp, dict(resp.cookies)
+
+
+async def seed_admin_helper(db_session, email="admin@watchbug.local", password="Admin123!"):
+    from app.services.auth_service import seed_admin
+
+    await seed_admin(db_session, email, password)
