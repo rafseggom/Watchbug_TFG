@@ -21,20 +21,24 @@ async def post_incident(
     db: AsyncSession = Depends(get_db),
 ):
     settings = get_settings()
-    # CORS echo for open ingest
+    # SEC-01: explicit null origin rejection before any CORS handling (T-02-03-01)
     origin = request.headers.get("origin")
-    if origin and origin not in settings.cors_origins_list:
-        response.headers["Access-Control-Allow-Origin"] = origin
-        response.headers["Vary"] = "Origin"
     if origin == "null":
         from fastapi import HTTPException
 
         raise HTTPException(status_code=403, detail="origin not allowed")
 
-    # Project key check
+    # CORS echo for open ingest — allow any customer domain (D-13). Admin allowlist is enforced by CORSMiddleware;
+    # ingest must echo Origin when not in allowlist so browser accepts response (credentials omit, no Allow-Credentials).
+    if origin and origin not in settings.cors_origins_list:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Vary"] = "Origin"
+
+    # Project key check — 401 before size guard per D-08 distinct error split
     project = await resolve_project(request, db)
 
-    # Payload size guard (read raw body)
+    # Payload size guard — 413 before validation per D-08 / SEC-04 / Pitfall 8.
+    # Use actual len(await request.body()) not just Content-Length to handle chunked.
     body = await request.body()
     if len(body) > settings.MAX_PAYLOAD_BYTES:
         from fastapi import HTTPException
@@ -57,8 +61,16 @@ async def post_incident(
     try:
         data = IncidentCreate(**data_dict)
     except ValidationError as e:
-        # Re-raise as RequestValidationError so FastAPI returns 422 with loc detail
-        raise RequestValidationError(errors=e.errors()) from e
+        # Re-raise as RequestValidationError so FastAPI returns 422 with loc detail.
+        # Prepend "body" to loc to match FastAPI automatic validation shape per D-06.
+        errors = []
+        for err in e.errors():
+            loc = err.get("loc", ())
+            # normalize loc to tuple
+            if not isinstance(loc, tuple):
+                loc = (loc,) if isinstance(loc, (str, int)) else tuple(loc)
+            errors.append({**err, "loc": ("body",) + loc})
+        raise RequestValidationError(errors=errors) from e
 
     incident = await create_incident(db, data, project.id)
 

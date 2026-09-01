@@ -1,33 +1,12 @@
 import base64
 import binascii
-import html
-import re
 import uuid
 
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.incident import Incident
-
-_EVENT_HANDLER_RE = re.compile(r"\bon\w+\s*=", re.IGNORECASE)
-_JAVASCRIPT_RE = re.compile(r"javascript\s*:", re.IGNORECASE)
-
-
-def sanitize_string(value: str) -> str:
-    escaped = html.escape(value, quote=True)
-    escaped = _EVENT_HANDLER_RE.sub("", escaped)
-    escaped = _JAVASCRIPT_RE.sub("", escaped)
-    return escaped
-
-
-def sanitize_payload(payload: dict | list | str | object) -> object:
-    if isinstance(payload, dict):
-        return {k: sanitize_payload(v) for k, v in payload.items()}
-    if isinstance(payload, list):
-        return [sanitize_payload(v) for v in payload]
-    if isinstance(payload, str):
-        return sanitize_string(payload)
-    return payload
+from app.utils.sanitize import sanitize_payload
 
 
 def decode_screenshot(b64: str) -> bytes:
@@ -42,13 +21,8 @@ def decode_screenshot(b64: str) -> bytes:
 
 async def create_incident(db: AsyncSession, data, project_id: uuid.UUID) -> Incident:
     raw = data.model_dump()
-    # Sanitize before storage
-    try:
-        from app.utils.sanitize import sanitize_payload as ext_sanitize  # type: ignore
-
-        sanitized = ext_sanitize(raw)  # type: ignore
-    except ImportError:
-        sanitized = sanitize_payload(raw)  # type: ignore
+    # Sanitize before storage — SEC-03 / D-15 double defense, primary gate is at ingest
+    sanitized = sanitize_payload(raw)  # type: ignore
 
     screenshot_b64 = raw.get("screenshot", "")
     screenshot_bytes = decode_screenshot(screenshot_b64)
