@@ -5,10 +5,10 @@
 
 ---
 
-## Estado actual (2026-08-31)
+## Estado actual (2026-09-01)
 
 - **Phase 01 — SDK Core: COMPLETE** — 5/5 planes ejecutados, verificación PASS (117 unit + 6 E2E, bundle 8.85 KB gzipped ≤45KB), shipped en `8da34ae` PR #2.
-- **Phase 02 — Backend API: EN PLANIFICACIÓN** — CONTEXT gathered 2026-08-31, RESEARCH + PATTERNS + 4 planes tracer-first creados (`44c1cc1`), pendiente `gsd-execute-phase 2`.
+- **Phase 02 — Backend API: COMPLETE** — 4/4 planes ejecutados, verificación PASS (65 tests, 20/20 truths verified), commits `81cdf7d`, `33522e1`, `bbdcfe2`, `2235330`, `cf0333c`, `2f8f1c3`. 39/39 requirements satisfied (API-01..05, AUTH-01..04, DB-01..04, SEC-01..05).
 - **Phase 03/04:** Pendientes.
 
 Este archivo estaba vacío hasta 2026-08-31. Se inicializa retroactivamente con los dead-ends y decisiones de Fase 1 para no repetir exploración. A partir de ahora los agentes (`gsd-executor`) deben escribir cada dead-end en el momento del fallo, no al final.
@@ -71,11 +71,23 @@ Este archivo estaba vacío hasta 2026-08-31. Se inicializa retroactivamente con 
 
 ---
 
-## Phase 02 — En curso (2026-08-31)
+## Phase 02 — Complete (2026-09-01)
 
-- CONTEXT con 16 decisiones D-01..D-16 locked (JWT HttpOnly 1h+7d, seeded admin `ADMIN_EMAIL/PASSWORD` bcrypt, `POST /api/incidents` público con `PROJECT_KEY`, paginación `page/size` + filtros `type/status`, BYTEA+JSONB, split CORS, slowapi in-memory, `html.escape` XSS, 100KB 413, `.env` only)
-- RESEARCH 02 cubre stack `FastAPI 0.141.x + asyncpg + Alembic + PyJWT + bcrypt + slowapi` y 10 pitfalls (lifespan vs on_event, expire_on_commit, Pydantic v2, CORS wildcard, Secure cookie, etc.)
-- PLAN 02-01..02-04 creados tracer-first. Dead-ends aún no registrados — el executor debe escribir aquí si una librería/patrón falla durante `gsd-execute-phase 2` (ej: `python-jose` CVEs rechazado ya en research, no re-intentar).
+- 4/4 planes ejecutados: `02-01` Tracer Backend, `02-02` Auth, `02-03` Security Hardening, `02-04` Retrieval & Status
+- Verificación: `02-VERIFICATION.md` — 20/20 must-haves verified, 65 pytest green, 0 gaps
+- **Deviations auto-fixed** (no dead-ends):
+  1. Pydantic TRN-04 validator not firing — fixed with `validate_default=True` (Plan 01)
+  2. SQLAlchemy JSONB compile error on SQLite — fixed using generic `Uuid`/`JSON` models (Plan 01)
+  3. Docker Desktop Windows asyncpg host networking broken — workaround docker network + sqlite fallback (Plan 01)
+  4. SQLite in-memory isolation with NullPool — switched to file fallback (Plan 01)
+  5. List lazy-load N+1 on deferred BYTEA — fixed via `inspect(state.unloaded)` (Plan 04)
+  6. Invalid filter values silently returning 200 — fixed via upfront `ValueError->422` (Plan 04)
+- **Notas de continuidad**:
+  - SQLite file fallback en `conftest.py` — tests corren en host sin Docker real; real PG verificado via docker network
+  - `--workers 1` requerido por slowapi in-memory limiter (no multi-worker safe)
+  - BYTEA list/detail split probado: `load_only` excluye screenshot en list, `data:image/png;base64` re-encode en detail
+  - `X-Watchbug-Key` (primary) + `X-Project-Key` (fallback) dual header verified
+  - `.env.example` documenta los 11 campos de Settings; `.env` nunca se commitea
 
 ---
 
@@ -85,4 +97,4 @@ Este archivo estaba vacío hasta 2026-08-31. Se inicializa retroactivamente con 
 2. **Al fallar algo**: escribir Dead-End aquí con formato de arriba **antes** de probar la siguiente alternativa.
 3. No agrupar dead-ends al final. No omitir `Evidence` concreto (mensaje de error, medida de bundle, test fail).
 
-*Última actualización: 2026-08-31 — inicialización retroactiva Fase 1 + scaffold Fase 2*
+*Última actualización: 2026-09-01 — Phase 02 complete (backend API 4/4 plans, 65 tests, 20/20 verified)*

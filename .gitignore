@@ -5,3 +5,13 @@ node_modules/
 
 .opencode
 
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.env
+.venv/
+venv/
+
