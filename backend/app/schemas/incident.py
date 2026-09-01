@@ -63,5 +63,41 @@ class IncidentCreate(BaseModel):
 
 class IncidentOut(BaseModel):
     id: str
+    type: str
     status: str
-    created_at: str
+    payload: dict | None = None
+    project_id: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+    has_screenshot: bool = False
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class IncidentOutDetail(BaseModel):
+    """Detail response includes screenshot re-encoded as data URL for Panel img src."""
+
+    id: str
+    type: str
+    status: str
+    payload: dict | None = None
+    screenshot: str | None = None  # data:image/png;base64,...
+    project_id: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class StatusUpdate(BaseModel):
+    """PATCH /api/incidents/{id}/status body — Any->Any among three states per D-12."""
+
+    status: str = Field(description="Pending, In Progress, or Resolved")
+
+    @field_validator("status", mode="after")
+    @classmethod
+    def validate_status(cls, v: str) -> str:
+        allowed = {"Pending", "In Progress", "Resolved"}
+        if v not in allowed:
+            raise ValueError("status must be one of Pending, In Progress, Resolved")
+        return v
