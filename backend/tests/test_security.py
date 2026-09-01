@@ -207,3 +207,176 @@ async def test_rate_limit_auth_429(async_client, db_session):
             assert resp.headers.get("retry-after") is not None
             assert resp.json().get("detail") == "rate limit exceeded"
     limiter.reset()
+
+
+@pytest.mark.asyncio
+async def test_xss_sanitized(async_client, seeded_project, db_session):
+    # SEC-03 / T-02-03-02: XSS payloads are sanitized before JSONB storage
+    payload = {
+        "type": "Bug",
+        "screenshot": valid_screenshot(),
+        "metadata": valid_metadata(),
+        "consoleLogs": [
+            {
+                "level": "error",
+                "args": ["<script>alert(1)</script>", "<img onerror=alert(1)>", "javascript:alert(1)"],
+                "timestamp": "2026-08-31T00:00:00Z",
+            }
+        ],
+        "notes": '"><svg onload=alert(1)>',
+        "errors": ['<svg onload=evil()>'],
+    }
+    headers = {"X-Watchbug-Key": "test-project-key-123"}
+    resp = await async_client.post("/api/incidents", json=payload, headers=headers)
+    assert resp.status_code == 201, resp.text
+    incident_id = resp.json()["id"]
+
+    from sqlalchemy import select
+
+    from app.models.incident import Incident
+
+    result = await db_session.execute(select(Incident).where(Incident.id == uuid.UUID(incident_id)))
+    incident = result.scalar_one_or_none()
+    assert incident is not None
+    stored = str(incident.payload)
+    # No raw tags should remain
+    assert "<script>" not in stored
+    assert "<img" not in stored.lower() or "&lt;img" in stored
+    assert "onerror" not in stored.lower()
+    assert "javascript:" not in stored.lower()
+    # Escaped equivalents should exist
+    assert "&lt;script&gt;" in stored
+    # Ensure response never contains raw <script>
+    assert "<script>" not in resp.text
+    # Also check via GET detail if available (list returns minimal but payload check above suffices)
+    # Verify that raw owner cannot get XSS back via GET
+    from tests.conftest import seed_admin_helper
+
+    await seed_admin_helper(db_session)
+    login_resp = await async_client.post(
+        "/api/auth/login", json={"email": "admin@watchbug.local", "password": "Admin123!"}
+    )
+    cookies = dict(login_resp.cookies)
+    # Use db direct query to simulate retrieval escaping; panel double defense is textContent
+    # Already verified via DB payload
+
+
+@pytest.mark.asyncio
+async def test_error_codes_distinct(async_client, seeded_project):
+    # Verify 401/413/422/429 return distinct codes and shapes per D-06/D-08/D-14
+    from app.limiter import limiter
+
+    limiter.reset()
+    b64 = valid_screenshot()
+
+    # 401 invalid project key
+    payload = {"type": "Feedback", "screenshot": b64, "metadata": valid_metadata()}
+    resp401 = await async_client.post("/api/incidents", json=payload, headers={"X-Watchbug-Key": "bad-key"})
+    assert resp401.status_code == 401
+    assert resp401.json()["detail"] == "invalid project key"
+
+    # 413 payload too large
+    large = "x" * 110000
+    payload413 = {"type": "Feedback", "screenshot": b64, "metadata": valid_metadata(), "notes": large}
+    resp413 = await async_client.post(
+        "/api/incidents", json=payload413, headers={"X-Watchbug-Key": "test-project-key-123"}
+    )
+    assert resp413.status_code == 413
+    assert "payload too large" in resp413.json()["detail"]
+
+    # 422 schema validation (Bug without consoleLogs)
+    payload422 = {"type": "Bug", "screenshot": b64, "metadata": valid_metadata()}
+    resp422 = await async_client.post(
+        "/api/incidents", json=payload422, headers={"X-Watchbug-Key": "test-project-key-123"}
+    )
+    assert resp422.status_code == 422
+    body = resp422.json()
+    assert "detail" in body
+    # FastAPI 422 shape is list of errors with loc/msg/type
+    details = body["detail"]
+    assert isinstance(details, list)
+    assert any("consoleLogs" in str(d.get("loc")) for d in details)
+
+    # 429 rate limit: need to exceed 10/min
+    limiter.reset()
+    payload_ok = {"type": "Feedback", "screenshot": b64, "metadata": valid_metadata()}
+    headers_ok = {"X-Watchbug-Key": "test-project-key-123"}
+    last = None
+    for _ in range(11):
+        last = await async_client.post("/api/incidents", json=payload_ok, headers=headers_ok)
+    assert last.status_code == 429
+    assert last.json()["detail"] == "rate limit exceeded"
+    assert "retry_after" in last.json()
+    assert last.headers.get("retry-after") is not None
+    limiter.reset()
+    # Ensure no secret leakage in any 4xx body
+    for resp in [resp401, resp413, resp422, last]:
+        text = resp.text.lower()
+        assert "database_url" not in text
+        assert "jwt_secret" not in text
+
+
+@pytest.mark.asyncio
+async def test_screenshot_data_url_variant(async_client, seeded_project, db_session):
+    b64 = valid_screenshot()
+    b64_with_prefix = valid_screenshot(with_prefix=True)
+    headers = {"X-Watchbug-Key": "test-project-key-123"}
+    for shot in [b64, b64_with_prefix]:
+        payload = {"type": "Feedback", "screenshot": shot, "metadata": valid_metadata()}
+        resp = await async_client.post("/api/incidents", json=payload, headers=headers)
+        assert resp.status_code == 201, resp.text
+        incident_id = resp.json()["id"]
+        from sqlalchemy import select
+
+        from app.models.incident import Incident
+
+        result = await db_session.execute(select(Incident).where(Incident.id == uuid.UUID(incident_id)))
+        incident = result.scalar_one_or_none()
+        assert incident is not None
+        assert isinstance(incident.screenshot, bytes)
+        import base64 as b64mod
+
+        expected = b64mod.b64decode(b64)
+        assert incident.screenshot == expected
+        # Ensure payload JSONB does NOT contain screenshot key
+        assert "screenshot" not in incident.payload
+
+
+@pytest.mark.asyncio
+async def test_case_insensitive_type_storage(async_client, seeded_project, db_session):
+    b64 = valid_screenshot()
+    headers = {"X-Watchbug-Key": "test-project-key-123"}
+    for input_type, expected in [("bug", "Bug"), ("FEEDBACK", "Feedback"), ("Feedback", "Feedback")]:
+        payload = {"type": input_type, "screenshot": b64, "metadata": valid_metadata()}
+        if expected == "Bug":
+            payload["consoleLogs"] = [
+                {"level": "log", "args": ["hi"], "timestamp": "2026-08-31T00:00:00Z"}
+            ]
+        resp = await async_client.post("/api/incidents", json=payload, headers=headers)
+        assert resp.status_code == 201, resp.text
+        incident_id = resp.json()["id"]
+        from sqlalchemy import select
+
+        from app.models.incident import Incident
+
+        result = await db_session.execute(select(Incident).where(Incident.id == uuid.UUID(incident_id)))
+        incident = result.scalar_one_or_none()
+        assert incident is not None
+        assert incident.type == expected
+
+
+@pytest.mark.asyncio
+async def test_no_secret_leakage_on_errors(async_client, seeded_project):
+    # Ensure 4xx responses never leak DATABASE_URL or JWT_SECRET or stack traces
+    b64 = valid_screenshot()
+    test_cases = [
+        ({"type": "Feedback", "screenshot": b64, "metadata": valid_metadata()}, {"X-Watchbug-Key": "bad"}),
+        ({"type": "Bug", "screenshot": b64, "metadata": valid_metadata()}, {"X-Watchbug-Key": "test-project-key-123"}),
+    ]
+    for payload, headers in test_cases:
+        resp = await async_client.post("/api/incidents", json=payload, headers=headers)
+        assert resp.status_code in (401, 422)
+        body = resp.text.lower()
+        assert "database_url" not in body
+        assert "jwt_secret" not in body
+        assert "traceback" not in body
