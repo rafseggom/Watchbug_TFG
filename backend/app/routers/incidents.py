@@ -3,9 +3,12 @@ import json
 from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from slowapi.util import get_remote_address
+
 from app.config import get_settings
 from app.db import get_db
 from app.dependencies import get_current_user
+from app.limiter import limiter
 from app.models.user import User
 from app.schemas.incident import IncidentCreate
 from app.services.incident_service import create_incident
@@ -14,7 +17,15 @@ from app.services.project_service import resolve_project
 router = APIRouter(prefix="/api/incidents")
 
 
+def _get_project_key(request: Request) -> str:
+    """Composite key for per-project rate limit: IP + project key (T-02-03-04)."""
+    key = request.headers.get("x-watchbug-key") or request.headers.get("x-project-key") or "unknown"
+    return f"{get_remote_address(request)}:{key}"
+
+
 @router.post("", status_code=201)
+@limiter.limit("10/minute")
+@limiter.limit("30/minute", key_func=_get_project_key)
 async def post_incident(
     request: Request,
     response: Response,
@@ -82,6 +93,7 @@ async def post_incident(
 
 
 @router.get("", status_code=200)
+@limiter.limit("60/minute")
 async def list_incidents(
     request: Request,
     db: AsyncSession = Depends(get_db),
@@ -122,6 +134,7 @@ async def list_incidents(
 
 
 @router.patch("/{incident_id}/status", status_code=200)
+@limiter.limit("60/minute")
 async def update_status(
     incident_id: str,
     request: Request,

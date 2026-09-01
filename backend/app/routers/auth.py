@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.db import get_db
+from app.limiter import limiter
 from app.models.user import User
 from app.schemas.auth import LoginRequest
 from app.services.auth_service import create_access_token, create_refresh_token, verify_password
@@ -18,7 +19,9 @@ def _is_secure() -> bool:
 
 
 @router.post("/login", status_code=200)
+@limiter.limit("60/minute")
 async def login(
+    request: Request,
     body: LoginRequest,
     response: Response,
     db: AsyncSession = Depends(get_db),
@@ -55,6 +58,7 @@ async def login(
 
 
 @router.post("/refresh", status_code=200)
+@limiter.limit("60/minute")
 async def refresh(
     request: Request,
     response: Response,

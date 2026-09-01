@@ -81,6 +81,24 @@ async def db_session():
     await engine.dispose()
 
 
+@pytest.fixture(autouse=True)
+def reset_rate_limiter():
+    # Ensure limiter storage is clean before each test function to avoid spillover
+    try:
+        from app.limiter import limiter
+
+        limiter.reset()
+    except Exception:
+        pass
+    yield
+    try:
+        from app.limiter import limiter
+
+        limiter.reset()
+    except Exception:
+        pass
+
+
 @pytest.fixture(scope="function")
 async def async_client(db_session):
     # Override get_db
