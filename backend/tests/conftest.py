@@ -149,3 +149,55 @@ async def seed_admin_helper(db_session, email="admin@watchbug.local", password="
     from app.services.auth_service import seed_admin
 
     await seed_admin(db_session, email, password)
+
+
+async def seed_incidents_helper(db_session, project_id, count=25):
+    """Seed `count` incidents with mix of Bug/Feedback and statuses, staggered created_at for ordering."""
+    import datetime
+    from app.models.incident import Incident
+
+    statuses = ["Pending", "In Progress", "Resolved"]
+    created = []
+    now = datetime.datetime.now(datetime.timezone.utc)
+    for i in range(count):
+        typ = "Bug" if i % 2 == 0 else "Feedback"
+        status = statuses[i % 3]
+        # stagger created_at: older first, newer later (so ordering desc puts last seeded first)
+        created_at = now - datetime.timedelta(minutes=count - i)
+        updated_at = created_at
+        incident = Incident(
+            type=typ,
+            status=status,
+            payload={
+                "type": typ,
+                "metadata": valid_metadata(),
+                "consoleLogs": [{"level": "log", "args": ["hi"], "timestamp": "2026-08-31T00:00:00Z"}] if typ == "Bug" else None,
+                "errors": [],
+                "notes": None,
+            },
+            screenshot=__import__("base64").b64decode(valid_screenshot()),
+            project_id=project_id,
+            created_at=created_at,
+            updated_at=updated_at,
+        )
+        db_session.add(incident)
+        created.append(incident)
+    await db_session.commit()
+    for inc in created:
+        await db_session.refresh(inc)
+    return created
+
+
+def assert_paginated_shape(data, expected_page=1, expected_size=20):
+    assert "items" in data
+    assert "total" in data
+    assert "page" in data
+    assert "size" in data
+    assert "pages" in data
+    assert data["page"] == expected_page
+    assert data["size"] == expected_size
+    # pages = ceil(total/size)
+    import math
+
+    expected_pages = math.ceil(data["total"] / data["size"]) if data["total"] else 0
+    assert data["pages"] == expected_pages, f"pages {data['pages']} != ceil({data['total']}/{data['size']})={expected_pages}"
