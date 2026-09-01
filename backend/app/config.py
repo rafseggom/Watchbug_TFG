@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     DOCS_ENABLED: bool = Field(default=False)
     MAX_PAYLOAD_BYTES: int = Field(default=102400)
     DEFAULT_PROJECT_API_KEY: str = Field(default="wb_test_project_key_123")
+    ENV: str = Field(default="development")
 
     @computed_field  # type: ignore[misc]
     @property
