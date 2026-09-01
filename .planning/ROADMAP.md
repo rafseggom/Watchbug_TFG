@@ -62,7 +62,7 @@ Plans:
   4. Status can be updated via `PATCH /api/incidents/:id/status` (Pending → In Progress → Resolved)
   5. Unauthenticated requests to protected endpoints return 401; CORS blocks unauthorized origins; rate limiting prevents abuse on `/api/incidents`
 
-**Plans:** 2/4 plans executed
+**Plans:** 3/4 plans executed
 
 Plans:
 **Wave 1**
@@ -75,7 +75,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2)*
 
-- [ ] 02-03-PLAN.md — Ingest hardening: XSS sanitize, 100KB guard, split CORS, rate limiting per IP+key
+- [x] 02-03-PLAN.md — Ingest hardening: XSS sanitize, 100KB guard, split CORS, rate limiting per IP+key
 
 **Wave 4** *(blocked on Wave 3)*
 
@@ -120,6 +120,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. SDK Core | 5/5 | Complete | 2026-08-30 |
-| 2. Backend API | 2/4 | In Progress|  |
+| 2. Backend API | 3/4 | In Progress|  |
 | 3. Admin Panel | 0/TBD | Not started | - |
 | 4. Docker Deployment | 0/TBD | Not started | - |

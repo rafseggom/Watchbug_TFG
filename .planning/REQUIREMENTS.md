@@ -42,7 +42,7 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Backend API
 
 - [ ] **API-01**: FastAPI app with lifespan context manager, Pydantic Settings from `.env`
-- [ ] **API-02**: Incident ingestion — `POST /api/incidents` accepts payload, validates schema, stores in PostgreSQL
+- [x] **API-02**: Incident ingestion — `POST /api/incidents` accepts payload, validates schema, stores in PostgreSQL
 - [ ] **API-03**: Incident retrieval — `GET /api/incidents` with pagination, filter by type (Bug/Feedback), status
 - [ ] **API-04**: Status update — `PATCH /api/incidents/:id/status` (Pending → In Progress → Resolved)
 - [ ] **API-05**: Health check endpoint — `GET /api/health` returns DB connection status
@@ -63,10 +63,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Security
 
-- [ ] **SEC-01**: CORS — configurable origin allowlist, block `null` origin, no wildcard on ingest endpoint
-- [ ] **SEC-02**: Rate limiting — slowapi per IP + project key on `/api/incidents`
-- [ ] **SEC-03**: XSS sanitization — all user fields sanitized before storage and rendering
-- [ ] **SEC-04**: Payload size limit — 100KB max on API level
+- [x] **SEC-01**: CORS — configurable origin allowlist, block `null` origin, no wildcard on ingest endpoint
+- [x] **SEC-02**: Rate limiting — slowapi per IP + project key on `/api/incidents`
+- [x] **SEC-03**: XSS sanitization — all user fields sanitized before storage and rendering
+- [x] **SEC-04**: Payload size limit — 100KB max on API level
 - [x] **SEC-05**: Zero secrets in code — `.env` only, `.env.example` committed with documentation
 
 ### Admin Panel
@@ -161,7 +161,7 @@ Deferred to future release. Tracked but not in current roadmap.
 | TRN-03 | Phase 1 | Complete |
 | TRN-04 | Phase 1 | Complete |
 | API-01 | Phase 2 | Pending |
-| API-02 | Phase 2 | Pending |
+| API-02 | Phase 2 | Complete |
 | API-03 | Phase 2 | Pending |
 | API-04 | Phase 2 | Pending |
 | API-05 | Phase 2 | Pending |
@@ -173,10 +173,10 @@ Deferred to future release. Tracked but not in current roadmap.
 | DB-02 | Phase 2 | Complete |
 | DB-03 | Phase 2 | Pending |
 | DB-04 | Phase 2 | Pending |
-| SEC-01 | Phase 2 | Pending |
-| SEC-02 | Phase 2 | Pending |
-| SEC-03 | Phase 2 | Pending |
-| SEC-04 | Phase 2 | Pending |
+| SEC-01 | Phase 2 | Complete |
+| SEC-02 | Phase 2 | Complete |
+| SEC-03 | Phase 2 | Complete |
+| SEC-04 | Phase 2 | Complete |
 | SEC-05 | Phase 2 | Complete |
 | PAN-01 | Phase 3 | Pending |
 | PAN-02 | Phase 3 | Pending |
