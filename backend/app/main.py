@@ -133,6 +133,17 @@ def create_app() -> FastAPI:
     app.include_router(incidents.router)
     app.include_router(auth.router)
 
+    # Static panel mount — Vite builds to api/static/panel with base "./"
+    try:
+        from fastapi.staticfiles import StaticFiles
+        import os
+
+        panel_dir = os.path.join(os.path.dirname(__file__), "..", "api", "static", "panel")
+        if os.path.isdir(panel_dir):
+            app.mount("/panel", StaticFiles(directory=panel_dir, html=True), name="panel")
+    except Exception:
+        pass
+
     return app
 
 

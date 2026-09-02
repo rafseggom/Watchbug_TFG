@@ -1,0 +1,26 @@
+:root {
+  --color-bg: #f6f8fa;
+  --color-surface: #ffffff;
+  --color-text: #24292e;
+  --color-text-muted: #586069;
+  --color-border: #e1e4e8;
+  --color-primary: #0366d6;
+  --color-bug: #d73a4a;
+  --color-feedback: #0366d6;
+  --status-pending-bg: #fff3cd;
+  --status-pending-text: #856404;
+  --status-progress-bg: #cce5ff;
+  --status-progress-text: #004085;
+  --status-resolved-bg: #d4edda;
+  --status-resolved-text: #155724;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --break-tablet: 768px;
+  --break-detail: 900px;
+  --header-height: 56px;
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.08);
+}

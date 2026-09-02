@@ -1,0 +1,16 @@
+{
+  "login.title": "Sign in to Watchbug",
+  "login.email": "Email",
+  "login.password": "Password",
+  "login.submit": "Sign in",
+  "login.errorRequired": "Email and password are required",
+  "login.errorInvalid": "Invalid credentials",
+  "login.loggingIn": "Signing in...",
+  "header.logout": "Logout",
+  "header.loggedOut": "Logged out",
+  "toast.loggedOut": "Logged out",
+  "toast.statusUpdated": "Status updated",
+  "errors.unauthorized": "Unauthorized — please sign in",
+  "errors.notFound": "Not found",
+  "errors.network": "Network error — please try again"
+}

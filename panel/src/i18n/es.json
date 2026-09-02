@@ -1,0 +1,16 @@
+{
+  "login.title": "Iniciar sesion en Watchbug",
+  "login.email": "Correo electronico",
+  "login.password": "Contrasena",
+  "login.submit": "Iniciar sesion",
+  "login.errorRequired": "Correo y contrasena son obligatorios",
+  "login.errorInvalid": "Credenciales no validas",
+  "login.loggingIn": "Iniciando sesion...",
+  "header.logout": "Cerrar sesion",
+  "header.loggedOut": "Sesion cerrada",
+  "toast.loggedOut": "Sesion cerrada",
+  "toast.statusUpdated": "Estado actualizado",
+  "errors.unauthorized": "No autorizado — inicia sesion",
+  "errors.notFound": "No encontrado",
+  "errors.network": "Error de red — intentalo de nuevo"
+}
