@@ -1,18 +1,18 @@
 ---
 gsd_state_version: 1.0
-current_phase: 3
+current_phase: 03
 current_phase_name: Admin Panel
-status: shipped
-stopped_at: Phase 3 context gathered
-last_updated: "2026-09-02T11:02:19.442Z"
-last_activity: 2026-09-01
-last_activity_desc: "Phase 02 shipped — PR #2"
-state_head: 81718669b1f3a962fdd6f29ebaa503e830255ae5
+status: executing
+stopped_at: Completed 03-01-PLAN.md
+last_updated: "2026-09-02T11:42:11.669Z"
+last_activity: 2026-09-02
+last_activity_desc: Phase 03 execution started
+state_head: ad001ebd2e3e4d1b5552e975666ade7fd3f6f04f
 progress:
   total_phases: 4
   completed_phases: 2
-  total_plans: 9
-  completed_plans: 9
+  total_plans: 12
+  completed_plans: 10
   percent: 50
 ---
 
@@ -23,16 +23,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-29)
 
 **Core value:** A lightweight, fully isolated widget that captures bugs with full visual context (screenshot + metadata) without breaking or leaking into the host application.
-**Current focus:** Phase 02 — Backend API
+**Current focus:** Phase 03 — Admin Panel
 
 ## Current Position
 
-Phase: 3 — Admin Panel
-Plan: Not started
-Status: Shipped — PR #2
-Last activity: 2026-09-01 — Phase 02 shipped — PR #2
+Phase: 03 (Admin Panel) — EXECUTING
+Plan: 2 of 3
+Status: Ready to execute
+Last activity: 2026-09-02 — Phase 03 execution started
 
-Progress: [████░░░░░░] 50% (2/4 phases)
+Progress: [█████░░░░░] 50% (2/4 phases)
 
 ## Performance Metrics
 
@@ -66,6 +66,7 @@ Progress: [████░░░░░░] 50% (2/4 phases)
 | Phase 01 P05 | 8 min | 3 tasks | 8 files |
 | Phase 02 P02 | 28min | 3 tasks | 10 files |
 | Phase 02-backend-api P03 | 42min | 3 tasks | 10 files |
+| Phase 03 P01 | 35min | 3 tasks | 29 files |
 
 ## Accumulated Context
 
@@ -89,6 +90,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 02]: 02-02: bcrypt direct cost12 + HS256 jti/sub/exp/iat cookies watchbug_access/refresh HttpOnly Lax Secure via ENV
 - [Phase 02]: 02-02: LoginRequest email as str to allow admin@watchbug.local .local domain rejected by EmailStr
 - [Phase 02]: 02-03: XSS html.escape + 100KB 413 guard + split CORS + slowapi rate limiting with IngestCors preflight
+- [Phase 03]: Vite base ./ with outDir ../backend/api/static/panel avoids 404 at /panel/assets when mounted at subpath
+- [Phase 03]: Hash routing only avoids FastAPI fallback, probe+refresh guard never reads HttpOnly cookie
 
 ### Pending Todos
 
@@ -108,6 +111,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-02T11:02:18.873Z
-Stopped at: Phase 3 context gathered
-Resume file: E:/Proyectos Github/Watchbug_TFG/.planning/phases/03-admin-panel/03-CONTEXT.md
+Last session: 2026-09-02T11:42:11.174Z
+Stopped at: Completed 03-01-PLAN.md
+Resume file: None

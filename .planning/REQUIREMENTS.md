@@ -71,13 +71,13 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Admin Panel
 
-- [ ] **PAN-01**: Static SPA — served from `api/static/panel/` via FastAPI
-- [ ] **PAN-02**: Login form — email/password, redirects to incident list on success
+- [x] **PAN-01**: Static SPA — served from `api/static/panel/` via FastAPI
+- [x] **PAN-02**: Login form — email/password, redirects to incident list on success
 - [ ] **PAN-03**: Incident listing — paginated table with columns: type, status, date, preview
 - [ ] **PAN-04**: Filter bar — filter by type (Bug/Feedback), status (Pending/In Progress/Resolved)
 - [ ] **PAN-05**: Incident detail view — full screenshot preview, metadata display, status management
 - [ ] **PAN-06**: Responsive layout — works on desktop and tablet
-- [ ] **PAN-07**: All user content rendered as escaped text — no raw HTML rendering
+- [x] **PAN-07**: All user content rendered as escaped text — no raw HTML rendering
 
 ### Deployment
 
@@ -178,13 +178,13 @@ Deferred to future release. Tracked but not in current roadmap.
 | SEC-03 | Phase 2 | Complete |
 | SEC-04 | Phase 2 | Complete |
 | SEC-05 | Phase 2 | Complete |
-| PAN-01 | Phase 3 | Pending |
-| PAN-02 | Phase 3 | Pending |
+| PAN-01 | Phase 3 | Complete |
+| PAN-02 | Phase 3 | Complete |
 | PAN-03 | Phase 3 | Pending |
 | PAN-04 | Phase 3 | Pending |
 | PAN-05 | Phase 3 | Pending |
 | PAN-06 | Phase 3 | Pending |
-| PAN-07 | Phase 3 | Pending |
+| PAN-07 | Phase 3 | Complete |
 | DEP-01 | Phase 4 | Pending |
 | DEP-02 | Phase 4 | Pending |
 | DEP-03 | Phase 4 | Pending |
