@@ -1,5 +1,6 @@
 import { parseHash, navigate } from "./utils/hash";
 import { renderLogin } from "./views/login";
+import { renderList } from "./views/list";
 import { authGuard } from "./auth";
 import { renderHeader } from "./components/header";
 
@@ -62,7 +63,7 @@ export async function onRoute(): Promise<void> {
   if (route.name === "list") {
     const ok = await authGuard();
     if (!ok) return;
-    renderListPlaceholder(app);
+    await renderList(app, route.query);
     return;
   }
 
