@@ -1,6 +1,7 @@
 import { parseHash, navigate } from "./utils/hash";
 import { renderLogin } from "./views/login";
 import { renderList } from "./views/list";
+import { renderDetail } from "./views/detail";
 import { authGuard } from "./auth";
 import { renderHeader } from "./components/header";
 
@@ -37,17 +38,9 @@ function renderListPlaceholder(root: HTMLElement): void {
 }
 
 function renderDetailPlaceholder(root: HTMLElement, id: string): void {
-  root.textContent = "";
-  renderHeader(root);
-  const wrapper = document.createElement("div");
-  wrapper.style.padding = "24px";
-  const h = document.createElement("h2");
-  h.textContent = "Incident " + id;
-  const p = document.createElement("p");
-  p.textContent = "Detail view placeholder.";
-  wrapper.appendChild(h);
-  wrapper.appendChild(p);
-  root.appendChild(wrapper);
+  void id;
+  void root;
+  // Legacy placeholder retained for type compat; actual detail uses renderDetail
 }
 
 export async function onRoute(): Promise<void> {
@@ -70,7 +63,7 @@ export async function onRoute(): Promise<void> {
   if (route.name === "detail") {
     const ok = await authGuard();
     if (!ok) return;
-    renderDetailPlaceholder(app, route.id);
+    await renderDetail(app, route.id);
     return;
   }
 

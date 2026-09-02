@@ -4,7 +4,10 @@
   }
 
   .detail-layout__left,
-  .detail-layout__right {
+  .detail-layout__right,
+  .screenshot-pane,
+  .metadata-pane {
+    flex: auto;
     width: 100% !important;
     max-width: 100% !important;
   }
