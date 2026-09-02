@@ -94,7 +94,7 @@ Plans:
   4. Status changes from the detail view persist to the backend and reflect in the list
   5. Panel works on desktop and tablet viewports; all user-generated content is rendered as escaped text (no raw HTML)
 
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans executed
 
 Plans:
 **Wave 1**
@@ -107,7 +107,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2)*
 
-- [ ] 03-03-PLAN.md — Detail view: two-col screenshot + metadata + consoleLogs + status PATCH optimistic + responsive 900
+- [x] 03-03-PLAN.md — Detail view: two-col screenshot + metadata + consoleLogs + status PATCH optimistic + responsive 900
 
 **UI hint**: yes
 
@@ -135,5 +135,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. SDK Core | 5/5 | Complete | 2026-08-30 |
 | 2. Backend API | 4/4 | Complete    | 2026-09-01 |
-| 3. Admin Panel | 2/3 | In Progress|  |
+| 3. Admin Panel | 3/3 | In Progress|  |
 | 4. Docker Deployment | 0/TBD | Not started | - |

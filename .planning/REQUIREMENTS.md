@@ -75,7 +75,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **PAN-02**: Login form — email/password, redirects to incident list on success
 - [x] **PAN-03**: Incident listing — paginated table with columns: type, status, date, preview
 - [x] **PAN-04**: Filter bar — filter by type (Bug/Feedback), status (Pending/In Progress/Resolved)
-- [ ] **PAN-05**: Incident detail view — full screenshot preview, metadata display, status management
+- [x] **PAN-05**: Incident detail view — full screenshot preview, metadata display, status management
 - [x] **PAN-06**: Responsive layout — works on desktop and tablet
 - [x] **PAN-07**: All user content rendered as escaped text — no raw HTML rendering
 
@@ -182,7 +182,7 @@ Deferred to future release. Tracked but not in current roadmap.
 | PAN-02 | Phase 3 | Complete |
 | PAN-03 | Phase 3 | Complete |
 | PAN-04 | Phase 3 | Complete |
-| PAN-05 | Phase 3 | Pending |
+| PAN-05 | Phase 3 | Complete |
 | PAN-06 | Phase 3 | Complete |
 | PAN-07 | Phase 3 | Complete |
 | DEP-01 | Phase 4 | Pending |
