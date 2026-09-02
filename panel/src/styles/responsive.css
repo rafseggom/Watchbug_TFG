@@ -24,8 +24,19 @@
     -webkit-overflow-scrolling: touch;
   }
 
-  .col-thumbnail {
+  /* Hide thumbnail/preview column below 768 per D-12 */
+  .col-thumbnail,
+  table th:nth-child(4),
+  table td:nth-child(4) {
     display: none;
+  }
+
+  table {
+    font-size: 14px;
+  }
+
+  .filter-bar {
+    flex-wrap: wrap;
   }
 
   .table-ua {

@@ -393,6 +393,7 @@ export async function renderList(root: HTMLElement, query: Record<string, string
         const retryAfter = res.headers.get("Retry-After");
         let msg = t("errors.rateLimited");
         if (retryAfter) msg = `${msg} (Retry-After: ${retryAfter}s)`;
+        msg = `${msg} (429)`;
         updateFooter(page, currentPages, currentTotal);
         showError(msg, page);
         showToast(msg);
