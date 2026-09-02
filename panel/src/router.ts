@@ -1,6 +1,7 @@
 import { parseHash, navigate } from "./utils/hash";
 import { renderLogin } from "./views/login";
 import { authGuard } from "./auth";
+import { renderHeader } from "./components/header";
 
 export { navigate, parseHash };
 export type { Route } from "./utils/hash";
@@ -22,6 +23,7 @@ function renderNotFound(root: HTMLElement): void {
 
 function renderListPlaceholder(root: HTMLElement): void {
   root.textContent = "";
+  renderHeader(root);
   const wrapper = document.createElement("div");
   wrapper.style.padding = "24px";
   const h = document.createElement("h2");
@@ -35,6 +37,7 @@ function renderListPlaceholder(root: HTMLElement): void {
 
 function renderDetailPlaceholder(root: HTMLElement, id: string): void {
   root.textContent = "";
+  renderHeader(root);
   const wrapper = document.createElement("div");
   wrapper.style.padding = "24px";
   const h = document.createElement("h2");
