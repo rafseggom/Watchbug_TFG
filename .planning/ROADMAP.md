@@ -94,7 +94,7 @@ Plans:
   4. Status changes from the detail view persist to the backend and reflect in the list
   5. Panel works on desktop and tablet viewports; all user-generated content is rendered as escaped text (no raw HTML)
 
-**Plans:** 1/3 plans executed
+**Plans:** 2/3 plans executed
 
 Plans:
 **Wave 1**
@@ -103,7 +103,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1)*
 
-- [ ] 03-02-PLAN.md — Incident list: paginated table, filter bar hash-synced, pagination, skeleton/empty/error, responsive 768
+- [x] 03-02-PLAN.md — Incident list: paginated table, filter bar hash-synced, pagination, skeleton/empty/error, responsive 768
 
 **Wave 3** *(blocked on Wave 2)*
 
@@ -135,5 +135,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. SDK Core | 5/5 | Complete | 2026-08-30 |
 | 2. Backend API | 4/4 | Complete    | 2026-09-01 |
-| 3. Admin Panel | 1/3 | In Progress|  |
+| 3. Admin Panel | 2/3 | In Progress|  |
 | 4. Docker Deployment | 0/TBD | Not started | - |
