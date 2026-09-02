@@ -9,6 +9,14 @@ import { showToast } from "../components/toast";
 
 const PAGE_SIZE = 20;
 
+function getCachedStatus(id: string): string | null {
+  try {
+    return localStorage.getItem(`watchbug:inc-${id}:status`);
+  } catch {
+    return null;
+  }
+}
+
 type IncidentItem = {
   id: string;
   type: string;
@@ -304,9 +312,12 @@ export async function renderList(root: HTMLElement, query: Record<string, string
     tbody.textContent = "";
     stateArea.textContent = "";
     for (const item of items) {
+      const cached = getCachedStatus(item.id);
+      const effectiveStatus = cached ?? item.status;
       const tr = document.createElement("tr");
       tr.style.borderBottom = "1px solid var(--color-border)";
       tr.style.cursor = "pointer";
+      tr.dataset.incId = item.id;
       tr.addEventListener("click", () => {
         location.hash = `#/incidents/${item.id}`;
       });
@@ -317,7 +328,7 @@ export async function renderList(root: HTMLElement, query: Record<string, string
 
       const tdStatus = document.createElement("td");
       tdStatus.style.padding = "10px 12px";
-      tdStatus.appendChild(renderStatusBadge(item.status));
+      tdStatus.appendChild(renderStatusBadge(effectiveStatus));
 
       const tdDate = document.createElement("td");
       tdDate.style.padding = "10px 12px";
@@ -438,6 +449,26 @@ export async function renderList(root: HTMLElement, query: Record<string, string
     if (location.hash !== newHash) location.hash = newHash;
     void fetchAndRender(newPage);
   });
+
+  // Optimistic cache: listen for status updates from detail view
+  window.addEventListener("watchbug:status-updated", ((e: CustomEvent<{ id: string; status: string }>) => {
+    const { id: updatedId, status: nextStatus } = e.detail ?? { id: "", status: "" };
+    if (!updatedId || !nextStatus) return;
+    try {
+      localStorage.setItem(`watchbug:inc-${updatedId}:status`, nextStatus);
+    } catch {
+      // ignore
+    }
+    // Update visible row if present without refetch
+    const row = tbody.querySelector(`tr[data-inc-id="${updatedId}"]`);
+    if (row) {
+      const statusCell = row.querySelectorAll("td")[1];
+      if (statusCell) {
+        statusCell.textContent = "";
+        statusCell.appendChild(renderStatusBadge(nextStatus));
+      }
+    }
+  }) as EventListener);
 
   // Filter change handlers
   const onFilterChange = (): void => {

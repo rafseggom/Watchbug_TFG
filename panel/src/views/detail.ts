@@ -1,6 +1,7 @@
 import { apiFetch } from "../api";
 import { renderHeader } from "../components/header";
 import { renderTypeBadge, renderStatusBadge } from "../components/badges";
+import { showToast } from "../components/toast";
 import { t, getLang } from "../i18n/index";
 import { isSafeHref } from "../utils/sanitize";
 import { formatDate } from "../utils/format";
@@ -297,6 +298,59 @@ export async function renderDetail(root: HTMLElement, id: string): Promise<void>
   if (ALLOWED_STATUSES.includes(detail.status as typeof ALLOWED_STATUSES[number])) {
     statusSelect.value = detail.status;
   }
+
+  // Status PATCH workflow with optimistic update + revert
+  statusSelect.addEventListener("change", async () => {
+    const next = statusSelect.value;
+    const prior = detail.status;
+    if (next === prior) return;
+    inlineError.textContent = "";
+    statusSelect.disabled = true;
+    try {
+      const res = await apiFetch(`/api/incidents/${id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: next }),
+      });
+      if (res.ok) {
+        detail.status = next;
+        showToast(t("toast.statusUpdated"));
+        try {
+          localStorage.setItem(`watchbug:inc-${id}:status`, next);
+          window.dispatchEvent(
+            new CustomEvent("watchbug:status-updated", { detail: { id, status: next } }),
+          );
+        } catch {
+          // ignore storage/event errors
+        }
+        // keep select at next value
+        statusSelect.value = next;
+      } else if (res.status === 422) {
+        inlineError.textContent = t("errors.invalidStatus");
+        statusSelect.value = prior;
+        showToast(t("errors.invalidStatus"), "error");
+      } else if (res.status === 401) {
+        statusSelect.value = prior;
+        location.hash = "#/login";
+      } else {
+        let msg = t("errors.network");
+        try {
+          const body = (await res.json()) as { detail?: string };
+          if (body?.detail) msg = body.detail;
+        } catch {
+          // keep generic
+        }
+        inlineError.textContent = msg;
+        statusSelect.value = prior;
+        showToast(msg, "error");
+      }
+    } catch {
+      inlineError.textContent = t("errors.network");
+      statusSelect.value = prior;
+      showToast(t("errors.network"), "error");
+    } finally {
+      statusSelect.disabled = false;
+    }
+  });
 
   // Left pane: screenshot
   if (detail.screenshot && typeof detail.screenshot === "string" && detail.screenshot.startsWith("data:image")) {
