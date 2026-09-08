@@ -5,11 +5,12 @@
 
 ---
 
-## Estado actual (2026-09-01)
+## Estado actual (2026-09-08)
 
 - **Phase 01 — SDK Core: COMPLETE** — 5/5 planes ejecutados, verificación PASS (117 unit + 6 E2E, bundle 8.85 KB gzipped ≤45KB), shipped en `8da34ae` PR #2.
 - **Phase 02 — Backend API: COMPLETE** — 4/4 planes ejecutados, verificación PASS (65 tests, 20/20 truths verified), commits `81cdf7d`, `33522e1`, `bbdcfe2`, `2235330`, `cf0333c`, `2f8f1c3`. 39/39 requirements satisfied (API-01..05, AUTH-01..04, DB-01..04, SEC-01..05).
-- **Phase 03/04:** Pendientes.
+- **Phase 03 — Admin Panel: COMPLETE** — 3/3 planes ejecutados, verificación PASS (43 tests, build 8.18kB gzipped, 0 innerHTML), completado 2026-09-02.
+- **Phase 04 — Docker Deployment: COMPLETE** — 2/2 planes ejecutados, verificación PASS (5/5 must-haves, DEP-01..05 satisfied), completado 2026-09-08.
 
 Este archivo estaba vacío hasta 2026-08-31. Se inicializa retroactivamente con los dead-ends y decisiones de Fase 1 para no repetir exploración. A partir de ahora los agentes (`gsd-executor`) deben escribir cada dead-end en el momento del fallo, no al final.
 
@@ -91,10 +92,50 @@ Este archivo estaba vacío hasta 2026-08-31. Se inicializa retroactivamente con 
 
 ---
 
+## Phase 03 — Complete (2026-09-02)
+
+- 3/3 planes ejecutados: `03-01` Tracer Scaffold + Vite + FastAPI Mount, `03-02` Incident List, `03-03` Detail View
+- Verificación: `03-VERIFICATION.md` — 43 tests pass, build 8.18kB gzipped, 0 innerHTML
+- **Deviations auto-fixed** (no dead-ends):
+  1. Vite base ./ with outDir ../backend/api/static/panel — avoids 404 at /panel/assets when mounted at subpath
+  2. Hash routing only — avoids FastAPI fallback, probe+refresh guard never reads HttpOnly cookie
+  3. Badge classes use allowlist fallback — prevents class injection XSS
+  4. Skeleton 5 rows colSpan optimization — keeps 5 shimmer count predictable vs 20
+- **Notas de continuidad**:
+  - Panel builds INTO `backend/api/static/panel/` — Dockerfile Node stage replicates this exact flow
+  - Hash routing only (`/#/`, `/#/detail/:id`) — no server-side routing needed
+  - All user-generated content rendered as escaped text (textContent, not innerHTML) — SEC-05
+  - Status PATCH optimistic via select change + toast + localStorage + CustomEvent
+  - List optimistic overlay getCachedStatus + event patch visible row without refetch
+
+---
+
+## Phase 04 — Complete (2026-09-08)
+
+- 2/2 planes ejecutados: `04-01` Tracer Multi-Stage Dockerfile + Compose + Entrypoint, `04-02` .env.example + Persistence Docs + down -v Contract
+- Verificación: `04-VERIFICATION.md` — 5/5 must-haves verified, DEP-01 through DEP-05 satisfied
+- **Deviations auto-fixed** (no dead-ends):
+  1. Added `PYTHONPATH=/app` to fix Alembic ModuleNotFoundError in container (Plan 01)
+  2. Remapped db port to 5433:5432 to avoid host PostgreSQL conflict (Plan 01)
+  3. Uncommented POSTGRES_* and PORT in .env.example to meet >=14 active key gate (Plan 02)
+  4. Made env_file optional via `required: false` so compose config works without .env (Plan 02)
+- **Notas de continuidad**:
+  - Single multi-stage Dockerfile: Node 22-alpine builder → Python 3.12-slim runtime per D-01
+  - PostgreSQL pinned to `postgres:16-alpine` per D-02 — not `:latest` or `:16`
+  - Entrypoint runs `alembic upgrade head` before `exec uvicorn --workers 1` per D-03
+  - Non-root user app (UID 10001) with curl for HEALTHCHECK
+  - .dockerignore excludes .env, node_modules, .git — build context 674B
+  - docker-compose.yml: Compose Spec (no version:), health-gated depends_on, loopback port binding
+  - env_file optional via `required: false` — compose config works with or without .env
+  - README documents volume lifecycle: `down` keeps pgdata, `down -v` destroys
+  - Health probe contract: 200-always with curl -f, strict python -c alternative documented
+
+---
+
 ## Protocolo para futuros agentes
 
 1. **Leer este archivo al inicio de sesión** (Anti-Amnesia).
 2. **Al fallar algo**: escribir Dead-End aquí con formato de arriba **antes** de probar la siguiente alternativa.
 3. No agrupar dead-ends al final. No omitir `Evidence` concreto (mensaje de error, medida de bundle, test fail).
 
-*Última actualización: 2026-09-01 — Phase 02 complete (backend API 4/4 plans, 65 tests, 20/20 verified)*
+*Última actualización: 2026-09-08 — Phase 04 complete (Docker deployment 2/2 plans, 5/5 must-haves verified, all 4 phases complete)*

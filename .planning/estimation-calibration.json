@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "samples": [
+    {
+      "estimateTokens": 45000,
+      "actualTokens": 7886
+    },
+    {
+      "estimateTokens": 40000,
+      "actualTokens": 10626
+    },
+    {
+      "estimateTokens": 45000,
+      "actualTokens": 13960
+    },
+    {
+      "estimateTokens": 45000,
+      "actualTokens": 12800
+    },
+    {
+      "estimateTokens": 25000,
+      "actualTokens": 3400
+    },
+    {
+      "estimateTokens": 31000,
+      "actualTokens": 8400
+    },
+    {
+      "estimateTokens": 27000,
+      "actualTokens": 6040
+    },
+    {
+      "estimateTokens": 29000,
+      "actualTokens": 18200
+    },
+    {
+      "estimateTokens": 28000,
+      "actualTokens": 12460
+    },
+    {
+      "estimateTokens": 31000,
+      "actualTokens": 39597
+    },
+    {
+      "estimateTokens": 29000,
+      "actualTokens": 8899
+    },
+    {
+      "estimateTokens": 27000,
+      "actualTokens": 9827
+    },
+    {
+      "estimateTokens": 31000,
+      "actualTokens": 1281
+    },
+    {
+      "estimateTokens": 24000,
+      "actualTokens": 16800
+    }
+  ]
+}
