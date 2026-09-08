@@ -1,0 +1,44 @@
+# .dockerignore — exclude files from Docker build context
+# Mirrors .gitignore plus Docker-specific additions
+
+# Git
+.git
+.gitignore
+
+# GSD planning
+.gsdr-profile
+.gsdr-install-state.json
+.gs/
+.planning/
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Node
+node_modules/
+
+# Build artifacts (produced by Node stage, not source)
+panel/dist/
+backend/api/static/panel/
+
+# Backend venv (may exist from local dev)
+backend/.venv/
+backend/__pycache__/
+
+# OpenCode
+.opencode/
+
+# Secrets — never bake into image (SEC-04)
+.env
+
+# Logs and coverage
+*.log
+coverage/
+
+# SDK dist (not needed for backend image)
+sdk/dist/
