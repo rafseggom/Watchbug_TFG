@@ -1,0 +1,33 @@
+{
+  "contract": "1.0.0",
+  "flavor": "core",
+  "milestone": null,
+  "phases": [
+    {
+      "number": "1",
+      "name": "SDK Core",
+      "status": "complete"
+    },
+    {
+      "number": "2",
+      "name": "Backend API",
+      "status": "complete"
+    },
+    {
+      "number": "3",
+      "name": "Admin Panel",
+      "status": "complete"
+    },
+    {
+      "number": "4",
+      "name": "Docker Deployment",
+      "status": "complete"
+    }
+  ],
+  "next": {
+    "command": "/gsd:new-milestone",
+    "label": "Start a new milestone",
+    "reason": "All phases complete — start a new milestone"
+  },
+  "updated_at": "2026-09-08T18:09:38.191Z"
+}

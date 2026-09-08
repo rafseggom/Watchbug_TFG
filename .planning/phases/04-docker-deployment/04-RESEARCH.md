@@ -529,21 +529,24 @@ export default defineConfig({
 | A4 | Port `8000` is the intended external port (currently `8000` in Vite proxy `target: http://localhost:8000` [VERIFIED: panel/vite.config.ts:13] and Settings default DATABASE `localhost:5432`) [CITED: .env.example] | Architecture Patterns | If host already uses 8000 (common), compose ports must remap (`"${PORT:-8000}:8000"` pattern); document env-driven port mapping |
 | A5 | Digest pinning is desired for reproducibility — team agrees to run refresh script (`ops/refresh-docker-base-digests.sh` pattern) on base updates [ASSUMED] | Standard Stack | If not desired, pinning to tag only (`16-alpine`, `3.12-slim`, `22-alpine`) is sufficient but loses reproducibility guarantee emphasized by patrykgolabek.dev |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Should `GET /api/health` return non-200 when DB is disconnected, or keep current 200-always and use strict Python probe?**
-   - What we know: Current handler always 200 with `db: disconnected` [VERIFIED: backend/app/routers/health.py:10-17]; `curl -f` healthcheck thus always passes. Phase 02 docs never specified health HTTP code semantics.
-   - What's unclear: Whether infra-only phase is allowed to change health HTTP semantics (would be API change, contradicts phase boundary "no API changes"). Safer to keep 200 and use strict probe.
-   - Recommendation: Keep endpoint unchanged; use `python -c` JSON-asserting probe in Docker HEALTHCHECK; document alternative (503) as deferred if health semantics later needed for orchestration.
+1. **Should `GET /api/health` return non-200 when DB is disconnected, or keep current 200-always and use strict Python probe? — RESOLVED: Keep 200-always**
+    - What we know: Current handler always 200 with `db: disconnected` [VERIFIED: backend/app/routers/health.py:10-17]; `curl -f` healthcheck thus always passes. Phase 02 docs never specified health HTTP code semantics.
+    - What's unclear: Whether infra-only phase is allowed to change health HTTP semantics (would be API change, contradicts phase boundary "no API changes"). Safer to keep 200 and use strict probe.
+    - Recommendation: Keep endpoint unchanged; use `python -c` JSON-asserting probe in Docker HEALTHCHECK; document alternative (503) as deferred if health semantics later needed for orchestration.
+    - **RESOLVED:** Keep `GET /api/health` at 200-always with `db: connected|disconnected` field per current contract; Docker HEALTHCHECK uses `curl -f http://localhost:8000/api/health` (HTTP liveness) per D-03/D-04 scope. Strict JSON-asserting alternative `python -c "import urllib.request,json,sys; d=json.load(...); sys.exit(0 if d.get('db')=='connected' else 1)"` is documented in RESEARCH Pitfall 2 and README health probe section as operator opt-in; no 503 change in Phase 04 (infra-only, no API contract change).
 
-2. **Is `postgres:16-alpine` acceptable despite musl minimal locale risk, or should runtime switch to `postgres:16-bookworm` for broader extension/locale compatibility?**
-   - What we know: D-02 locks `postgres:16-alpine` per user decision; Alpine is ~70 MB vs 150 MB Debian but minimal locales can break Turkish sort / some extensions [CITED: techearl.com]. DEP-05 requires pin, not variant.
-   - What's unclear: Whether future panel/API search features need locale-aware collation or `pgvector` extensions that prefer Debian.
-   - Recommendation: Honor D-02 Alpine for Phase 04; add `Alternatives Considered` note that switching to `16-bookworm` is single-line change if extension/locale need arises.
+2. **Is `postgres:16-alpine` acceptable despite musl minimal locale risk, or should runtime switch to `postgres:16-bookworm` for broader extension/locale compatibility? — RESOLVED: Honor D-02 postgres:16-alpine**
+    - What we know: D-02 locks `postgres:16-alpine` per user decision; Alpine is ~70 MB vs 150 MB Debian but minimal locales can break Turkish sort / some extensions [CITED: techearl.com]. DEP-05 requires pin, not variant.
+    - What's unclear: Whether future panel/API search features need locale-aware collation or `pgvector` extensions that prefer Debian.
+    - Recommendation: Honor D-02 Alpine for Phase 04; add `Alternatives Considered` note that switching to `16-bookworm` is single-line change if extension/locale need arises.
+    - **RESOLVED:** Honor locked decision D-02 `postgres:16-alpine` for Phase 04 (DEP-05 pin). Alpine size win outweighs locale risk for Watchbug's JSONB+BYTEA workload; `postgres:16-bookworm` remains a one-line compose image change if future locale/`pgvector` need arises. Document digest-refresh procedure via `docker pull` + `docker inspect` in Standard Stack.
 
-3. **Does the panel lockfile exist in repo for `npm ci`, and what is the exact Dockerfile WORKDIR to satisfy relative outDir?**
-   - What we know: `panel/package.json` exists without visible lockfile; `vite.config.ts` outDir `"../backend/api/static/panel"` is relative to `panel/` [VERIFIED]. Dockerfile pattern must be prototyped with `ls` after `vite build` to confirm artifact location.
-   - Recommendation: Planner's first task validates lockfile presence and builds panel in an empty container to assert outDir correctness before committing Dockerfile.
+3. **Does the panel lockfile exist in repo for `npm ci`, and what is the exact Dockerfile WORKDIR to satisfy relative outDir? — RESOLVED: Validate lockfile + WORKDIR /app pattern**
+    - What we know: `panel/package.json` exists without visible lockfile; `vite.config.ts` outDir `"../backend/api/static/panel"` is relative to `panel/` [VERIFIED]. Dockerfile pattern must be prototyped with `ls` after `vite build` to confirm artifact location.
+    - Recommendation: Planner's first task validates lockfile presence and builds panel in an empty container to assert outDir correctness before committing Dockerfile.
+    - **RESOLVED:** Plan 04-01 Task 1 validates `panel/package-lock.json` presence and uses `WORKDIR /app` with `COPY panel/ + COPY backend/api/` before `npm --prefix panel run build` so relative outDir `../backend/api/static/panel` resolves to `/app/backend/api/static/panel`; builder stage asserts with `ls /app/backend/api/static/panel/index.html` before `COPY --from=panel-builder` to runtime at `/app/api/static/panel`. Fallback if lockfile missing is `npm install`.
 
 ## Environment Availability
 
