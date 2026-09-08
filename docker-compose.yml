@@ -40,7 +40,8 @@ services:
       DEFAULT_PROJECT_API_KEY: ${DEFAULT_PROJECT_API_KEY:-wb_test_project_key_123}
       DOCS_ENABLED: ${DOCS_ENABLED:-false}
     env_file:
-      - .env
+      - path: .env
+        required: false
     depends_on:
       db:
         condition: service_healthy
