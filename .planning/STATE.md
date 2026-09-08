@@ -1,73 +1,52 @@
 ---
 gsd_state_version: 1.0
-current_phase: 04
-status: "Phase 04 shipped — PR #2"
-stopped_at: Phase 04 complete — all phases complete
-last_updated: "2026-09-08T18:18:41.799Z"
+current_phase: complete
+status: "Milestone v1.0 shipped"
+stopped_at: Milestone v1.0 complete — all phases archived
+last_updated: "2026-09-08T21:30:00Z"
 last_activity: 2026-09-08
-state_head: cd492fb10b0d137b4f696a49a28bc302626eaa01
+state_head: 77d3d0a
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 14
   completed_plans: 14
-  percent: 75
+  percent: 100
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-08-29)
+See: .planning/PROJECT.md (updated 2026-09-08)
 
 **Core value:** A lightweight, fully isolated widget that captures bugs with full visual context (screenshot + metadata) without breaking or leaking into the host application.
-**Current focus:** Phase 04 — Docker Deployment
+**Current focus:** v2.0 planning — real DOM screenshots, integration tests, real-time updates
 
 ## Current Position
 
-Phase: 04
-Plan: Not started
-Status: Phase 04 shipped — PR #2
+Milestone: v1.0 (complete)
+Status: All phases shipped and archived
 Last activity: 2026-09-08
 
-Progress: [███████░░░] 75% (3/4 phases)
+Progress: [██████████] 100% (4/4 phases, 14/14 plans)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 11
-- Average duration: 12.6 min
-- Total execution time: 63 min (1h 3m)
+- Total plans completed: 14
+- Average duration: ~20 min
+- Total execution time: ~5 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01 SDK Core | 5 | 63 min | 12.6 min |
-| 02 | 4 | - | - |
-| 04 | 2 | - | - |
-
-**Recent Trend:**
-
-- Last 5 plans: 17, 12, 12, 14, 8 min
-- Trend: stable ~12 min avg
-
-*Updated after each plan completion*
-**Per-Plan Metrics:**
-
-| Plan | Duration | Tasks | Files |
-|------|----------|-------|-------|
-| Phase 01-sdk-core P01 | 17min | 3 tasks | 11 files |
-| Phase 01-sdk-core P02 | 12min | 3 tasks | 10 files |
-| Phase 01-sdk-core P03 | 12min | 3 tasks | 11 files |
-| Phase 01-sdk-core P04 | 14min | 2 tasks | 10 files |
-| Phase 01 P05 | 8 min | 3 tasks | 8 files |
-| Phase 02 P02 | 28min | 3 tasks | 10 files |
-| Phase 02-backend-api P03 | 42min | 3 tasks | 10 files |
-| Phase 03 P01 | 35min | 3 tasks | 29 files |
-| Phase 03 P02 | 15min | 2 tasks | 11 files |
-| Phase 03 P03 | 25min | 2 tasks | 8 files |
+| 02 Backend API | 4 | ~90 min | ~22 min |
+| 03 Admin Panel | 3 | ~75 min | ~25 min |
+| 04 Docker Deployment | 2 | ~20 min | ~10 min |
 
 ## Accumulated Context
 
@@ -75,30 +54,8 @@ Progress: [███████░░░] 75% (3/4 phases)
 
 Decisions are logged in PROJECT.md Key Decisions table.
 
-- [Roadmap]: 4-phase structure — SDK → Backend → Panel → Docker — each phase delivers vertical slice
-- [Roadmap]: Phase 1 tackles hardest risks first (Shadow DOM isolation, bundle size, destructive masking)
-- [Phase 01]: Use closed Shadow DOM with connectedCallback for ARIA to avoid jsdom constructor attribute error
-- [Phase 01]: Root package.json required for vitest at project root alongside sdk/package.json
-- [Phase 01]: Widget bundled via side-effect import in entry point to ensure customElements registration
-- [Phase 01]: Use canvas.toDataURL with SecurityError catch and timeout race for viewport screenshot - keeps bundle small
-- [Phase 01]: Console timestamps as ISO strings with number fallback for legacy _pushConsoleEntry
-- [Phase 01]: Patch ConsoleBuffer.add to respect consent flag rather than stopping interception
-- [Phase 01]: Add submitReport to WatchbugAPI via EventBatcher - updated sdk-entry keys test
-- [Phase 01]: Canvas editor with 5 tools using per-tool factories and destructive maskRegion via getImageData/putImageData
-- [Phase 01]: Auto-sanitizer masks password, sensitive and credit-card patterns before screenshot encode, integrated in screenshot.ts
-- [Phase 01]: Transport sender with credentials omit, validation TRN-04, retry exponential backoff, draft localStorage, consent via isEnabled, widget submit flow with toast/retry per D-07/D-08/CAP-06
-- [Phase 01]: Plan 01-05: Finalized Rollup IIFE build with terser (8.85KB gzipped), bundle size gate check-size.js, E2E isolation tests proving Shadow DOM with aggressive CSS
-- [Phase 02]: 02-02: bcrypt direct cost12 + HS256 jti/sub/exp/iat cookies watchbug_access/refresh HttpOnly Lax Secure via ENV
-- [Phase 02]: 02-02: LoginRequest email as str to allow admin@watchbug.local .local domain rejected by EmailStr
-- [Phase 02]: 02-03: XSS html.escape + 100KB 413 guard + split CORS + slowapi rate limiting with IngestCors preflight
-- [Phase 03]: Vite base ./ with outDir ../backend/api/static/panel avoids 404 at /panel/assets when mounted at subpath
-- [Phase 03]: Hash routing only avoids FastAPI fallback, probe+refresh guard never reads HttpOnly cookie
-- [Phase 03]: Badge classes use allowlist fallback to prevent class injection XSS
-- [Phase 03]: Skeleton 5 rows colSpan optimization keeps 5 shimmer count predictable vs 20
-- [Phase 03]: List pagination hash includes page param shareable, filter reset to 1
-- [Phase 03]: Detail uses data URL screenshot lazy contain + lightbox 90vw overlay dismiss outside, metadata via textContent with isSafeHref guard, consoleLogs details badge args slice 2000
-- [Phase 03]: Status PATCH optimistic via select change, toast, localStorage watchbug:inc-:id:status + CustomEvent watchbug:status-updated, 422 revert inline, Any->Any allowed
-- [Phase 03]: List optimistic overlay getCachedStatus + event patch visible row without refetch, meta-card .meta-card to preserve login .card
+- [v1.0]: 10 key decisions validated across 4 phases
+- [v1.0]: 84 institutional learnings captured (34 decisions, 18 lessons, 24 patterns, 8 surprises)
 
 ### Pending Todos
 
@@ -114,10 +71,14 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 | Category | Item | Status | Deferred At | Milestone |
 |----------|------|--------|-------------|-----------|
-| *(none)* | | | | |
+| tech_debt | Screenshot capture uses white placeholder | acknowledged | 2026-09-08 | v1.0 |
+| tech_debt | ConsoleEntry dual args/message schema | acknowledged | 2026-09-08 | v1.0 |
+| tech_debt | No real-time updates | acknowledged | 2026-09-08 | v1.0 |
+| tech_debt | Single uvicorn worker | acknowledged | 2026-09-08 | v1.0 |
+| requirement | TST-02 integration tests | unsatisfied | 2026-09-08 | v1.0 |
 
 ## Session Continuity
 
-Last session: 2026-09-04T17:17:43.948Z
-Stopped at: Phase 04 complete — all phases complete
-Resume file: .planning/phases/04-docker-deployment/04-CONTEXT.md
+Last session: 2026-09-08T21:30:00Z
+Stopped at: Milestone v1.0 complete — ready for v2.0 planning
+Resume file: .planning/ROADMAP.md

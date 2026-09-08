@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Watchbug Test Page</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #f5f5f5; color: #333; padding: 2rem; }
+    h1 { margin-bottom: .25rem; font-size: 1.5rem; }
+    .subtitle { color: #6b7280; margin-bottom: 1.5rem; font-size: .875rem; }
+    .section { margin-bottom: 1.5rem; padding: 1rem; background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+    .section h2 { font-size: 1rem; margin-bottom: .75rem; }
+    .row { display: flex; flex-wrap: wrap; gap: .5rem; }
+    button {
+      padding: .5rem 1rem; border: none; border-radius: 6px; cursor: pointer;
+      font-size: .875rem; font-weight: 500; transition: opacity .15s;
+    }
+    button:hover { opacity: .85; }
+    .btn-log { background: #2563eb; color: #fff; }
+    .btn-warn { background: #d97706; color: #fff; }
+    .btn-error { background: #dc2626; color: #fff; }
+    .btn-info { background: #0891b2; color: #fff; }
+    .btn-send { background: #16a34a; color: #fff; }
+    .btn-draft { background: #7c3aed; color: #fff; }
+    .btn-neutral { background: #6b7280; color: #fff; }
+    .btn-reset { background: #be123c; color: #fff; }
+    #output {
+      background: #1e1e1e; color: #d4d4d4; font-family: monospace;
+      font-size: .8rem; padding: 1rem; border-radius: 6px;
+      max-height: 300px; overflow-y: auto; white-space: pre-wrap;
+    }
+    .badge { display: inline-block; padding: .15rem .5rem; border-radius: 4px; font-size: .7rem; font-weight: 600; margin-left: .5rem; }
+    .badge-ok { background: #dcfce7; color: #166534; }
+    .badge-err { background: #fee2e2; color: #991b1b; }
+    input[type="password"], input[type="text"] {
+      padding: .5rem; border: 1px solid #d1d5db; border-radius: 6px;
+      width: 220px; font-size: .875rem;
+    }
+    .status { margin-top: .5rem; font-size: .8rem; color: #6b7280; }
+
+    .hero { background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff; padding: 2rem; border-radius: 12px; margin-bottom: 1.5rem; text-align: center; }
+    .hero h2 { font-size: 1.75rem; margin-bottom: .5rem; }
+    .hero p { opacity: .9; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+    .card { background: #fff; padding: 1.25rem; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+    .card h3 { font-size: .95rem; margin-bottom: .5rem; }
+    .card p { font-size: .8rem; color: #6b7280; }
+    .card .num { font-size: 1.75rem; font-weight: 700; color: #6366f1; }
+    .demo-table { width: 100%; border-collapse: collapse; margin-top: .5rem; font-size: .85rem; }
+    .demo-table th, .demo-table td { padding: .5rem .75rem; border-bottom: 1px solid #e5e7eb; text-align: left; }
+    .demo-table th { background: #f9fafb; font-weight: 600; }
+    .status-badge { display: inline-block; padding: .15rem .5rem; border-radius: 9999px; font-size: .7rem; font-weight: 600; }
+    .st-pending { background: #fef3c7; color: #92400e; }
+    .st-active { background: #d1fae5; color: #065f46; }
+    .st-done { background: #e0e7ff; color: #3730a3; }
+  </style>
+</head>
+<body>
+
+<h1>Watchbug SDK Test Page</h1>
+<p class="subtitle">Manual testing dashboard &mdash; generate errors, capture screenshots, send reports to the admin panel.</p>
+
+<!-- Hero banner — visible content for screenshots -->
+<div class="hero">
+  <h2>Watchbug Dashboard</h2>
+  <p>This section ensures screenshots capture meaningful visual content.</p>
+</div>
+
+<!-- Stat cards — more visual content -->
+<div class="cards">
+  <div class="card"><div class="num">12</div><h3>Total Reports</h3><p>Bug + feedback reports submitted</p></div>
+  <div class="card"><div class="num">3</div><h3>Open Issues</h3><p>Pending resolution</p></div>
+  <div class="card"><div class="num">9</div><h3>Resolved</h3><p>Fixed and closed</p></div>
+  <div class="card"><div class="num">98%</div><h3>Uptime</h3><p>Last 30 days</p></div>
+</div>
+
+<!-- Sample table — more visual content -->
+<div class="section">
+  <h2>Recent Activity</h2>
+  <table class="demo-table">
+    <thead><tr><th>ID</th><th>Type</th><th>Status</th><th>Date</th></tr></thead>
+    <tbody>
+      <tr><td>#001</td><td>Bug</td><td><span class="status-badge st-pending">Pending</span></td><td>2026-09-08</td></tr>
+      <tr><td>#002</td><td>Feedback</td><td><span class="status-badge st-active">Active</span></td><td>2026-09-07</td></tr>
+      <tr><td>#003</td><td>Bug</td><td><span class="status-badge st-done">Resolved</span></td><td>2026-09-06</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Init -->
+<div class="section">
+  <h2>1. Init SDK</h2>
+  <div class="row" style="align-items:center; gap:.75rem; margin-bottom:.5rem;">
+    <input id="apiKey" type="text" placeholder="API Key" value="wb_test_project_key_123" />
+    <input id="apiUrl" type="text" placeholder="API URL" value="http://localhost:8000" />
+    <button class="btn-send" onclick="initSDK()">Init</button>
+  </div>
+  <div id="initStatus" class="status">Not initialized</div>
+</div>
+
+<!-- Console logs -->
+<div class="section">
+  <h2>2. Console Logs</h2>
+  <div class="row">
+    <button class="btn-log" onclick="console.log('Hello from Watchbug!')">console.log</button>
+    <button class="btn-warn" onclick="console.warn('Something looks off...')">console.warn</button>
+    <button class="btn-error" onclick="console.error('Something broke!')">console.error</button>
+    <button class="btn-info" onclick="console.info('FYI: page loaded')">console.info</button>
+    <button class="btn-neutral" onclick="console.log('password: SuperSecret123!')">Log with secret</button>
+  </div>
+</div>
+
+<!-- Errors -->
+<div class="section">
+  <h2>3. Trigger Errors</h2>
+  <div class="row">
+    <button class="btn-error" onclick="throwError()">Throw Error</button>
+    <button class="btn-error" onclick="throwAsyncError()">Async Error</button>
+    <button class="btn-error" onclick="triggerTypeError()">TypeError</button>
+  </div>
+</div>
+
+<!-- Manual report -->
+<div class="section">
+  <h2>4. Manual Report</h2>
+  <div class="row">
+    <button class="btn-send" onclick="sendManualReport('bug')">Send Bug Report</button>
+    <button class="btn-send" onclick="sendManualReport('feedback')">Send Feedback</button>
+  </div>
+</div>
+
+<!-- Drafts -->
+<div class="section">
+  <h2>5. Drafts (Failed Reports)</h2>
+  <div class="row">
+    <button class="btn-draft" onclick="showDrafts()">Show Drafts</button>
+    <button class="btn-draft" onclick="retryFirstDraft()">Retry First Draft</button>
+    <button class="btn-neutral" onclick="clearOutput()">Clear Output</button>
+  </div>
+</div>
+
+<!-- Widget tools -->
+<div class="section">
+  <h2>6. Widget & Consent</h2>
+  <div class="row">
+    <button class="btn-info" onclick="showLogs()">Show Buffered Logs</button>
+    <button class="btn-neutral" onclick="toggleConsent(true)">Enable Consent</button>
+    <button class="btn-neutral" onclick="toggleConsent(false)">Disable Consent</button>
+    <button class="btn-reset" onclick="resetSDK()">Reset SDK</button>
+  </div>
+</div>
+
+<!-- Output -->
+<div class="section">
+  <h2>Output</h2>
+  <div id="output">Ready.</div>
+</div>
+
+<!-- Hidden sensitive elements for sanitization test -->
+<input type="password" placeholder="Password (auto-masked)" style="margin-top:1rem;" />
+<div data-watchbug-sensitive style="margin-top:.5rem; padding:.5rem; background:#fde68a; border-radius:4px;">
+  This block has data-watchbug-sensitive — should be masked in screenshots.
+</div>
+
+<script src="sdk/dist/watchbug.js"></script>
+<script>
+  const $out = document.getElementById('output');
+  function log(msg) {
+    $out.textContent += '\n[' + new Date().toLocaleTimeString() + '] ' + msg;
+    $out.scrollTop = $out.scrollHeight;
+  }
+  function clearOutput() { $out.textContent = 'Cleared.'; }
+
+  function initSDK() {
+    try {
+      const key = document.getElementById('apiKey').value;
+      const apiUrl = document.getElementById('apiUrl').value;
+      window.Watchbug.init({ key, apiUrl, autoSanitize: true, language: 'en' });
+      document.getElementById('initStatus').innerHTML = 'Initialized <span class="badge badge-ok">OK</span>';
+      log('SDK initialized — key=' + key + ' apiUrl=' + apiUrl);
+    } catch (e) {
+      document.getElementById('initStatus').innerHTML = 'Error: ' + e.message + ' <span class="badge badge-err">FAIL</span>';
+      log('Init failed: ' + e.message);
+    }
+  }
+
+  function throwError() { throw new Error('Manual test error — ' + Date.now()); }
+  function throwAsyncError() {
+    setTimeout(function () { throw new Error('Async uncaught error — ' + Date.now()); }, 100);
+  }
+  function triggerTypeError() { var obj = null; obj.foo.bar; }
+
+  function sendManualReport(type) {
+    try {
+      window.Watchbug.submitReport({
+        type: type,
+        screenshot: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+        metadata: {
+          url: location.href,
+          userAgent: navigator.userAgent,
+          timestamp: new Date().toISOString(),
+          screenWidth: screen.width,
+          screenHeight: screen.height,
+          viewportWidth: window.innerWidth,
+          viewportHeight: window.innerHeight,
+          language: 'en',
+          manualTest: true
+        },
+        consoleLogs: window.Watchbug.getConsoleLogs(),
+        errors: ['Manual test error for ' + type],
+        notes: 'Sent from test page at ' + new Date().toLocaleTimeString()
+      });
+      log('Manual ' + type + ' report queued');
+    } catch (e) {
+      log('submitReport error: ' + e.message);
+    }
+  }
+
+  function showDrafts() {
+    var drafts = window.Watchbug.getDrafts();
+    log('Drafts (' + drafts.length + '): ' + JSON.stringify(drafts, null, 2));
+  }
+
+  function retryFirstDraft() {
+    var drafts = window.Watchbug.getDrafts();
+    if (!drafts.length) { log('No drafts to retry'); return; }
+    var keys = Object.keys(localStorage).filter(function (k) { return k.startsWith('wb_draft_'); });
+    if (!keys.length) { log('No draft keys in localStorage'); return; }
+    window.Watchbug.retryDraft(keys[0]).then(function (res) {
+      log('Retry result: ' + JSON.stringify(res));
+    });
+  }
+
+  function showLogs() {
+    var logs = window.Watchbug.getConsoleLogs();
+    log('Buffered logs (' + logs.length + '):');
+    logs.forEach(function (l) { log('  [' + l.level + '] ' + l.message); });
+  }
+
+  function toggleConsent(enabled) {
+    window.Watchbug.setConsent(enabled);
+    log('Consent set to ' + enabled);
+  }
+
+  function resetSDK() {
+    if (window.Watchbug._resetForTesting) {
+      window.Watchbug._resetForTesting();
+      document.getElementById('initStatus').innerHTML = 'Reset <span class="badge badge-err">RESET</span>';
+      log('SDK reset');
+    } else {
+      log('_resetForTesting not available (production build)');
+    }
+  }
+</script>
+</body>
+</html>

@@ -5,7 +5,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 class ConsoleEntry(BaseModel):
     level: Literal["log", "warn", "error", "info"]
-    args: list[str]
+    args: list[str] | None = None
+    message: str | None = None
     timestamp: str
 
 
