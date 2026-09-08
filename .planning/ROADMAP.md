@@ -9,7 +9,7 @@ Watchbug ships as four vertical slices: a client SDK that captures bugs with ful
 - [x] **Phase 1: SDK Core** - Client widget with Shadow DOM isolation, capture engine, canvas editor, and transport
 - [x] **Phase 2: Backend API** - FastAPI ingestion, PostgreSQL storage, JWT auth, and security hardening (completed 2026-09-01)
 - [x] **Phase 3: Admin Panel** - Static SPA for incident listing, filtering, detail view, and status management (completed 2026-09-02)
-- [ ] **Phase 4: Docker Deployment** - Single docker-compose.yml with multi-stage build and data persistence
+- [x] **Phase 4: Docker Deployment** - Single docker-compose.yml with multi-stage build and data persistence (completed 2026-09-08)
 
 ## Phase Details
 
@@ -127,8 +127,9 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 04-01-PLAN.md — Tracer multi-stage Dockerfile + compose + entrypoint proving healthy stack with panel served (DEP-01, DEP-02, DEP-05)
-- [ ] 04-02-PLAN.md — .env.example completeness + persistence volume docs + down -v destructive contract (DEP-03, DEP-04)
+
+- [x] 04-01-PLAN.md — Tracer multi-stage Dockerfile + compose + entrypoint proving healthy stack with panel served (DEP-01, DEP-02, DEP-05)
+- [x] 04-02-PLAN.md — .env.example completeness + persistence volume docs + down -v destructive contract (DEP-03, DEP-04)
 
 ## Progress
 
@@ -140,4 +141,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | 1. SDK Core | 5/5 | Complete | 2026-08-30 |
 | 2. Backend API | 4/4 | Complete    | 2026-09-01 |
 | 3. Admin Panel | 3/3 | Complete | 2026-09-02 |
-| 4. Docker Deployment | 0/TBD | Not started | - |
+| 4. Docker Deployment | 2/2 | Complete    | 2026-09-08 |

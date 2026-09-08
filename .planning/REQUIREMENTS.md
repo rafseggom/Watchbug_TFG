@@ -81,11 +81,11 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Deployment
 
-- [ ] **DEP-01**: Single `docker-compose.yml` — API + Panel + PostgreSQL, one-command startup
-- [ ] **DEP-02**: Multi-stage Dockerfile — Node builder for panel → Python production image
-- [ ] **DEP-03**: Named Docker volume — PostgreSQL data persistence, documented `-v` behavior
-- [ ] **DEP-04**: `.env.example` — all required environment variables documented
-- [ ] **DEP-05**: PostgreSQL version pinned — specific minor version to prevent upgrade breakage
+- [x] **DEP-01**: Single `docker-compose.yml` — API + Panel + PostgreSQL, one-command startup
+- [x] **DEP-02**: Multi-stage Dockerfile — Node builder for panel → Python production image
+- [x] **DEP-03**: Named Docker volume — PostgreSQL data persistence, documented `-v` behavior
+- [x] **DEP-04**: `.env.example` — all required environment variables documented
+- [x] **DEP-05**: PostgreSQL version pinned — specific minor version to prevent upgrade breakage
 
 ### Testing & Verification
 
@@ -185,11 +185,11 @@ Deferred to future release. Tracked but not in current roadmap.
 | PAN-05 | Phase 3 | Complete |
 | PAN-06 | Phase 3 | Complete |
 | PAN-07 | Phase 3 | Complete |
-| DEP-01 | Phase 4 | Pending |
-| DEP-02 | Phase 4 | Pending |
-| DEP-03 | Phase 4 | Pending |
-| DEP-04 | Phase 4 | Pending |
-| DEP-05 | Phase 4 | Pending |
+| DEP-01 | Phase 4 | Complete |
+| DEP-02 | Phase 4 | Complete |
+| DEP-03 | Phase 4 | Complete |
+| DEP-04 | Phase 4 | Complete |
+| DEP-05 | Phase 4 | Complete |
 | TST-01 | Phase 1 | Complete |
 | TST-02 | Phase 2 | Pending |
 | TST-03 | Phase 1 | Complete |
