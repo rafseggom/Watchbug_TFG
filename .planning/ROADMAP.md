@@ -124,7 +124,11 @@ Plans:
   4. `.env.example` documents all required environment variables — new deployment requires only copying to `.env` and filling values
   5. `docker-compose down -v` behavior is documented — developers understand this destroys data
 
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 04-01-PLAN.md — Tracer multi-stage Dockerfile + compose + entrypoint proving healthy stack with panel served (DEP-01, DEP-02, DEP-05)
+- [ ] 04-02-PLAN.md — .env.example completeness + persistence volume docs + down -v destructive contract (DEP-03, DEP-04)
 
 ## Progress
 
