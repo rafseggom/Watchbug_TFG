@@ -1,0 +1,56 @@
+# docker-compose.yml — Compose Spec (no version: key)
+# Single entrypoint for Watchbug: API + Panel + PostgreSQL
+# Usage: docker compose up -d --build
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-watchbug}
+      POSTGRES_USER: ${POSTGRES_USER:-watchbug}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-watchbug}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5433:5432"
+    healthcheck:
+      # $$ escaped for compose runtime (single $ becomes container env var)
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # Use service name `db` for bridge DNS — never localhost inside compose network
+      DATABASE_URL: postgresql+asyncpg://watchbug:watchbug@db:5432/watchbug
+      ENV: ${ENV:-production}
+      JWT_SECRET: ${JWT_SECRET:-change-me-to-a-random-secret-at-least-32-chars}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://localhost}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@watchbug.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin123!}
+      DEFAULT_PROJECT_API_KEY: ${DEFAULT_PROJECT_API_KEY:-wb_test_project_key_123}
+      DOCS_ENABLED: ${DOCS_ENABLED:-false}
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    init: true
+
+volumes:
+  pgdata:
