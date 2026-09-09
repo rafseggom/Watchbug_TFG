@@ -31,6 +31,50 @@ def _get_project_key(request: Request) -> str:
     return f"{get_remote_address(request)}:{key}"
 
 
+def _validate_origin(origin: str | None) -> None:
+    """SEC-01: reject null origin before any CORS handling (T-02-03-01)."""
+    if origin == "null":
+        raise HTTPException(status_code=403, detail="origin not allowed")
+
+
+def _set_cors_headers(response: Response, origin: str | None, cors_origins_list: list[str]) -> None:
+    """CORS echo for open ingest — allow any customer domain (D-13)."""
+    if origin and origin not in cors_origins_list:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Vary"] = "Origin"
+
+
+def _validate_payload_size(body: bytes, max_bytes: int) -> None:
+    """Payload size guard — 413 before validation per D-08 / SEC-04 / Pitfall 8."""
+    if len(body) > max_bytes:
+        raise HTTPException(status_code=413, detail="payload too large")
+
+
+def _parse_json_body(body: bytes) -> dict:
+    """Parse JSON body, raise 422 on invalid JSON."""
+    try:
+        return json.loads(body) if body else {}
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=422, detail="invalid json") from e
+
+
+def _validate_incident_data(data_dict: dict):
+    """Validate incident data via Pydantic, raise 422 with proper loc shape."""
+    from fastapi.exceptions import RequestValidationError
+    from pydantic import ValidationError
+
+    try:
+        return IncidentCreate(**data_dict)
+    except ValidationError as e:
+        errors = []
+        for err in e.errors():
+            loc = err.get("loc", ())
+            if not isinstance(loc, tuple):
+                loc = (loc,) if isinstance(loc, (str, int)) else tuple(loc)
+            errors.append({**err, "loc": ("body",) + loc})
+        raise RequestValidationError(errors=errors) from e
+
+
 @router.post("", status_code=201)
 @limiter.limit("10/minute")
 @limiter.limit("30/minute", key_func=_get_project_key)
@@ -40,50 +84,17 @@ async def post_incident(
     db: AsyncSession = Depends(get_db),
 ):
     settings = get_settings()
-    # SEC-01: explicit null origin rejection before any CORS handling (T-02-03-01)
     origin = request.headers.get("origin")
-    if origin == "null":
-        raise HTTPException(status_code=403, detail="origin not allowed")
+    _validate_origin(origin)
+    _set_cors_headers(response, origin, settings.cors_origins_list)
 
-    # CORS echo for open ingest — allow any customer domain (D-13). Admin allowlist is enforced by CORSMiddleware;
-    # ingest must echo Origin when not in allowlist so browser accepts response (credentials omit, no Allow-Credentials).
-    if origin and origin not in settings.cors_origins_list:
-        response.headers["Access-Control-Allow-Origin"] = origin
-        response.headers["Vary"] = "Origin"
-
-    # Project key check — 401 before size guard per D-08 distinct error split
     project = await resolve_project(request, db)
 
-    # Payload size guard — 413 before validation per D-08 / SEC-04 / Pitfall 8.
-    # Use actual len(await request.body()) not just Content-Length to handle chunked.
     body = await request.body()
-    if len(body) > settings.MAX_PAYLOAD_BYTES:
-        raise HTTPException(status_code=413, detail="payload too large")
+    _validate_payload_size(body, settings.MAX_PAYLOAD_BYTES)
 
-    # Parse JSON and validate via Pydantic
-    try:
-        data_dict = json.loads(body) if body else {}
-    except json.JSONDecodeError as e:
-        raise HTTPException(status_code=422, detail="invalid json") from e
-
-    # Validate via Pydantic (will raise 422 automatically if invalid via ValidationError handling)
-    # We manually instantiate to get proper 422 response
-    from fastapi.exceptions import RequestValidationError
-    from pydantic import ValidationError
-
-    try:
-        data = IncidentCreate(**data_dict)
-    except ValidationError as e:
-        # Re-raise as RequestValidationError so FastAPI returns 422 with loc detail.
-        # Prepend "body" to loc to match FastAPI automatic validation shape per D-06.
-        errors = []
-        for err in e.errors():
-            loc = err.get("loc", ())
-            # normalize loc to tuple
-            if not isinstance(loc, tuple):
-                loc = (loc,) if isinstance(loc, (str, int)) else tuple(loc)
-            errors.append({**err, "loc": ("body",) + loc})
-        raise RequestValidationError(errors=errors) from e
+    data_dict = _parse_json_body(body)
+    data = _validate_incident_data(data_dict)
 
     incident = await create_incident(db, data, project.id)
 
@@ -167,6 +178,50 @@ async def get_incident_detail(
     return to_incident_detail(incident)
 
 
+def _parse_status_body(body: dict | None) -> str | None:
+    """Extract status from request body."""
+    if isinstance(body, dict):
+        return body.get("status")
+    return None
+
+
+def _validate_status_update(raw_status: str | None):
+    """Validate status update via Pydantic, raise 422 with proper loc shape."""
+    from fastapi.exceptions import RequestValidationError
+    from pydantic import ValidationError
+
+    try:
+        return StatusUpdate(status=raw_status)
+    except ValidationError as e:
+        errors = []
+        for err in e.errors():
+            loc = err.get("loc", ())
+            if not isinstance(loc, tuple):
+                loc = (loc,) if isinstance(loc, (str, int)) else tuple(loc)
+            errors.append({**err, "loc": ("body",) + loc})
+        raise RequestValidationError(errors=errors) from e
+
+
+def _parse_incident_id(incident_id: str) -> uuid.UUID:
+    """Parse incident ID, raise 404 if invalid UUID format."""
+    try:
+        return uuid.UUID(incident_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="incident not found")
+
+
+async def _fetch_incident_or_404(db: AsyncSession, iid: uuid.UUID):
+    """Fetch incident by ID, raise 404 if not found."""
+    from sqlalchemy import select
+    from app.models.incident import Incident
+
+    result = await db.execute(select(Incident).where(Incident.id == iid))
+    incident = result.scalar_one_or_none()
+    if not incident:
+        raise HTTPException(status_code=404, detail="incident not found")
+    return incident
+
+
 @router.patch("/{incident_id}/status", status_code=200)
 @limiter.limit("60/minute")
 async def update_status(
@@ -175,43 +230,17 @@ async def update_status(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    from sqlalchemy import select
+    iid = _parse_incident_id(incident_id)
+    incident = await _fetch_incident_or_404(db, iid)
 
-    from app.models.incident import Incident
-
-    try:
-        iid = uuid.UUID(incident_id)
-    except ValueError:
-        raise HTTPException(status_code=404, detail="incident not found")
-    result = await db.execute(select(Incident).where(Incident.id == iid))
-    incident = result.scalar_one_or_none()
-    if not incident:
-        raise HTTPException(status_code=404, detail="incident not found")
-
-    # Parse body for status update — use StatusUpdate schema for validation
     try:
         body = await request.json()
     except Exception:
         body = {}
-    raw_status = body.get("status") if isinstance(body, dict) else None
 
-    # Validate via StatusUpdate Pydantic to get proper 422 loc shape
-    from fastapi.exceptions import RequestValidationError
-    from pydantic import ValidationError
+    raw_status = _parse_status_body(body)
+    validated = _validate_status_update(raw_status)
 
-    try:
-        validated = StatusUpdate(status=raw_status)
-    except ValidationError as e:
-        errors = []
-        for err in e.errors():
-            loc = err.get("loc", ())
-            if not isinstance(loc, tuple):
-                loc = (loc,) if isinstance(loc, (str, int)) else tuple(loc)
-            # Map to body loc per D-06 shape ["body","status"]
-            errors.append({**err, "loc": ("body",) + loc})
-        raise RequestValidationError(errors=errors) from e
-
-    # Any->Any allowed among three states per D-12 — no state-machine check
     incident.status = validated.status
     await db.commit()
     await db.refresh(incident)

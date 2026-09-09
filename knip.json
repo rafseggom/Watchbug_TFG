@@ -1,0 +1,21 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "workspaces": {
+    "sdk": {
+      "entry": ["src/index.ts", "src/iife-entry.ts"],
+      "ignoreDependencies": ["@rollup/plugin-terser", "@rollup/plugin-typescript", "tslib"]
+    },
+    "panel": {
+      "entry": ["src/main.ts"],
+      "ignoreDependencies": ["vite"]
+    }
+  },
+  "ignore": [
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/.planning/**",
+    "**/documentation/**"
+  ]
+}

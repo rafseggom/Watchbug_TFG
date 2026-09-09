@@ -51,22 +51,7 @@ function buildHashQuery(typeVal: string, statusVal: string, page: number): Recor
   return q;
 }
 
-export async function renderList(root: HTMLElement, query: Record<string, string>): Promise<void> {
-  root.textContent = "";
-  renderHeader(root);
-
-  const container = document.createElement("div");
-  container.style.padding = "24px";
-  container.style.maxWidth = "1200px";
-  container.style.margin = "0 auto";
-  container.style.width = "100%";
-
-  const title = document.createElement("h2");
-  title.textContent = t("list.title");
-  title.style.marginBottom = "16px";
-  container.appendChild(title);
-
-  // Filter bar
+function createFilterBar(query: Record<string, string>): { filterBar: HTMLDivElement; typeSelect: HTMLSelectElement; statusSelect: HTMLSelectElement } {
   const filterBar = document.createElement("div");
   filterBar.className = "filter-bar";
   filterBar.style.display = "flex";
@@ -74,69 +59,85 @@ export async function renderList(root: HTMLElement, query: Record<string, string
   filterBar.style.marginBottom = "16px";
   filterBar.style.alignItems = "center";
 
-  const typeLabel = document.createElement("label");
-  typeLabel.textContent = t("list.filterType");
-  typeLabel.style.fontSize = "13px";
-  typeLabel.style.fontWeight = "600";
-  const typeSelect = document.createElement("select");
-  typeSelect.setAttribute("aria-label", t("list.filterType"));
-  typeSelect.style.padding = "6px 8px";
-  typeSelect.style.borderRadius = "6px";
-  typeSelect.style.border = "1px solid var(--color-border)";
-  for (const opt of ["All", "Bug", "Feedback"]) {
-    const o = document.createElement("option");
-    o.value = opt;
-    o.textContent = opt === "All" ? t("list.all") : opt;
-    if ((query.type ?? "All") === opt) o.selected = true;
-    // also handle TitleCase normalization: if query has lowercase, still match
-    if (query.type && query.type.toLowerCase() === opt.toLowerCase() && opt !== "All") o.selected = true;
-    typeSelect.appendChild(o);
-  }
-  // If query.type is present but not matching, select All fallback; ensure correct selected
-  if (query.type && !["All", "Bug", "Feedback"].includes(query.type)) {
-    // if lowercase bug/feedback, normalize to TitleCase selection
-    const norm = query.type.toLowerCase();
-    for (const o of Array.from(typeSelect.options)) {
-      if (o.value.toLowerCase() === norm) o.selected = true;
-    }
-  }
-
-  const statusLabel = document.createElement("label");
-  statusLabel.textContent = t("list.filterStatus");
-  statusLabel.style.fontSize = "13px";
-  statusLabel.style.fontWeight = "600";
-  const statusSelect = document.createElement("select");
-  statusSelect.setAttribute("aria-label", t("list.filterStatus"));
-  statusSelect.style.padding = "6px 8px";
-  statusSelect.style.borderRadius = "6px";
-  statusSelect.style.border = "1px solid var(--color-border)";
-  for (const opt of ["All", "Pending", "In Progress", "Resolved"]) {
-    const o = document.createElement("option");
-    o.value = opt;
-    o.textContent = opt === "All" ? t("list.all") : opt;
-    if ((query.status ?? "All") === opt) o.selected = true;
-    statusSelect.appendChild(o);
-  }
+  const typeSelect = createTypeSelect(query);
+  const statusSelect = createStatusSelect(query);
 
   const typeWrap = document.createElement("div");
   typeWrap.style.display = "flex";
   typeWrap.style.gap = "6px";
   typeWrap.style.alignItems = "center";
-  typeWrap.appendChild(typeLabel);
+  typeWrap.appendChild(typeSelect.previousElementSibling);
   typeWrap.appendChild(typeSelect);
 
   const statusWrap = document.createElement("div");
   statusWrap.style.display = "flex";
   statusWrap.style.gap = "6px";
   statusWrap.style.alignItems = "center";
-  statusWrap.appendChild(statusLabel);
+  statusWrap.appendChild(statusSelect.previousElementSibling);
   statusWrap.appendChild(statusSelect);
 
   filterBar.appendChild(typeWrap);
   filterBar.appendChild(statusWrap);
-  container.appendChild(filterBar);
+  return { filterBar, typeSelect, statusSelect };
+}
 
-  // Table wrapper
+function createTypeSelect(query: Record<string, string>): HTMLSelectElement {
+  const label = document.createElement("label");
+  label.textContent = t("list.filterType");
+  label.style.fontSize = "13px";
+  label.style.fontWeight = "600";
+
+  const select = document.createElement("select");
+  select.setAttribute("aria-label", t("list.filterType"));
+  select.style.padding = "6px 8px";
+  select.style.borderRadius = "6px";
+  select.style.border = "1px solid var(--color-border)";
+
+  for (const opt of ["All", "Bug", "Feedback"]) {
+    const o = document.createElement("option");
+    o.value = opt;
+    o.textContent = opt === "All" ? t("list.all") : opt;
+    if ((query.type ?? "All") === opt) o.selected = true;
+    if (query.type && query.type.toLowerCase() === opt.toLowerCase() && opt !== "All") o.selected = true;
+    select.appendChild(o);
+  }
+
+  if (query.type && !["All", "Bug", "Feedback"].includes(query.type)) {
+    const norm = query.type.toLowerCase();
+    for (const o of Array.from(select.options)) {
+      if (o.value.toLowerCase() === norm) o.selected = true;
+    }
+  }
+
+  select.insertAdjacentElement("beforebegin", label);
+  return select;
+}
+
+function createStatusSelect(query: Record<string, string>): HTMLSelectElement {
+  const label = document.createElement("label");
+  label.textContent = t("list.filterStatus");
+  label.style.fontSize = "13px";
+  label.style.fontWeight = "600";
+
+  const select = document.createElement("select");
+  select.setAttribute("aria-label", t("list.filterStatus"));
+  select.style.padding = "6px 8px";
+  select.style.borderRadius = "6px";
+  select.style.border = "1px solid var(--color-border)";
+
+  for (const opt of ["All", "Pending", "In Progress", "Resolved"]) {
+    const o = document.createElement("option");
+    o.value = opt;
+    o.textContent = opt === "All" ? t("list.all") : opt;
+    if ((query.status ?? "All") === opt) o.selected = true;
+    select.appendChild(o);
+  }
+
+  select.insertAdjacentElement("beforebegin", label);
+  return select;
+}
+
+function createTable(): { wrapper: HTMLDivElement; tbody: HTMLTableSectionElement } {
   const wrapper = document.createElement("div");
   wrapper.className = "table-wrapper";
   wrapper.style.overflowX = "auto";
@@ -169,13 +170,10 @@ export async function renderList(root: HTMLElement, query: Record<string, string
   const tbody = document.createElement("tbody");
   table.appendChild(tbody);
   wrapper.appendChild(table);
-  container.appendChild(wrapper);
+  return { wrapper, tbody };
+}
 
-  // Status areas (empty/error) below table
-  const stateArea = document.createElement("div");
-  container.appendChild(stateArea);
-
-  // Footer pagination
+function createPaginationFooter(): { footer: HTMLDivElement; pageInfo: HTMLSpanElement; btnPrev: HTMLButtonElement; btnNext: HTMLButtonElement } {
   const footer = document.createElement("div");
   footer.style.display = "flex";
   footer.style.justifyContent = "space-between";
@@ -212,6 +210,180 @@ export async function renderList(root: HTMLElement, query: Record<string, string
 
   footer.appendChild(pageInfo);
   footer.appendChild(btnGroup);
+  return { footer, pageInfo, btnPrev, btnNext };
+}
+
+function renderRow(item: IncidentItem, tbody: HTMLTableSectionElement): void {
+  const cached = getCachedStatus(item.id);
+  const effectiveStatus = cached ?? item.status;
+  const tr = document.createElement("tr");
+  tr.style.borderBottom = "1px solid var(--color-border)";
+  tr.style.cursor = "pointer";
+  tr.dataset.incId = item.id;
+  tr.addEventListener("click", () => {
+    location.hash = `#/incidents/${item.id}`;
+  });
+
+  const tdType = document.createElement("td");
+  tdType.style.padding = "10px 12px";
+  tdType.appendChild(renderTypeBadge(item.type));
+
+  const tdStatus = document.createElement("td");
+  tdStatus.style.padding = "10px 12px";
+  tdStatus.appendChild(renderStatusBadge(effectiveStatus));
+
+  const tdDate = document.createElement("td");
+  tdDate.style.padding = "10px 12px";
+  tdDate.style.fontSize = "13px";
+  tdDate.style.whiteSpace = "nowrap";
+  tdDate.textContent = formatDate(item.created_at ?? "");
+
+  const tdPreview = document.createElement("td");
+  tdPreview.className = "col-thumbnail";
+  tdPreview.style.padding = "10px 12px";
+  tdPreview.style.textAlign = "center";
+  tdPreview.textContent = item.has_screenshot ? "◉" : "—";
+
+  tr.appendChild(tdType);
+  tr.appendChild(tdStatus);
+  tr.appendChild(tdDate);
+  tr.appendChild(tdPreview);
+  tbody.appendChild(tr);
+}
+
+function updatePageInfo(pageInfo: HTMLSpanElement, btnPrev: HTMLButtonElement, btnNext: HTMLButtonElement, page: number, pages: number, total: number): void {
+  const tpl = t("list.pageInfo");
+  let text = tpl
+    .replace("{page}", String(page))
+    .replace("{pages}", String(pages || 1))
+    .replace("{total}", String(total));
+  if (!text.includes(String(page))) {
+    text = `Page ${page} of ${pages || 1} (Total ${total})`;
+  }
+  pageInfo.textContent = text;
+  btnPrev.disabled = page <= 1;
+  btnNext.disabled = page >= (pages || 1);
+}
+
+function showEmptyState(stateArea: HTMLDivElement, total: number, typeSelect: HTMLSelectElement, statusSelect: HTMLSelectElement, fetchAndRender: (page: number) => Promise<void>): void {
+  stateArea.textContent = "";
+  const empty = document.createElement("div");
+  empty.className = "empty";
+  empty.style.textAlign = "center";
+  empty.style.padding = "32px 16px";
+  empty.style.color = "var(--color-text-muted)";
+
+  const icon = document.createElement("div");
+  icon.textContent = "📭";
+  icon.style.fontSize = "32px";
+  icon.style.marginBottom = "8px";
+  empty.appendChild(icon);
+
+  const hasFilter = typeSelect.value !== "All" || statusSelect.value !== "All";
+  const p = document.createElement("p");
+  p.textContent = hasFilter ? t("list.emptyNoResults") : t("list.emptyNoIncidents");
+  p.style.marginBottom = "12px";
+  empty.appendChild(p);
+
+  if (hasFilter) {
+    const clearBtn = document.createElement("button");
+    clearBtn.textContent = t("list.clearFilters");
+    clearBtn.style.padding = "6px 12px";
+    clearBtn.style.border = "1px solid var(--color-border)";
+    clearBtn.style.borderRadius = "6px";
+    clearBtn.style.cursor = "pointer";
+    clearBtn.addEventListener("click", () => {
+      typeSelect.value = "All";
+      statusSelect.value = "All";
+      const newHash = buildHash({ name: "list", query: {} });
+      if (location.hash !== newHash) location.hash = newHash;
+      void fetchAndRender(1);
+    });
+    empty.appendChild(clearBtn);
+  }
+
+  stateArea.appendChild(empty);
+}
+
+function showErrorMessage(stateArea: HTMLDivElement, message: string, retryPage: number, fetchAndRender: (page: number) => Promise<void>): void {
+  stateArea.textContent = "";
+  const err = document.createElement("div");
+  err.className = "error";
+  err.style.textAlign = "center";
+  err.style.padding = "24px 16px";
+  err.style.color = "var(--color-bug)";
+
+  const p = document.createElement("p");
+  p.textContent = message;
+  p.style.marginBottom = "12px";
+  err.appendChild(p);
+
+  const retryBtn = document.createElement("button");
+  retryBtn.textContent = t("list.retry");
+  retryBtn.style.padding = "6px 12px";
+  retryBtn.style.border = "1px solid var(--color-border)";
+  retryBtn.style.borderRadius = "6px";
+  retryBtn.style.cursor = "pointer";
+  retryBtn.addEventListener("click", () => {
+    void fetchAndRender(retryPage);
+  });
+  err.appendChild(retryBtn);
+  stateArea.appendChild(err);
+}
+
+async function parseErrorResponse(res: Response): Promise<string> {
+  if (res.status === 422) {
+    let detail = t("errors.invalidFilter");
+    try {
+      const body = (await res.json()) as { detail?: unknown };
+      if (body && typeof body.detail === "string") detail = body.detail;
+      else if (Array.isArray(body.detail) && body.detail.length) {
+        const first = body.detail[0] as { msg?: string };
+        if (first?.msg) detail = first.msg;
+      }
+    } catch { /* ignore json parse */ }
+    return detail;
+  }
+  if (res.status === 429) {
+    const retryAfter = res.headers.get("Retry-After");
+    let msg = t("errors.rateLimited");
+    if (retryAfter) msg = `${msg} (Retry-After: ${retryAfter}s)`;
+    return `${msg} (429)`;
+  }
+  let msg = t("errors.network");
+  try {
+    const body = (await res.json()) as { detail?: string };
+    if (body?.detail) msg = body.detail;
+  } catch { /* keep generic */ }
+  if (res.status) msg = `${msg} (${res.status})`;
+  return msg;
+}
+
+export async function renderList(root: HTMLElement, query: Record<string, string>): Promise<void> {
+  root.textContent = "";
+  renderHeader(root);
+
+  const container = document.createElement("div");
+  container.style.padding = "24px";
+  container.style.maxWidth = "1200px";
+  container.style.margin = "0 auto";
+  container.style.width = "100%";
+
+  const title = document.createElement("h2");
+  title.textContent = t("list.title");
+  title.style.marginBottom = "16px";
+  container.appendChild(title);
+
+  const { filterBar, typeSelect, statusSelect } = createFilterBar(query);
+  container.appendChild(filterBar);
+
+  const { wrapper, tbody } = createTable();
+  container.appendChild(wrapper);
+
+  const stateArea = document.createElement("div");
+  container.appendChild(stateArea);
+
+  const { footer, pageInfo, btnPrev, btnNext } = createPaginationFooter();
   container.appendChild(footer);
 
   root.appendChild(container);
@@ -226,138 +398,21 @@ export async function renderList(root: HTMLElement, query: Record<string, string
     currentPage = page;
     currentTotal = total;
     currentPages = pages || 1;
-    const tpl = t("list.pageInfo");
-    // Replace placeholders: Page {page} of {pages} (Total {total})
-    let text = tpl;
-    text = text.replace("{page}", String(page));
-    text = text.replace("{pages}", String(pages || 1));
-    text = text.replace("{total}", String(total));
-    // Fallback if template not replaced
-    if (!text.includes(String(page))) {
-      text = `Page ${page} of ${pages || 1} (Total ${total})`;
-    }
-    pageInfo.textContent = text;
-    btnPrev.disabled = page <= 1;
-    btnNext.disabled = page >= (pages || 1);
-  }
-
-  function showEmpty(total: number): void {
-    stateArea.textContent = "";
-    // Only show empty when truly empty; do not duplicate table rows
-    const empty = document.createElement("div");
-    empty.className = "empty";
-    empty.style.textAlign = "center";
-    empty.style.padding = "32px 16px";
-    empty.style.color = "var(--color-text-muted)";
-
-    const icon = document.createElement("div");
-    icon.textContent = "📭";
-    icon.style.fontSize = "32px";
-    icon.style.marginBottom = "8px";
-    empty.appendChild(icon);
-
-    const hasFilter = typeSelect.value !== "All" || statusSelect.value !== "All";
-    const p = document.createElement("p");
-    p.textContent = hasFilter ? t("list.emptyNoResults") : t("list.emptyNoIncidents");
-    p.style.marginBottom = "12px";
-    empty.appendChild(p);
-
-    if (hasFilter) {
-      const clearBtn = document.createElement("button");
-      clearBtn.textContent = t("list.clearFilters");
-      clearBtn.style.padding = "6px 12px";
-      clearBtn.style.border = "1px solid var(--color-border)";
-      clearBtn.style.borderRadius = "6px";
-      clearBtn.style.cursor = "pointer";
-      clearBtn.addEventListener("click", () => {
-        typeSelect.value = "All";
-        statusSelect.value = "All";
-        const newHash = buildHash({ name: "list", query: {} });
-        if (location.hash !== newHash) location.hash = newHash;
-        void fetchAndRender(1);
-      });
-      empty.appendChild(clearBtn);
-    }
-
-    stateArea.appendChild(empty);
-  }
-
-  function showError(message: string, retryPage: number): void {
-    stateArea.textContent = "";
-    const err = document.createElement("div");
-    err.className = "error";
-    err.style.textAlign = "center";
-    err.style.padding = "24px 16px";
-    err.style.color = "var(--color-bug)";
-
-    const p = document.createElement("p");
-    p.textContent = message;
-    p.style.marginBottom = "12px";
-    err.appendChild(p);
-
-    const retryBtn = document.createElement("button");
-    retryBtn.textContent = t("list.retry");
-    retryBtn.style.padding = "6px 12px";
-    retryBtn.style.border = "1px solid var(--color-border)";
-    retryBtn.style.borderRadius = "6px";
-    retryBtn.style.cursor = "pointer";
-    retryBtn.addEventListener("click", () => {
-      void fetchAndRender(retryPage);
-    });
-    err.appendChild(retryBtn);
-    stateArea.appendChild(err);
+    updatePageInfo(pageInfo, btnPrev, btnNext, page, pages, total);
   }
 
   function renderRows(items: IncidentItem[]): void {
     tbody.textContent = "";
     stateArea.textContent = "";
     for (const item of items) {
-      const cached = getCachedStatus(item.id);
-      const effectiveStatus = cached ?? item.status;
-      const tr = document.createElement("tr");
-      tr.style.borderBottom = "1px solid var(--color-border)";
-      tr.style.cursor = "pointer";
-      tr.dataset.incId = item.id;
-      tr.addEventListener("click", () => {
-        location.hash = `#/incidents/${item.id}`;
-      });
-
-      const tdType = document.createElement("td");
-      tdType.style.padding = "10px 12px";
-      tdType.appendChild(renderTypeBadge(item.type));
-
-      const tdStatus = document.createElement("td");
-      tdStatus.style.padding = "10px 12px";
-      tdStatus.appendChild(renderStatusBadge(effectiveStatus));
-
-      const tdDate = document.createElement("td");
-      tdDate.style.padding = "10px 12px";
-      tdDate.style.fontSize = "13px";
-      tdDate.style.whiteSpace = "nowrap";
-      tdDate.textContent = formatDate(item.created_at ?? "");
-
-      const tdPreview = document.createElement("td");
-      tdPreview.className = "col-thumbnail";
-      tdPreview.style.padding = "10px 12px";
-      tdPreview.style.textAlign = "center";
-      // has_screenshot boolean -> placeholder icon
-      const hasShot = Boolean(item.has_screenshot);
-      tdPreview.textContent = hasShot ? "◉" : "—";
-
-      tr.appendChild(tdType);
-      tr.appendChild(tdStatus);
-      tr.appendChild(tdDate);
-      tr.appendChild(tdPreview);
-      tbody.appendChild(tr);
+      renderRow(item, tbody);
     }
   }
 
   async function fetchAndRender(page: number): Promise<void> {
-    // Show skeleton while loading
     tbody.textContent = "";
     stateArea.textContent = "";
     tbody.appendChild(renderSkeletonRows(5));
-    // Reset footer to loading disabled
     btnPrev.disabled = true;
     btnNext.disabled = true;
 
@@ -374,64 +429,26 @@ export async function renderList(root: HTMLElement, query: Record<string, string
         if (data.items.length === 0 || data.total === 0) {
           tbody.textContent = "";
           updateFooter(data.page ?? page, data.pages, data.total);
-          showEmpty(data.total);
+          showEmptyState(stateArea, data.total, typeSelect, statusSelect, fetchAndRender);
           return;
         }
         renderRows(data.items);
         updateFooter(data.page ?? page, data.pages, data.total);
         return;
       }
-      // Error handling
       tbody.textContent = "";
-      if (res.status === 422) {
-        let detail = t("errors.invalidFilter");
-        try {
-          const body = (await res.json()) as { detail?: unknown };
-          if (body && typeof body.detail === "string") detail = body.detail;
-          else if (Array.isArray(body.detail) && body.detail.length) {
-            const first = body.detail[0] as { msg?: string };
-            if (first?.msg) detail = first.msg;
-          }
-        } catch {
-          // ignore json parse
-        }
-        updateFooter(page, currentPages, currentTotal);
-        showError(detail, page);
-        showToast(detail);
-        return;
-      }
-      if (res.status === 429) {
-        const retryAfter = res.headers.get("Retry-After");
-        let msg = t("errors.rateLimited");
-        if (retryAfter) msg = `${msg} (Retry-After: ${retryAfter}s)`;
-        msg = `${msg} (429)`;
-        updateFooter(page, currentPages, currentTotal);
-        showError(msg, page);
-        showToast(msg);
-        return;
-      }
-      // Generic error
-      let msg = t("errors.network");
-      try {
-        const body = (await res.json()) as { detail?: string };
-        if (body?.detail) msg = body.detail;
-      } catch {
-        // keep generic
-      }
-      if (res.status) msg = `${msg} (${res.status})`;
+      const errorMsg = await parseErrorResponse(res);
       updateFooter(page, currentPages, currentTotal);
-      showError(msg, page);
-      return;
+      showErrorMessage(stateArea, errorMsg, page, fetchAndRender);
+      showToast(errorMsg);
     } catch (e) {
       tbody.textContent = "";
       const msg = e instanceof Error ? e.message : t("errors.network");
-      const display = msg || t("errors.network");
       updateFooter(page, currentPages, currentTotal);
-      showError(display, page);
+      showErrorMessage(stateArea, msg || t("errors.network"), page, fetchAndRender);
     }
   }
 
-  // Pagination handlers
   btnPrev.addEventListener("click", () => {
     if (currentPage <= 1) return;
     const newPage = currentPage - 1;
@@ -450,16 +467,12 @@ export async function renderList(root: HTMLElement, query: Record<string, string
     void fetchAndRender(newPage);
   });
 
-  // Optimistic cache: listen for status updates from detail view
   window.addEventListener("watchbug:status-updated", ((e: CustomEvent<{ id: string; status: string }>) => {
     const { id: updatedId, status: nextStatus } = e.detail ?? { id: "", status: "" };
     if (!updatedId || !nextStatus) return;
     try {
       localStorage.setItem(`watchbug:inc-${updatedId}:status`, nextStatus);
-    } catch {
-      // ignore
-    }
-    // Update visible row if present without refetch
+    } catch { /* ignore */ }
     const row = tbody.querySelector(`tr[data-inc-id="${updatedId}"]`);
     if (row) {
       const statusCell = row.querySelectorAll("td")[1];
@@ -470,7 +483,6 @@ export async function renderList(root: HTMLElement, query: Record<string, string
     }
   }) as EventListener);
 
-  // Filter change handlers
   const onFilterChange = (): void => {
     const q = buildHashQuery(typeSelect.value, statusSelect.value, 1);
     const newHash = buildHash({ name: "list", query: q });
@@ -480,6 +492,5 @@ export async function renderList(root: HTMLElement, query: Record<string, string
   typeSelect.addEventListener("change", onFilterChange);
   statusSelect.addEventListener("change", onFilterChange);
 
-  // Initial fetch
   await fetchAndRender(currentPage);
 }

@@ -2,6 +2,7 @@ export type SupportedLanguage = 'en' | 'es';
 
 export type Translations = Record<string, { en: string; es: string }>;
 
+// audit:code-health-ok — exported for test verification in i18n.test.ts
 export const TRANSLATIONS: Translations = {
   reportBug: { en: 'Report Bug', es: 'Reportar Error' },
   sendFeedback: { en: 'Send Feedback', es: 'Enviar Comentarios' },

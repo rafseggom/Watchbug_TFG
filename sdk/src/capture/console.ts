@@ -4,6 +4,7 @@ export type ConsoleEntry = {
   timestamp: string;
 };
 
+// audit:code-health-ok — exported for test verification in console.test.ts
 export const SECRET_PATTERNS: RegExp[] = [
   /password['":\s=]+[^\s'"]+/gi,
   /token['":\s=]+[^\s'"]+/gi,
@@ -14,6 +15,7 @@ export const SECRET_PATTERNS: RegExp[] = [
   /eyJ[A-Za-z0-9-_=]+?\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*/g,
 ];
 
+// audit:code-health-ok — exported for test verification in console.test.ts
 export function redactSecrets(message: string): string {
   let redacted = message;
   for (const pattern of SECRET_PATTERNS) {

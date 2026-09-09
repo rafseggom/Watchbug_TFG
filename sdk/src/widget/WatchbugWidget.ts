@@ -219,56 +219,79 @@ export class WatchbugWidget extends HTMLElement {
     return { apiUrl, projectKey };
   }
 
+  private async _captureScreenshot(): Promise<string> {
+    if (this._editor) {
+      try {
+        const canvas = this._editor.getCanvas();
+        return canvas.toDataURL('image/png');
+      } catch { /* continue to fallback */ }
+    }
+    try {
+      const cap = await captureScreenshot();
+      if (cap) return cap.dataUrl;
+    } catch { /* ignore */ }
+    return 'data:image/png;base64,placeholder';
+  }
+
+  private _collectConsoleLogs(): ReportPayload['consoleLogs'] {
+    try {
+      const w = (window as unknown as Record<string, unknown>).Watchbug as { getConsoleLogs?: () => ReportPayload['consoleLogs'] } | undefined;
+      if (w?.getConsoleLogs) return w.getConsoleLogs();
+    } catch { /* ignore */ }
+    return [];
+  }
+
+  private _buildPayload(screenshot: string, notes: string, consoleLogs: ReportPayload['consoleLogs']): ReportPayload {
+    const metadata = collectMetadata();
+    const errors: string[] = consoleLogs.filter((l) => l.level === 'error').map((l) => l.message);
+    return {
+      type: this._reportType,
+      screenshot,
+      metadata: metadata as unknown as Record<string, unknown>,
+      consoleLogs,
+      errors,
+      notes,
+    };
+  }
+
+  private _handleSendSuccess(): void {
+    this._showToast('Report sent!', false);
+    this._hideRetry();
+    setTimeout(() => {
+      this._hideOverlay();
+    }, 1200);
+    try {
+      window.dispatchEvent(new CustomEvent('watchbug:toast', { detail: { message: 'Report sent' } }));
+    } catch { /* ignore */ }
+  }
+
+  private _handleSendFailure(payload: ReportPayload, error: string | undefined): void {
+    try {
+      saveDraft(payload);
+    } catch { /* ignore */ }
+    this._showRetry();
+    this._showToast(error || 'Failed to send. Draft saved.', true);
+    try {
+      window.dispatchEvent(new CustomEvent('watchbug:retry', { detail: { payload } }));
+    } catch { /* ignore */ }
+  }
+
   private async _handleSend(isRetry = false): Promise<void> {
     if (this._isSending) return;
-    // Respect consent — check data-consent attribute set by index.ts
     if (this.getAttribute('data-consent') === 'false') return;
     const shadow = this._shadow;
     if (!shadow) return;
     const sendBtn = shadow.querySelector('[data-tool="send"]') as HTMLElement | null;
     const notesEl = shadow.querySelector('.wb-notes') as HTMLTextAreaElement | null;
-    const retryBtn = shadow.querySelector('.wb-retry') as HTMLElement | null;
 
     this._isSending = true;
     if (sendBtn) sendBtn.setAttribute('disabled', 'true');
 
     try {
-      // Capture screenshot: prefer editor canvas, fallback to captureScreenshot
-      let screenshot = '';
-      if (this._editor) {
-        try {
-          const canvas = this._editor.getCanvas();
-          screenshot = canvas.toDataURL('image/png');
-        } catch {
-          screenshot = '';
-        }
-      }
-      if (!screenshot) {
-        try {
-          const cap = await captureScreenshot();
-          if (cap) screenshot = cap.dataUrl;
-        } catch {}
-      }
-      if (!screenshot) screenshot = 'data:image/png;base64,placeholder';
-
-      const metadata = collectMetadata();
-      let consoleLogs: ReportPayload['consoleLogs'] = [];
-      try {
-        const w = (window as unknown as Record<string, unknown>).Watchbug as { getConsoleLogs?: () => ReportPayload['consoleLogs'] } | undefined;
-        if (w?.getConsoleLogs) consoleLogs = w.getConsoleLogs();
-      } catch {}
-
-      const errors: string[] = consoleLogs.filter((l) => l.level === 'error').map((l) => l.message);
+      const screenshot = await this._captureScreenshot();
+      const consoleLogs = this._collectConsoleLogs();
       const notes = notesEl?.value ?? '';
-
-      const payload: ReportPayload = {
-        type: this._reportType,
-        screenshot,
-        metadata: metadata as unknown as Record<string, unknown>,
-        consoleLogs,
-        errors,
-        notes,
-      };
+      const payload = this._buildPayload(screenshot, notes, consoleLogs);
 
       const validation = validatePayload(payload as unknown);
       if (!validation.valid) {
@@ -277,28 +300,12 @@ export class WatchbugWidget extends HTMLElement {
       }
 
       const { apiUrl, projectKey } = this._getApiConfig();
-      // If apiUrl missing, treat as validation error but still allow tests with mocked fetch
       const result = await retrySend(() => sendReport(apiUrl || 'https://api.example.com', projectKey || 'test-key', payload));
 
       if (result.success) {
-        this._showToast('Report sent!', false);
-        this._hideRetry();
-        // Hide overlay after short delay per D-07
-        setTimeout(() => {
-          this._hideOverlay();
-        }, 1200);
-        try {
-          window.dispatchEvent(new CustomEvent('watchbug:toast', { detail: { message: 'Report sent' } }));
-        } catch {}
+        this._handleSendSuccess();
       } else {
-        try {
-          saveDraft(payload);
-        } catch {}
-        this._showRetry();
-        this._showToast(result.error || 'Failed to send. Draft saved.', true);
-        try {
-          window.dispatchEvent(new CustomEvent('watchbug:retry', { detail: { payload } }));
-        } catch {}
+        this._handleSendFailure(payload, result.error);
       }
       void isRetry;
     } finally {
@@ -397,6 +404,28 @@ export class WatchbugWidget extends HTMLElement {
     return this._i18n.getLanguage();
   }
 
+  private _updateButtonLabel(shadow: ShadowRoot, selector: string, label: string, icon?: string): void {
+    const btn = shadow.querySelector(selector) as HTMLElement | null;
+    if (!btn) return;
+    btn.setAttribute('aria-label', label);
+    btn.setAttribute('title', label);
+    if (icon) btn.textContent = `${icon} ${label}`;
+  }
+
+  private _updateToolbarButtonText(shadow: ShadowRoot, tool: string, label: string): void {
+    const btn = shadow.querySelector(`[data-tool="${tool}"]`) as HTMLElement | null;
+    if (!btn) return;
+    btn.setAttribute('aria-label', label);
+    const icons: Record<string, string> = {
+      'pencil': '✏️',
+      'arrow': '↗',
+      'text': 'T',
+      'mask-rect': '▭',
+      'mask-paint': '🖌',
+    };
+    btn.textContent = icons[tool] ? `${icons[tool]} ${label}` : label;
+  }
+
   private _updateTexts(): void {
     if (!this._shadow) return;
     const t = this._i18n.t.bind(this._i18n);
@@ -407,24 +436,14 @@ export class WatchbugWidget extends HTMLElement {
     const reportLabel = reportBtn?.previousElementSibling as HTMLElement | null;
     const feedbackLabel = feedbackBtn?.previousElementSibling as HTMLElement | null;
 
-    if (reportBtn) {
-      reportBtn.setAttribute('aria-label', t('reportBug'));
-      reportBtn.setAttribute('title', t('reportBug'));
-    }
+    this._updateButtonLabel(shadow, '[data-action="report-bug"]', t('reportBug'));
+    this._updateButtonLabel(shadow, '[data-action="send-feedback"]', t('sendFeedback'));
     if (reportLabel) reportLabel.textContent = t('reportBug');
-    if (feedbackBtn) {
-      feedbackBtn.setAttribute('aria-label', t('sendFeedback'));
-      feedbackBtn.setAttribute('title', t('sendFeedback'));
-    }
     if (feedbackLabel) feedbackLabel.textContent = t('sendFeedback');
 
-    const closeBtn = shadow.querySelector('.wb-close') as HTMLElement | null;
-    if (closeBtn) {
-      closeBtn.setAttribute('aria-label', t('close'));
-      closeBtn.setAttribute('title', t('close'));
-    }
+    this._updateButtonLabel(shadow, '.wb-close', t('close'));
 
-    const toolbarMap: Record<string, string> = {
+    const toolbarTools: Record<string, string> = {
       'pencil': t('pencil'),
       'arrow': t('arrow'),
       'text': t('text'),
@@ -433,17 +452,8 @@ export class WatchbugWidget extends HTMLElement {
       'send': t('submit'),
     };
 
-    for (const [tool, label] of Object.entries(toolbarMap)) {
-      const btn = shadow.querySelector(`[data-tool="${tool}"]`) as HTMLElement | null;
-      if (btn) {
-        btn.setAttribute('aria-label', label);
-        if (tool === 'pencil') btn.textContent = `✏️ ${label}`;
-        else if (tool === 'arrow') btn.textContent = `↗ ${label}`;
-        else if (tool === 'text') btn.textContent = `T ${label}`;
-        else if (tool === 'mask-rect') btn.textContent = `▭ ${label}`;
-        else if (tool === 'mask-paint') btn.textContent = `🖌 ${label}`;
-        else btn.textContent = label;
-      }
+    for (const [tool, label] of Object.entries(toolbarTools)) {
+      this._updateToolbarButtonText(shadow, tool, label);
     }
   }
 }

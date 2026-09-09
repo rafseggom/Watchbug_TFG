@@ -32,11 +32,33 @@ export function maskRegion(
   height: number,
   mode: 'pixelate' | 'solid' = 'solid',
 ): void {
-  // Clamp and normalize to avoid negative dimensions
+  const { nx, ny, nw, nh } = normalizeAndClampCoordinates(ctx, x, y, width, height);
+  if (nw === 0 || nh === 0) return;
+
+  const imageData = ctx.getImageData(nx, ny, nw, nh);
+  const data = imageData.data;
+
+  if (mode === 'solid') {
+    applySolidMask(data);
+  } else if (mode === 'pixelate') {
+    applyPixelateMask(data, imageData.width, imageData.height);
+  }
+
+  ctx.putImageData(imageData, nx, ny);
+}
+
+function normalizeAndClampCoordinates(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): { nx: number; ny: number; nw: number; nh: number } {
   let nx = Math.round(x);
   let ny = Math.round(y);
   let nw = Math.round(width);
   let nh = Math.round(height);
+
   if (nw < 0) {
     nx += nw;
     nw = Math.abs(nw);
@@ -45,9 +67,7 @@ export function maskRegion(
     ny += nh;
     nh = Math.abs(nh);
   }
-  if (nw === 0 || nh === 0) return;
 
-  // Clamp to canvas bounds if canvas dimensions available
   try {
     const canvas = ctx.canvas as HTMLCanvasElement;
     if (canvas && typeof canvas.width === 'number' && typeof canvas.height === 'number') {
@@ -61,64 +81,85 @@ export function maskRegion(
       }
       if (nx + nw > canvas.width) nw = canvas.width - nx;
       if (ny + nh > canvas.height) nh = canvas.height - ny;
-      if (nw <= 0 || nh <= 0) return;
+      if (nw <= 0 || nh <= 0) return { nx: 0, ny: 0, nw: 0, nh: 0 };
     }
-  } catch {
-    // ignore clamping errors
+  } catch { /* ignore clamping errors */ }
+
+  return { nx, ny, nw, nh };
+}
+
+function applySolidMask(data: Uint8ClampedArray): void {
+  for (let i = 0; i < data.length; i += 4) {
+    data[i] = 128;
+    data[i + 1] = 128;
+    data[i + 2] = 128;
+    data[i + 3] = 255;
   }
+}
 
-  const imageData = ctx.getImageData(nx, ny, nw, nh);
-  const data = imageData.data; // Uint8ClampedArray
-
-  if (mode === 'solid') {
-    for (let i = 0; i < data.length; i += 4) {
-      data[i] = 128;
-      data[i + 1] = 128;
-      data[i + 2] = 128;
-      data[i + 3] = 255;
+function applyPixelateMask(data: Uint8ClampedArray, width: number, height: number): void {
+  const blockSize = 8;
+  for (let by = 0; by < height; by += blockSize) {
+    for (let bx = 0; bx < width; bx += blockSize) {
+      const blockW = Math.min(blockSize, width - bx);
+      const blockH = Math.min(blockSize, height - by);
+      const avg = calculateBlockAverage(data, bx, by, blockW, blockH, width);
+      applyBlockAverage(data, bx, by, blockW, blockH, width, avg);
     }
-  } else if (mode === 'pixelate') {
-    const blockSize = 8;
-    const w = imageData.width;
-    const h = imageData.height;
-    // Iterate blocks
-    for (let by = 0; by < h; by += blockSize) {
-      for (let bx = 0; bx < w; bx += blockSize) {
-        const blockW = Math.min(blockSize, w - bx);
-        const blockH = Math.min(blockSize, h - by);
-        let r = 0;
-        let g = 0;
-        let b = 0;
-        let a = 0;
-        let count = 0;
-        for (let py = 0; py < blockH; py++) {
-          for (let px = 0; px < blockW; px++) {
-            const idx = ((by + py) * w + (bx + px)) * 4;
-            r += data[idx];
-            g += data[idx + 1];
-            b += data[idx + 2];
-            a += data[idx + 3];
-            count++;
-          }
-        }
-        const avgR = Math.round(r / count);
-        const avgG = Math.round(g / count);
-        const avgB = Math.round(b / count);
-        const avgA = Math.round(a / count);
-        for (let py = 0; py < blockH; py++) {
-          for (let px = 0; px < blockW; px++) {
-            const idx = ((by + py) * w + (bx + px)) * 4;
-            data[idx] = avgR;
-            data[idx + 1] = avgG;
-            data[idx + 2] = avgB;
-            data[idx + 3] = avgA;
-          }
-        }
-      }
+  }
+}
+
+function calculateBlockAverage(
+  data: Uint8ClampedArray,
+  startX: number,
+  startY: number,
+  blockW: number,
+  blockH: number,
+  stride: number,
+): { r: number; g: number; b: number; a: number } {
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  let a = 0;
+  let count = 0;
+
+  for (let py = 0; py < blockH; py++) {
+    for (let px = 0; px < blockW; px++) {
+      const idx = ((startY + py) * stride + (startX + px)) * 4;
+      r += data[idx];
+      g += data[idx + 1];
+      b += data[idx + 2];
+      a += data[idx + 3];
+      count++;
     }
   }
 
-  ctx.putImageData(imageData, nx, ny);
+  return {
+    r: Math.round(r / count),
+    g: Math.round(g / count),
+    b: Math.round(b / count),
+    a: Math.round(a / count),
+  };
+}
+
+function applyBlockAverage(
+  data: Uint8ClampedArray,
+  startX: number,
+  startY: number,
+  blockW: number,
+  blockH: number,
+  stride: number,
+  avg: { r: number; g: number; b: number; a: number },
+): void {
+  for (let py = 0; py < blockH; py++) {
+    for (let px = 0; px < blockW; px++) {
+      const idx = ((startY + py) * stride + (startX + px)) * 4;
+      data[idx] = avg.r;
+      data[idx + 1] = avg.g;
+      data[idx + 2] = avg.b;
+      data[idx + 3] = avg.a;
+    }
+  }
 }
 
 export function createMaskRectTool(ctx: CanvasRenderingContext2D): Tool {
