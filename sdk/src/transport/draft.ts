@@ -27,6 +27,7 @@ export function saveDraft(report: ReportPayload): void {
 /**
  * Load the most recent draft (highest timestamp suffix).
  */
+// audit:code-health-ok — exported for test verification in draft.test.ts
 export function loadDraft(): ReportPayload | null {
   if (!isLocalStorageAvailable()) return null;
   const keys: string[] = [];
