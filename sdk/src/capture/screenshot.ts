@@ -13,6 +13,59 @@ export type ScreenshotResult = {
  */
 import { sanitizeCanvas } from '../editor/sanitizer';
 
+function getViewportDimensions(): { width: number; height: number } {
+  const width = typeof window !== 'undefined' ? window.innerWidth : 0;
+  const height = typeof window !== 'undefined' ? window.innerHeight : 0;
+  return { width, height };
+}
+
+function calculateTargetDimensions(viewportWidth: number, viewportHeight: number, maxWidth: number): { width: number; height: number } {
+  if (viewportWidth <= maxWidth) {
+    return { width: viewportWidth, height: viewportHeight };
+  }
+  const scale = maxWidth / viewportWidth;
+  return { width: maxWidth, height: Math.round(viewportHeight * scale) };
+}
+
+function isSecurityError(e: unknown): boolean {
+  if (e instanceof DOMException && e.name === 'SecurityError') return true;
+  const err = e as { name?: string };
+  return err?.name === 'SecurityError';
+}
+
+function createCanvas(targetWidth: number, targetHeight: number): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } | null {
+  const canvas = document.createElement('canvas');
+  canvas.width = targetWidth;
+  canvas.height = targetHeight;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  return { canvas, ctx };
+}
+
+function fillCanvasPlaceholder(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+  try {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, height);
+  } catch { /* ignore fill errors */ }
+}
+
+function applyAutoSanitize(ctx: CanvasRenderingContext2D, width: number, height: number, autoSanitize?: boolean): void {
+  try {
+    if (autoSanitize) {
+      sanitizeCanvas(ctx, width, height, { autoSanitize });
+    }
+  } catch { /* ignore sanitization errors */ }
+}
+
+function encodeCanvasToDataUrl(canvas: HTMLCanvasElement): string | null {
+  try {
+    return canvas.toDataURL('image/png');
+  } catch (e) {
+    if (isSecurityError(e)) return null;
+    return null;
+  }
+}
+
 export async function captureScreenshot(options?: {
   maxWidth?: number;
   timeout?: number;
@@ -39,80 +92,30 @@ export async function captureScreenshot(options?: {
     };
 
     try {
-      const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 0;
-      const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 0;
-
+      const { width: viewportWidth, height: viewportHeight } = getViewportDimensions();
       if (viewportWidth === 0 || viewportHeight === 0) {
         finish(null);
         return;
       }
 
-      let targetWidth = viewportWidth;
-      let targetHeight = viewportHeight;
-
-      if (targetWidth > maxWidth) {
-        const scale = maxWidth / targetWidth;
-        targetWidth = maxWidth;
-        targetHeight = Math.round(viewportHeight * scale);
-      }
-
-      const canvas = document.createElement('canvas');
-      canvas.width = targetWidth;
-      canvas.height = targetHeight;
-
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
+      const { width: targetWidth, height: targetHeight } = calculateTargetDimensions(viewportWidth, viewportHeight, maxWidth);
+      const canvasResult = createCanvas(targetWidth, targetHeight);
+      if (!canvasResult) {
         finish(null);
         return;
       }
 
-      // In a real implementation, we would paint the viewport.
-      // Here we fill with a placeholder so toDataURL has content.
-      try {
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, targetWidth, targetHeight);
-      } catch {
-        // ignore fill errors
-      }
+      fillCanvasPlaceholder(canvasResult.ctx, targetWidth, targetHeight);
+      applyAutoSanitize(canvasResult.ctx, targetWidth, targetHeight, options?.autoSanitize);
 
-      // Auto-sanitize before encoding per CAP-04 / SEC-01
-      try {
-        if (options?.autoSanitize) {
-          sanitizeCanvas(ctx, targetWidth, targetHeight, { autoSanitize: options.autoSanitize });
-        } else if (typeof options?.autoSanitize === 'undefined') {
-          // Also check global config via window.Watchbug if available
-          const w = typeof window !== 'undefined' ? (window as unknown as Record<string, unknown>).Watchbug as { _getConfig?: () => { autoSanitize?: boolean } } | undefined : undefined;
-          // No-op if not set — sanitizer returns early when false/undefined
-        }
-      } catch {
-        // ignore sanitization errors — still attempt to encode
-      }
-
-      // Use toDataURL for synchronous capture; wrap in try for tainted canvas
-      try {
-        const dataUrl = canvas.toDataURL('image/png');
+      const dataUrl = encodeCanvasToDataUrl(canvasResult.canvas);
+      if (dataUrl) {
         finish({ dataUrl, width: targetWidth, height: targetHeight });
-      } catch (e) {
-        // SecurityError for tainted canvas
-        if (e instanceof DOMException && e.name === 'SecurityError') {
-          finish(null);
-          return;
-        }
-        // Also handle generic error with SecurityError name
-        const err = e as { name?: string };
-        if (err?.name === 'SecurityError') {
-          finish(null);
-          return;
-        }
+      } else {
         finish(null);
       }
     } catch (e) {
-      const err = e as { name?: string };
-      if (err?.name === 'SecurityError') {
-        finish(null);
-        return;
-      }
-      if (e instanceof DOMException && e.name === 'SecurityError') {
+      if (isSecurityError(e)) {
         finish(null);
         return;
       }
