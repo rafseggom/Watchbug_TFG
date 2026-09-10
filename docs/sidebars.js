@@ -11,7 +11,7 @@ const sidebars = {
       label: 'Recursos de Ingeniería de IA',
       collapsed: false,
       items: [
-        'bibliografia',
+        'investigacion',
         'harness-engineering',
       ],
     },
@@ -20,7 +20,6 @@ const sidebars = {
       label: 'GSD (Get Ship Done)',
       collapsed: false,
       items: [
-        'GSD',
         'gsd-wiki',
       ],
     },

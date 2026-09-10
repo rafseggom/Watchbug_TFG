@@ -51,13 +51,13 @@ export default function Home() {
               <ResourceCard
                 title="Recursos de Ingeniería de IA"
                 description="Bibliografía, artículos, skills, cursos y herramientas para trabajar con agentes de IA."
-                link="/docs/bibliografia"
+                link="/docs/investigacion"
                 icon="📄"
               />
               <ResourceCard
                 title="GSD (Get Ship Done)"
                 description="Sistema de coordinación entre humanos e IA para desarrollo de software estructurado."
-                link="/docs/GSD"
+                link="/docs/gsd-wiki"
                 icon="⚙️"
               />
               <ResourceCard

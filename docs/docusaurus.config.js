@@ -66,7 +66,7 @@ const config = {
         title: 'Watchbug TFG',
         logo: {
           alt: 'Watchbug Logo',
-          src: 'img/logo.svg',
+          src: 'img/logo.png',
         },
         items: [
           {
@@ -94,11 +94,11 @@ const config = {
             items: [
               {
                 label: 'Bibliografía',
-                to: '/docs/bibliografia',
+                to: '/docs/investigacion',
               },
               {
                 label: 'GSD',
-                to: '/docs/GSD',
+                to: '/docs/gsd-wiki',
               },
               {
                 label: 'Harness Engineering',

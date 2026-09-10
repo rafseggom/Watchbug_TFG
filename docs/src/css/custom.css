@@ -35,6 +35,20 @@
   letter-spacing: -0.224px;
 }
 
+/* Logo with background for transparency */
+.navbar__logo img {
+  border-radius: 8px;
+  padding: 4px;
+}
+
+[data-theme='light'] .navbar__logo img {
+  background: #f0f0f2;
+}
+
+[data-theme='dark'] .navbar__logo img {
+  background: #2a2a30;
+}
+
 /* Sidebar styling */
 .menu__link {
   border-radius: 8px;

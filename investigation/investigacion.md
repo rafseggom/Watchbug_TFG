@@ -146,6 +146,8 @@ La productividad con agentes no es instantánea sino un proceso de adaptación d
 
 [Framework de Microsoft](https://github.com/microsoft/autogen) para sistemas multi-agente. Fuente: [publicación en X](https://x.com/marfinxx/status/2096206860781031528).
 
+> 📹 **Vídeo demostrativo:** [Ver en X →](https://x.com/marfinxx/status/2096206860781031528/video/1) — Arquitectura de tres capas de AutoGen v0.4 en acción.
+
 Microsoft reescribió AutoGen desde cero (v0.4) para demostrar que construir agentes de IA escalables requiere separación arquitectónica en tres capas:
 
 | Capa | Componente | Función |
@@ -166,6 +168,8 @@ Referencia arquitectónica para construir sistemas multi-agente fiables y escala
 Spotify publicó la configuración interna que sus ingenieros usan con Claude Code, reduciendo el consumo de tokens en un 90%. La estrategia consiste en añadir dos asistentes baratos: uno que abre archivos y devuelve un resumen, otro que escribe código repetitivo basándose en ejemplos. El modelo caro solo se usa para edits y para detectar bugs que el modelo barato se pierde.
 
 Mecanismo de enforcement: las reglas escritas como instrucciones las ignoraba el modelo; ahora cualquier cosa mayor de 350 líneas se bloquea antes de abrirla y se envía al modelo barato. Las reglas escritas son sugerencias; un bloqueo no lo es.
+
+![Spotify token optimization chart](./img/spotify-chart.jpg)
 
 Demostración práctica de cómo combinar modelos baratos y caros para reducir costes sin perder calidad.
 
@@ -256,6 +260,8 @@ Genera una representación intermedia tipada en JSON y la compila de forma deter
 
 Casos de uso: revisar arquitectura antes de un merge, entender dependencias y comparar estados antes y después de una refactorización.
 
+![Archify — diagramas de arquitectura interactivos](./img/archify-readme-hero.png)
+
 ### Cyclomatic Complexity Skill
 
 [GitHub: cyclomatic-complexity-skill](https://github.com/saurabhkumar8112/cyclomatic-complexity-skill/tree/master), skill de análisis y refactorización.
@@ -281,6 +287,8 @@ Diferencia frente a `stopthatslop`: este se centra más en reglas técnicas y an
 [GitHub: cathrynlavery/diagram-design](https://github.com/cathrynlavery/diagram-design), skill para generar diagramas.
 
 Genera 39 tipos de diagramas. Cada uno sale como un archivo HTML que se puede abrir con doble clic. Útil para visualizar arquitectura, flujos, secuencias y estructuras de datos sin dependencias externas.
+
+![Diagram Design — tipos de diagramas](./img/diagram-design.webp)
 
 ### council
 
@@ -374,6 +382,8 @@ Características:
 
 Por defecto, los datos permanecen en la máquina local y el servidor se enlaza a `127.0.0.1`. La telemetría anónima de actividad del daemon puede desactivarse.
 
+![AgentsView — analítica de sesiones](./img/agentsview.png)
+
 Convierte las sesiones en evidencia recuperable. Esto ayuda a revisar qué hizo el agente, cuánto costó, qué archivos cambió y qué decisiones se tomaron.
 
 ## Revisión de cambios
@@ -395,6 +405,8 @@ Características:
 - Ejecución como App, Action, CLI o skill del agente.
 
 El repositorio requiere Node.js 20.11 o superior y pnpm 10 para desarrollo. Está publicado bajo licencia MIT.
+
+![PR Lens — diagramas de arquitectura en pull requests](./img/pr-lens.svg)
 
 ## Design
 
@@ -453,6 +465,16 @@ Reúne decenas de marcas y productos para estudiar cómo resuelven su identidad 
 [YouTube](https://www.youtube.com/watch?v=kIbr5lN-2F8), vídeo introductorio.
 
 Referencia audiovisual para obtener una visión general de la ingeniería de IA en un formato breve. Puede servir como punto de entrada antes de estudiar en profundidad agentes, herramientas, evaluación, memoria, observabilidad y despliegue.
+
+<div style={{position: 'relative', paddingBottom: '56.25%', height: 0, overflow: 'hidden', maxWidth: '100%', marginBottom: '1.5rem'}}>
+  <iframe
+    src="https://www.youtube.com/embed/kIbr5lN-2F8"
+    style={{position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 0}}
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+    allowFullScreen
+    title="Ingeniería de IA en 26 minutos"
+  />
+</div>
 
 ### Panel YC: el estado de los harnesses
 
