@@ -5,3 +5,6 @@ node_modules/
 
 .opencode
 
+# Docusaurus build output
+docs/build/
+
