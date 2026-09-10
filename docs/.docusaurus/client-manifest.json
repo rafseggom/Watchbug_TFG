@@ -1,0 +1,237 @@
+{
+  "entrypoints": [
+    "main"
+  ],
+  "origins": {
+    "237": [
+      237
+    ],
+    "436": [
+      436
+    ],
+    "17896441": [
+      869,
+      401
+    ],
+    "main": [
+      354,
+      869,
+      792
+    ],
+    "runtime~main": [
+      792,
+      869,
+      354
+    ],
+    "03e2811a": [
+      570
+    ],
+    "1661bccd": [
+      973
+    ],
+    "3980beaa": [
+      310
+    ],
+    "5e95c892": [
+      647
+    ],
+    "9b180c2b": [
+      94
+    ],
+    "a7456010": [
+      235
+    ],
+    "a7bd4aaa": [
+      98
+    ],
+    "a94703ab": [
+      869,
+      48
+    ],
+    "aba21aa0": [
+      742
+    ],
+    "c0c0366e": [
+      163
+    ],
+    "c4f5d8e4": [
+      869,
+      634
+    ],
+    "eef9e8b6": [
+      53
+    ],
+    "styles": [
+      48,
+      354,
+      401,
+      634,
+      792,
+      869
+    ]
+  },
+  "assets": {
+    "48": {
+      "js": [
+        {
+          "file": "assets/js/a94703ab.82f62255.js",
+          "hash": "6aef6e195f0dc6f1",
+          "publicPath": "/watchbug-tfg/en/assets/js/a94703ab.82f62255.js"
+        }
+      ]
+    },
+    "53": {
+      "js": [
+        {
+          "file": "assets/js/eef9e8b6.339b9b32.js",
+          "hash": "d5fa51c1cf2a7fdf",
+          "publicPath": "/watchbug-tfg/en/assets/js/eef9e8b6.339b9b32.js"
+        }
+      ]
+    },
+    "94": {
+      "js": [
+        {
+          "file": "assets/js/9b180c2b.c9777a06.js",
+          "hash": "915955c7b5c32972",
+          "publicPath": "/watchbug-tfg/en/assets/js/9b180c2b.c9777a06.js"
+        }
+      ]
+    },
+    "98": {
+      "js": [
+        {
+          "file": "assets/js/a7bd4aaa.e9b4a8b6.js",
+          "hash": "9589c44d00871610",
+          "publicPath": "/watchbug-tfg/en/assets/js/a7bd4aaa.e9b4a8b6.js"
+        }
+      ]
+    },
+    "163": {
+      "js": [
+        {
+          "file": "assets/js/c0c0366e.a7b5a765.js",
+          "hash": "fb4340dc90fd6bc5",
+          "publicPath": "/watchbug-tfg/en/assets/js/c0c0366e.a7b5a765.js"
+        }
+      ]
+    },
+    "235": {
+      "js": [
+        {
+          "file": "assets/js/a7456010.67834a94.js",
+          "hash": "e99d682b4b6117f6",
+          "publicPath": "/watchbug-tfg/en/assets/js/a7456010.67834a94.js"
+        }
+      ]
+    },
+    "237": {
+      "js": [
+        {
+          "file": "assets/js/237.46e9b118.js",
+          "hash": "a757f30bfb7bddd5",
+          "publicPath": "/watchbug-tfg/en/assets/js/237.46e9b118.js"
+        }
+      ]
+    },
+    "310": {
+      "js": [
+        {
+          "file": "assets/js/3980beaa.f77437c8.js",
+          "hash": "d70bab1a0bd8b497",
+          "publicPath": "/watchbug-tfg/en/assets/js/3980beaa.f77437c8.js"
+        }
+      ]
+    },
+    "354": {
+      "js": [
+        {
+          "file": "assets/js/runtime~main.8ae1726a.js",
+          "hash": "1965b88af8daa58d",
+          "publicPath": "/watchbug-tfg/en/assets/js/runtime~main.8ae1726a.js"
+        }
+      ]
+    },
+    "401": {
+      "js": [
+        {
+          "file": "assets/js/17896441.326aaa2f.js",
+          "hash": "c4cd7e92ce44fb8a",
+          "publicPath": "/watchbug-tfg/en/assets/js/17896441.326aaa2f.js"
+        }
+      ]
+    },
+    "436": {
+      "js": [
+        {
+          "file": "assets/js/436.7ed06dbf.js",
+          "hash": "7a5d479f3f28f7b6",
+          "publicPath": "/watchbug-tfg/en/assets/js/436.7ed06dbf.js"
+        }
+      ]
+    },
+    "570": {
+      "js": [
+        {
+          "file": "assets/js/03e2811a.c053d51a.js",
+          "hash": "38185df55527b7ef",
+          "publicPath": "/watchbug-tfg/en/assets/js/03e2811a.c053d51a.js"
+        }
+      ]
+    },
+    "634": {
+      "js": [
+        {
+          "file": "assets/js/c4f5d8e4.5f2459b0.js",
+          "hash": "88377ac2dd868176",
+          "publicPath": "/watchbug-tfg/en/assets/js/c4f5d8e4.5f2459b0.js"
+        }
+      ]
+    },
+    "647": {
+      "js": [
+        {
+          "file": "assets/js/5e95c892.6ba8de26.js",
+          "hash": "07ded08f1ce3c209",
+          "publicPath": "/watchbug-tfg/en/assets/js/5e95c892.6ba8de26.js"
+        }
+      ]
+    },
+    "742": {
+      "js": [
+        {
+          "file": "assets/js/aba21aa0.22d32dc3.js",
+          "hash": "5282bb830a96f5fd",
+          "publicPath": "/watchbug-tfg/en/assets/js/aba21aa0.22d32dc3.js"
+        }
+      ]
+    },
+    "792": {
+      "js": [
+        {
+          "file": "assets/js/main.322b0be9.js",
+          "hash": "f83fda11f13c7e4c",
+          "publicPath": "/watchbug-tfg/en/assets/js/main.322b0be9.js"
+        }
+      ]
+    },
+    "869": {
+      "css": [
+        {
+          "file": "assets/css/styles.965e61eb.css",
+          "hash": "0edd174ff33c4ace",
+          "publicPath": "/watchbug-tfg/en/assets/css/styles.965e61eb.css"
+        }
+      ]
+    },
+    "973": {
+      "js": [
+        {
+          "file": "assets/js/1661bccd.fa62b07f.js",
+          "hash": "b50fbbd91bf08922",
+          "publicPath": "/watchbug-tfg/en/assets/js/1661bccd.fa62b07f.js"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "id": "index",
+  "title": "Inicio",
+  "description": "Documentación de investigación y recursos para Ingeniería de IA",
+  "source": "@site/../investigation/index.md",
+  "sourceDirName": ".",
+  "slug": "/",
+  "permalink": "/watchbug-tfg/en/docs/",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/your-github-username/watchbug-tfg/tree/docusaurus/../investigation/index.md",
+  "tags": [],
+  "version": "current",
+  "lastUpdatedAt": null,
+  "sidebarPosition": 0,
+  "frontMatter": {
+    "sidebar_position": 0,
+    "slug": "/",
+    "title": "Inicio",
+    "description": "Documentación de investigación y recursos para Ingeniería de IA"
+  },
+  "sidebar": "investigationSidebar",
+  "next": {
+    "title": "Bibliografía — Ingeniería de IA",
+    "permalink": "/watchbug-tfg/en/docs/bibliografia"
+  }
+}

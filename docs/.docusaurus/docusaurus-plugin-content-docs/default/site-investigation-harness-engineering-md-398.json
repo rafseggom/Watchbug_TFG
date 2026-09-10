@@ -1,0 +1,30 @@
+{
+  "id": "harness-engineering",
+  "title": "Guía de Harness Engineering",
+  "description": "Cómo construir entornos fiables para que los agentes de IA trabajen de forma consistente",
+  "source": "@site/../investigation/harness-engineering.md",
+  "sourceDirName": ".",
+  "slug": "/harness-engineering",
+  "permalink": "/watchbug-tfg/en/docs/harness-engineering",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/your-github-username/watchbug-tfg/tree/docusaurus/../investigation/harness-engineering.md",
+  "tags": [],
+  "version": "current",
+  "lastUpdatedAt": null,
+  "sidebarPosition": 2,
+  "frontMatter": {
+    "sidebar_position": 2,
+    "title": "Guía de Harness Engineering",
+    "description": "Cómo construir entornos fiables para que los agentes de IA trabajen de forma consistente"
+  },
+  "sidebar": "investigationSidebar",
+  "previous": {
+    "title": "Bibliografía — Ingeniería de IA",
+    "permalink": "/watchbug-tfg/en/docs/bibliografia"
+  },
+  "next": {
+    "title": "GSD — Resumen",
+    "permalink": "/watchbug-tfg/en/docs/GSD"
+  }
+}
