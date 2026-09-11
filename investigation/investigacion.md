@@ -56,8 +56,13 @@ La colección ya no se limita a skills para agentes: también incluye fundamento
 	- [AgentsView](#agentsview)
 6. [Revisión de cambios](#revisión-de-cambios)
 	- [PR Lens](#pr-lens)
+	- [Self-Evolving Code Review Agent](#self-evolving-code-review-agent)
 7. [Design](#design)
 	- [Skills for Designers and Engineers](#skills-for-designers-and-engineers)
+	- [Make Interfaces Feel Better](#make-interfaces-feel-better)
+	- [12 Principles of Animation](#12-principles-of-animation)
+	- [Fixing Accessibility](#fixing-accessibility)
+	- [shadcn](#shadcn)
 	- [Sona UI](#sona-ui)
 	- [Recursos de diseño Design.md](#recursos-de-diseño-designmd)
 	- [Rico UI Brands](#rico-ui-brands)
@@ -408,6 +413,22 @@ El repositorio requiere Node.js 20.11 o superior y pnpm 10 para desarrollo. Est�
 
 ![PR Lens — diagramas de arquitectura en pull requests](./img/pr-lens.svg)
 
+### Self-Evolving Code Review Agent
+
+[GitHub: Sumanth077/Hands-On-AI-Engineering](https://github.com/Sumanth077/tree/main/ai_agents/self_evolving_code_review_agent). Agente de revisión de código con memoria experencial persistente.
+
+La mayoría de agentes de revisión usan el mismo prompt cada vez. Este proyecto añade memoria experencial al bucle de revisión: antes de cada review, el agente recupera reglas del equipo y trayectorias de revisiones pasadas similares. Después, el ingeniero acepta, rechaza o edita cada comentario, y esa retroalimentación se convierte en la señal de aprendizaje.
+
+**Bucle de trabajo:**
+
+- **Retrieve:** busca en memoria reglas relevantes y revisiones pasadas similares antes de generar comentarios.
+- **Review:** genera feedback estructurado usando el diff actual más la memoria recuperada.
+- **Human feedback:** pausa el workflow y recopila una decisión de aceptar, rechazar o editar por cada comentario.
+- **Reflect:** convierte esas decisiones en reglas reutilizables en lenguaje natural con rationale, polaridad, scope y confianza.
+- **Persist:** almacena tanto los insights aprendidos como la trayectoria completa de la revisión para futuras recuperaciones.
+
+El agente se adapta de forma no paramétrica: en lugar de fine-tuning del modelo, mejora almacenando resultados de revisión como memoria reutilizable. Funciona localmente con LangGraph, Ollama, BGE embeddings y una base de datos vectorial.
+
 ## Design
 
 ### Skills for Designers and Engineers
@@ -417,6 +438,30 @@ El repositorio requiere Node.js 20.11 o superior y pnpm 10 para desarrollo. Est�
 Reúne conocimientos prácticos para diseñadores e ingenieros que trabajan con interfaces y animaciones. Su propósito es acelerar decisiones de diseño sin sustituir la experiencia de dominio.
 
 Aporta criterios para evaluar animaciones, orientación sobre diseño de interfaces, reglas basadas en experiencia profesional en productos como Vercel y Linear, y una forma de convertir expertise de diseño en instrucciones reutilizables por agentes.
+
+### Make Interfaces Feel Better
+
+[ui-skills.com: jakubkrehel/make-interfaces-feel-better](http://ui-skills.com/skills/jakubkrehel/make-interfaces-feel-better). Skill de diseño de ingeniería para interfaces.
+
+Enfocado en hacer que las interfaces se sientan pulidas y profesionales. Cubre principios de diseño visual, micro-interacciones, espaciado, tipografía y composición para que los agentes generen interfaces con buen gusto visual.
+
+### 12 Principles of Animation
+
+[ui-skills.com: raphaelsalaja/12-principles-of-animation](http://ui-skills.com/skills/raphaelsalaja/12-principles-of-animation). Skill de animación para interfaces.
+
+Los 12 principios de animación de Disney aplicados a interfaces web. Útil cuando se necesita crear transiciones, enter/exit animations y micro-interacciones que se sientan naturales y fluidas.
+
+### Fixing Accessibility
+
+[ui-skills.com: ibelick/fixing-accessibility](http://ui-skills.com/skills/ibelick/fixing-accessibility). Skill de accesibilidad web.
+
+Detecta y corrige problemas de accesibilidad en interfaces. Cubre ARIA labels, contraste de color, navegación por teclado, soporte para screen readers y otros requisitos WCAG. Complementa la auditoría de accesibilidad con reglas prácticas para agentes.
+
+### shadcn
+
+[ui-skills.com: shadcn-ui/shadcn](http://ui-skills.com/skills/shadcn-ui/shadcn). Skill del ecosistema shadcn/ui.
+
+Reglas y patrones para trabajar con componentes shadcn/ui de forma correcta. Incluye convenciones de uso, composición de componentes, patrones de diseño y integración con Tailwind CSS. Útil cuando se genera código que usa este ecosistema de componentes.
 
 ### Sona UI
 
@@ -562,10 +607,15 @@ Juego interactivo diseñado para evaluar si conseguimos que la IA haga lo que re
 ### Arquitectura y revisión
 
 - [PR Lens](https://github.com/coldteadotai/pr-lens)
+- [Self-Evolving Code Review Agent](https://github.com/Sumanth077/tree/main/ai_agents/self_evolving_code_review_agent)
 
 ### Design
 
 - [Skills for Designers and Engineers](https://github.com/emilkowalski/skills/tree/main)
+- [Make Interfaces Feel Better](http://ui-skills.com/skills/jakubkrehel/make-interfaces-feel-better)
+- [12 Principles of Animation](http://ui-skills.com/skills/raphaelsalaja/12-principles-of-animation)
+- [Fixing Accessibility](http://ui-skills.com/skills/ibelick/fixing-accessibility)
+- [shadcn](http://ui-skills.com/skills/shadcn-ui/shadcn)
 - [Sona UI](https://sona-ui.vercel.app/)
 - [Recursos Design.md](https://styles.refero.design)
 - [Rico UI Brands](https://design.ricoui.com/brands)
