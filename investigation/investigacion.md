@@ -15,6 +15,7 @@ La colección ya no se limita a skills para agentes: también incluye fundamento
 
 | Versión | Fecha | Cambios |
 | --- | --- | --- |
+| 1.5.0 | 2026-09-16 | Incorporación de la sección MCP con codebase-memory-mcp. |
 | 1.4.0 | 2026-09-10 | Ampliación con Frontier Engineering, ripwire, AutoGen v0.4, Spotify y Claude Code, skills adicionales, curso de Andrew Ng, panel de YC sobre harnesses, guía VRAM para modelos locales y Opus Five. |
 | 1.3.1 | 2026-09-04 | Incorporación de Rico UI Brands como recopilatorio de referencias visuales y design.md. |
 | 1.3.0 | 2026-09-04 | Clasificación de Learn Harness Engineering como curso; traslado de Archify, Cyclomatic Complexity Skill y code-health-auditor al apartado Skills; separación de PR Lens en revisión de cambios. |
@@ -47,7 +48,9 @@ La colección ya no se limita a skills para agentes: también incluye fundamento
 	- [wait-what](#wait-what)
 	- [show-me](#show-me)
 	- [PageSpeed Optimization](#pagespeed-optimization)
-3. [Cursos](#cursos)
+3. [MCP](#mcp)
+	- [codebase-memory-mcp](#codebase-memory-mcp)
+4. [Cursos](#cursos)
 	- [Learn Harness Engineering](#learn-harness-engineering)
 	- [Complete Harness Engineering (Andrew Ng)](#complete-harness-engineering-andrew-ng)
 4. [Calidad](#calidad)
@@ -331,6 +334,43 @@ Ayuda a entender el tema de conversación visualmente mediante diagramas, pseudo
 
 Optimiza sitios web enfocado en mejorar métricas de rendimiento y PageSpeed. Útil cuando se necesita auditar y acelerar el rendimiento de una aplicación web.
 
+## MCP
+
+### codebase-memory-mcp
+
+[GitHub: DeusData/codebase-memory-mcp](https://github.com/DeusData/codebase-memory-mcp). Motor de inteligencia de código para agentes de IA.
+
+Codebase-memory-mcp indexa un repositorio completo en milisegundos —el kernel de Linux (28 millones de líneas, 75.000 archivos) en 3 minutos— y responde consultas estructuradas en menos de 1 ms. Se distribuye como ejecutable nativo con un conjunto pequeño de assets verificados para macOS, Linux y Windows: descargar, ejecutar install, listo.
+
+Parsea mediante AST de tree-sitter en 162 lenguajes, con resolución semántica de tipos mediante LSP híbrido para Python, TypeScript/JavaScript/JSX/TSX, PHP, C#, Go, C, C++, Java, Kotlin, Rust y Perl. Genera un grafo de conocimiento persistente de funciones, clases, cadenas de llamadas, rutas HTTP y enlaces entre servicios. Incluye 15 herramientas MCP. Sin runtime de lenguaje, servicio alojado ni API key. Funciona en 45 superficies de cliente soportadas.
+
+#### Qué resuelve
+
+Los agentes de IA suelen explorar el código grepeando y abriendo archivos repetidamente, lo que derrocha tokens y produce contexto incompleto. Codebase-memory-mcp sustituye esa búsqueda a ciegas por un grafo estructural que el agente puede consultar directamente: quién llama a quién, qué depende de qué, qué rutas HTTP expone un módulo, cuál es el radio de impacto de un cambio.
+
+#### Herramientas principales
+
+| Herramienta | Función |
+| --- | --- |
+| `search_graph` | Encuentra funciones, clases, rutas y variables por patrón |
+| `trace_path` | Traza quién llama a una función o qué invoca |
+| `get_code_snippet` | Lee el código fuente de un símbolo concreto |
+| `check_index_coverage` | Valida rutas candidatas y detecta huecos de cobertura |
+| `query_graph` | Consultas Cypher complejas para patrones multi-salto |
+| `get_architecture` | Resumen de alto nivel del proyecto |
+
+#### Casos de uso
+
+- Entender la arquitectura de un repositorio sin leerlo entero.
+- Analizar el impacto de un cambio antes de modificarlo.
+- Encontrar funciones huérfanas o dependencias circulares.
+- Responder preguntas como «¿qué archivos dependen de este módulo?» de forma inmediata.
+- Dar a un agente un mapa estructural del código en lugar de fragmentos aislados.
+
+Para ver el grafo resultante: [http://localhost:9749/](http://localhost:9749/)
+
+![codebase-memory-mcp — grafo de código](./img/graph-ui-screenshot.png)
+
 ## Cursos
 
 ### Learn Harness Engineering
@@ -590,6 +630,10 @@ Juego interactivo diseñado para evaluar si conseguimos que la IA haga lo que re
 - [wait-what](https://github.com/mattpocock/skills/tree/main/skills/productivity/wait-what)
 - [show-me](https://github.com/humanlayer/humanlayer)
 - [PageSpeed Optimization](https://github.com/YankielDBC2/pagespeed-optimization)
+
+### MCP
+
+- [codebase-memory-mcp](https://github.com/DeusData/codebase-memory-mcp)
 
 ### Cursos
 
