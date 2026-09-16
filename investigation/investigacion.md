@@ -15,7 +15,7 @@ La colección ya no se limita a skills para agentes: también incluye fundamento
 
 | Versión | Fecha | Cambios |
 | --- | --- | --- |
-| 1.5.0 | 2026-09-16 | Incorporación de la sección MCP con codebase-memory-mcp. |
+| 1.5.0 | 2026-09-16 | Incorporación de la sección MCP con codebase-memory-mcp y security-audit-skill de Cloudflare en Skills. |
 | 1.4.0 | 2026-09-10 | Ampliación con Frontier Engineering, ripwire, AutoGen v0.4, Spotify y Claude Code, skills adicionales, curso de Andrew Ng, panel de YC sobre harnesses, guía VRAM para modelos locales y Opus Five. |
 | 1.3.1 | 2026-09-04 | Incorporación de Rico UI Brands como recopilatorio de referencias visuales y design.md. |
 | 1.3.0 | 2026-09-04 | Clasificación de Learn Harness Engineering como curso; traslado de Archify, Cyclomatic Complexity Skill y code-health-auditor al apartado Skills; separación de PR Lens en revisión de cambios. |
@@ -48,6 +48,7 @@ La colección ya no se limita a skills para agentes: también incluye fundamento
 	- [wait-what](#wait-what)
 	- [show-me](#show-me)
 	- [PageSpeed Optimization](#pagespeed-optimization)
+	- [security-audit-skill](#security-audit-skill)
 3. [MCP](#mcp)
 	- [codebase-memory-mcp](#codebase-memory-mcp)
 4. [Cursos](#cursos)
@@ -333,6 +334,18 @@ Ayuda a entender el tema de conversación visualmente mediante diagramas, pseudo
 [GitHub: YankielDBC2/pagespeed-optimization](https://github.com/YankielDBC2/pagespeed-optimization), skill de optimización web.
 
 Optimiza sitios web enfocado en mejorar métricas de rendimiento y PageSpeed. Útil cuando se necesita auditar y acelerar el rendimiento de una aplicación web.
+
+### security-audit-skill
+
+[GitHub: cloudflare/security-audit-skill](https://github.com/cloudflare/security-audit-skill), skill de auditoría de seguridad de Cloudflare.
+
+Estructura y automatiza auditorías de seguridad asistidas por IA, sirviendo como puente entre herramientas de IA y procesos de desarrollo. Compuesto por tres partes:
+
+- **Skill principal:** archivo orientador para que los agentes de IA realicen auditorías de seguridad metódicas y estructuradas.
+- **Base de conocimiento en Markdown:** guías y manuales temáticos que cubren vulnerabilidades web, IA y LLMs, infraestructura en nube, cadena de suministro y otros frentes de seguridad.
+- **Scripts de validación y esquemas:** herramientas en Node.js y un esquema formal para validar automáticamente que los reportes de seguridad cumplan un formato estricto y una cobertura adecuada.
+
+Estandariza auditorías de seguridad asistidas por IA: por un lado, da al agente el conocimiento para auditar código como un experto usando las guías integradas; por otro, proporciona scripts para validar en CI que los informes de seguridad estén bien estructurados y completos.
 
 ## MCP
 
@@ -630,6 +643,7 @@ Juego interactivo diseñado para evaluar si conseguimos que la IA haga lo que re
 - [wait-what](https://github.com/mattpocock/skills/tree/main/skills/productivity/wait-what)
 - [show-me](https://github.com/humanlayer/humanlayer)
 - [PageSpeed Optimization](https://github.com/YankielDBC2/pagespeed-optimization)
+- [security-audit-skill](https://github.com/cloudflare/security-audit-skill)
 
 ### MCP
 
