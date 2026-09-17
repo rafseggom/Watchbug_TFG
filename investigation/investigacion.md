@@ -15,6 +15,7 @@ La colección ya no se limita a skills para agentes: también incluye fundamento
 
 | Versión | Fecha | Cambios |
 | --- | --- | --- |
+| 1.6.0 | 2026-09-17 | Nuevo apartado destacado: *Agentic Software Engineering* (libro de Ahmed E. Hassan). |
 | 1.5.0 | 2026-09-16 | Incorporación de la sección MCP con codebase-memory-mcp y security-audit-skill de Cloudflare en Skills. |
 | 1.4.0 | 2026-09-10 | Ampliación con Frontier Engineering, ripwire, AutoGen v0.4, Spotify y Claude Code, skills adicionales, curso de Andrew Ng, panel de YC sobre harnesses, guía VRAM para modelos locales y Opus Five. |
 | 1.3.1 | 2026-09-04 | Incorporación de Rico UI Brands como recopilatorio de referencias visuales y design.md. |
@@ -26,14 +27,15 @@ La colección ya no se limita a skills para agentes: también incluye fundamento
 
 ## Tabla de contenidos
 
-1. [Artículos e investigación](#artículos-e-investigación)
+1. [Agentic Software Engineering](#agentic-software-engineering)
+2. [Artículos e investigación](#artículos-e-investigación)
 	- [AI Engineering Skills Map: Software Engineering Fundamentals](#ai-engineering-skills-map-software-engineering-fundamentals)
 	- [The End of Software Engineering](#the-end-of-software-engineering-how-ai-agents-are-fundamentally-restructuring-the-software-paradigm)
 	- [Frontier Engineering](#frontier-engineering)
 	- [AutoGen v0.4: Arquitectura de tres capas para agentes multi-agente](#autogen-v04-arquitectura-de-tres-capas-para-agentes-multi-agente)
 	- [Spotify y Claude Code: optimización de tokens](#spotify-y-claude-code-optimización-de-tokens)
 	- [ripwire: contexto de repositorio sin embeddings](#ripwire-contexto-de-repositorio-sin-embeddings)
-2. [Skills](#skills)
+3. [Skills](#skills)
 	- [Humanizer](#humanizer)
 	- [SwarmForge](#swarmforge)
 	- [Gentle-AI](#gentle-ai)
@@ -49,19 +51,19 @@ La colección ya no se limita a skills para agentes: también incluye fundamento
 	- [show-me](#show-me)
 	- [PageSpeed Optimization](#pagespeed-optimization)
 	- [security-audit-skill](#security-audit-skill)
-3. [MCP](#mcp)
+4. [MCP](#mcp)
 	- [codebase-memory-mcp](#codebase-memory-mcp)
-4. [Cursos](#cursos)
+5. [Cursos](#cursos)
 	- [Learn Harness Engineering](#learn-harness-engineering)
 	- [Complete Harness Engineering (Andrew Ng)](#complete-harness-engineering-andrew-ng)
-4. [Calidad](#calidad)
+6. [Calidad](#calidad)
 	- [stopthatslop](#stopthatslop)
-5. [Observabilidad](#observabilidad)
+7. [Observabilidad](#observabilidad)
 	- [AgentsView](#agentsview)
-6. [Revisión de cambios](#revisión-de-cambios)
+8. [Revisión de cambios](#revisión-de-cambios)
 	- [PR Lens](#pr-lens)
 	- [Self-Evolving Code Review Agent](#self-evolving-code-review-agent)
-7. [Design](#design)
+9. [Design](#design)
 	- [Skills for Designers and Engineers](#skills-for-designers-and-engineers)
 	- [Make Interfaces Feel Better](#make-interfaces-feel-better)
 	- [12 Principles of Animation](#12-principles-of-animation)
@@ -70,15 +72,40 @@ La colección ya no se limita a skills para agentes: también incluye fundamento
 	- [Sona UI](#sona-ui)
 	- [Recursos de diseño Design.md](#recursos-de-diseño-designmd)
 	- [Rico UI Brands](#rico-ui-brands)
-8. [Formación](#formación)
+10. [Formación](#formación)
 	- [Todo lo que necesitas saber sobre la Ingeniería de IA en 26 minutos](#todo-lo-que-necesitas-saber-sobre-la-ingeniería-de-ia-en-26-minutos)
 	- [Panel YC: el estado de los harnesses](#panel-yc-el-estado-de-los-harnesses)
-9. [Guías de referencia](#guías-de-referencia)
+11. [Guías de referencia](#guías-de-referencia)
 	- [Guía de modelos por VRAM](#guía-de-modelos-por-vram)
-10. [Casos de uso y exploración](#casos-de-uso-y-exploración)
+12. [Casos de uso y exploración](#casos-de-uso-y-exploración)
 	- [Opus Five](#opus-five)
-11. [Índice de enlaces](#índice-de-enlaces)
-12. [Conclusión](#conclusión)
+13. [Índice de enlaces](#índice-de-enlaces)
+14. [Conclusión](#conclusión)
+
+## Agentic Software Engineering
+
+**Libro de referencia principal de esta wiki.**
+
+[Agentic Software Engineering — The Future of Code](https://agenticse-book.github.io/) · Ahmed E. Hassan (2026).
+
+Libro definitive sobre cómo los agentes autónomos de IA están revolucionando la forma en que construimos, probamos y desplegamos software. Cubre el salto de asistentes de autocompletado a sistemas agénticos completos, y establece la disciplina de la Ingeniería de Software Agéntica.
+
+#### Ideas centrales
+
+- **El cuello de botella real:** la producción de código no es el límite. El verdadero reto es la complejidad, la comunicación y mantener la integridad del sistema a lo largo del tiempo.
+- **La disciplina:** la Ingeniería de Software Agéntica es la disciplina de garantizar fiabilidad y confianza a partir de IA estocástica y contribuciones humanas.
+- **Los nuevos ganadores:** el éxito pertenece a los equipos que establecen una intención clara, gestionan límites de riesgo y exigen evidencia — no solo a los que escriben más rápido.
+
+#### Contenido
+
+- Del coding a la arquitectura: el rol del desarrollador cambia de escribir código a diseñar la configuración del agente que construye el software.
+- Gestión de complejidad en sistemas multi-agente.
+- Verificación y evidencia como pilares del flujo de trabajo agéntico.
+- El futuro: de herramientas a colaboradores autónomos.
+
+**Formato:** [Lectura online](https://agenticse-book.github.io/) · [PDF descargable](https://agenticse-book.github.io/pdf/AgenticSE_Book.pdf) · [Audio de 27 min](https://agenticse-book.github.io/) (resumen IA generado).
+
+**Por qué importa:** es el marco conceptual que subyace a todo lo que esta wiki documenta. Si solo puedes leer un recurso, lee este.
 
 ## Artículos e investigación
 
