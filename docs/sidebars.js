@@ -8,10 +8,18 @@ const sidebars = {
     },
     {
       type: 'category',
-      label: 'Recursos de Ingeniería de IA',
+      label: 'Agentic Software Engineering',
       collapsed: false,
       items: [
         'investigacion',
+        'AgenticSE',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Referencias',
+      collapsed: false,
+      items: [
         'harness-engineering',
       ],
     },

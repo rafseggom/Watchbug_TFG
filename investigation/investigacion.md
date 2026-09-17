@@ -107,6 +107,8 @@ Libro definitive sobre cómo los agentes autónomos de IA están revolucionando 
 
 **Por qué importa:** es el marco conceptual que subyace a todo lo que esta wiki documenta. Si solo puedes leer un recurso, lee este.
 
+> 📖 **Apuntes completos de estudio:** [AgenticSE — Apuntes de Estudio](./AgenticSE.md) — Glosario, partes del libro, resumen por capítulos y guía de referencia rápida.
+
 ## Artículos e investigación
 
 ### AI Engineering Skills Map: Software Engineering Fundamentals
