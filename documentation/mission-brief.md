@@ -9,6 +9,7 @@ Desarrollar la primera versión funcional (MVP) de Watchbug, que consta de:
 2. Una API/Backend ligera de recepción y almacenamiento de reportes.
 3. Un Panel Web de gestión de incidencias auto-hospedable.
 4. Autenticación básica del panel mediante credenciales (usuario/contraseña) o token estático configurado por variables de entorno (.env), con emisión de sesiones basadas en JWT (JSON Web Tokens) o cookies HttpOnly.
+5. El SDK debe ser lo más general posible, debe poder funcionar en el máximo de sistemas posible.
 
 ---
 
