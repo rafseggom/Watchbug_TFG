@@ -9,3 +9,5 @@ node_modules/
 # Docusaurus
 docs/.docusaurus/
 docs/build/
+
+.env
