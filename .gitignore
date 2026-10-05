@@ -5,3 +5,9 @@ node_modules/
 
 .opencode
 
+# Local Pi runtime state
+.atl/
+
+# GSD research scratch (non-hermetic agent output)
+.planning/research/.cache/
+.planning/research/.research-plan-input.json
