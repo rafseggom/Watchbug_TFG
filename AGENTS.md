@@ -66,60 +66,74 @@ This project operates under the **ASE paradigm**. Every task must follow the **C
 
 ## Project Overview (Watchbug SDK)
 
-Open-source, self-hosted error reporting & visual feedback SDK. Injects a lightweight widget into web apps to capture issues with environment metadata. Backend API for ingestion/storage + web admin panel. Deployable via single `docker-compose.yml`.
+Open-source, self-hostable bug-reporting and visual-feedback SDK. A developer adds one async script tag to their web app; their end users get a floating widget that captures the current tab, annotates it, destructively masks anything sensitive, and files it as a bug or as plain feedback with console logs and environment metadata. The developer then triages those reports in a self-hosted admin panel deployed as containers.
 
-**Stack:** Python 3.10 (FastAPI), vanilla JS/TS client SDK (≤45 KB gzipped), PostgreSQL, Docker.
+**Stack (R-15): TypeScript end to end.** npm-workspaces monorepo - `packages/contracts`, `packages/sdk`, `apps/api` (Fastify 5), `apps/panel` (React + Vite), PostgreSQL 18, Docker. Exact pinned versions live in `.planning/research/STACK.md`.
+
+> **Corrected 2026-10-05.** This file previously described a Python 3.10 / FastAPI / Ruff / pytest / `watchbug/*` layout with an 80% unit-test coverage target. That was leftover scaffolding from an unrelated setup and is **not** this project. See `documentation/resolution-record.md` R-15, R-16 and R-12.
 
 ---
 
 ## Architecture & Data Flow
 
 ```
-Host App + Widget  ──HTTP/JSON──▶  Backend (FastAPI)  ──▶  Database (PostgreSQL)
-                                     │
-                                     ▼
-                              Admin Panel (Static SPA)
+Host App + Widget  --HTTP multipart-->  apps/api (Fastify)  -->  PostgreSQL
+   (packages/sdk)                            |
+                                             v
+                                      apps/panel (static SPA behind nginx)
 ```
 
-**Key modules (planned):**
-- `watchbug/sdk/` — Client SDK (widget, capture engine, Shadow DOM isolation)
-- `watchbug/api/` — FastAPI backend (ingestion, auth, incidents CRUD)
-- `watchbug/panel/` — Admin panel (SPA, served as static files)
-- `watchbug/core/` — Shared schemas, utilities, i18n
+**Workspaces**
+
+| Workspace | Purpose |
+|-----------|---------|
+| `packages/contracts` | The single official JSON schema (Zod 4) for CA-01. The SDK imports it **types-only**. |
+| `packages/sdk` | Client: widget, capture, redaction, annotation, transport. **Zero runtime dependencies.** |
+| `apps/api` | Fastify 5 ingestion + admin API. |
+| `apps/panel` | React + Vite static SPA (INV-03). |
+
+**Ports (R-02 - pragmatic hexagonal, exactly 8 seams)**
+
+Client: `CaptureSource`, `Redactor`, `Enricher`, `Annotator`, `Transport`, `WidgetHost`. Server: `Storage`, `AuthProvider`.
+
+Reserved ports are **seams only**. Never build an adapter for an out-of-scope feature (Jira/GitHub/Slack, S3/MinIO, bearer auth, session replay, AI analysis) - those are non-goals.
 
 ---
 
 ## Invariants & Non-Negotiables (From Mentorship Pack)
 
-> **Full details:** `documentation/mentorship-pack.md`
+> **Full details:** `documentation/mentorship-pack.md` - Amendments: `documentation/resolution-record.md` section 5
 
 | Invariant | Requirement |
 |-----------|-------------|
-| **INV-01: Total Widget Isolation** | Shadow DOM (`mode: 'closed'`). Zero global CSS/JS leakage. |
-| **INV-02: Clean Global Namespace** | Single `window.Watchbug` entry point. No prototype pollution. |
-| **INV-03: Self-Hosted Containers** | Single `docker-compose.yml` for API, panel, DB. |
-| **SEC-01: Auto-Sanitization** | Mask `input[type=password]`, `data-watchbug-sensitive`, card patterns. |
-| **SEC-02: Destructive Canvas Masking** | Pixel alteration on `ImageData` before Base64 — no CSS overlays. |
-| **SEC-03: No Host Credentials** | SDK never sends host app cookies/tokens. Only `PROJECT_KEY` (public). |
+| **INV-01: Total Widget Isolation** | Shadow DOM `mode: 'closed'` (build-time `SHADOW_MODE` flag emits the e2e-only bundle). Zero global CSS/JS leakage. |
+| **INV-02: Clean Global Namespace** | Single `window.Watchbug` entry point. No prototype patching. |
+| **INV-03: Self-Hosted Containers** | Single `docker-compose.yml`, exactly three services: `api`, `panel`, `db`. |
+| **SEC-01: Auto-Sanitization** | Mask `input[type=password]`, credential/token/card patterns, `data-watchbug-sensitive`. |
+| **SEC-02: Destructive Canvas Masking** | Alter `ImageData` before encode. **Flat opaque fill only** as the automatic primitive. No CSS overlays. |
+| **SEC-03: No Host Credentials** | SDK never reads or sends host cookies/storage/tokens. Only the public write-only `project_key`. |
 | **SEC-04: Zero Secrets in Code** | `.env` only. `.env.example` committed. |
-| **SEC-05: XSS Sanitization + Rate Limiting** | All user fields sanitized. `/api/incidents` rate-limited per IP + key. |
-| **SEC-06: Secure Auth** | bcrypt/Argon2. JWT short TTL, HttpOnly/SameSite/Secure cookies. |
-| **RNF-01: Bundle ≤45 KB gzipped** | Async load, no main-thread blocking. |
-| **RNF-02: Total Isolation** | Host CSS cannot break widget. |
+| **SEC-05: XSS Sanitization + Rate Limiting** | Sanitise on ingest, render inert in the panel. `/api/incidents` rate-limited per IP **and** per project key. |
+| **SEC-06: Secure Auth** | Argon2id. JWT TTL no more than 8 h in a `__Host-` / `HttpOnly` / `Secure` / `SameSite=Lax` cookie. |
+| **RNF-01: Tiered size budget** | Injected core no more than **45 KB** gz, lazy chunk no more than **25 KB** gz, runtime total no more than **80 KB** gz. Async, never blocking the main thread. |
+| **RNF-02: Total Isolation** | Host CSS cannot break the widget. |
 | **RNF-03: i18n** | English + Spanish. |
+| **R-13: Masking primitive** | **Flat opaque fill (alpha 255)** is the only automatic primitive. Pixelation opt-in only at block size at least `max(8 px, 2x cap-height)`, grid-snapped. **Gaussian blur is prohibited** - it is partially invertible by deconvolution. |
+| **R-12: Verification policy** | **E2E and property assertions ONLY.** See Testing & QA below. |
 
 ---
 
 ## Consultation Triggers (Pause & Ask)
 
-> **Full autonomy envelope:** `documentation/mission-brief.md#3`
+> **Full autonomy envelope:** `documentation/mission-brief.md` section 3
 
-Stop autonomous work and request human decision when:
-- Changing public SDK init interface (`window.Watchbug.init()`)
-- Adding deps that push SDK >45 KB gzipped
-- Modifying Shadow DOM isolation strategy
+Stop autonomous work and generate a Consultation Request Pack when:
+- Changing the public SDK interface (`window.Watchbug.init()`)
+- Changing the `/api/incidents` payload schema (CA-01 is a contract)
+- Modifying the Shadow DOM isolation strategy
 - DB schema changes / migrations
 - Choosing blob storage (FS vs S3/MinIO vs DB)
+- Adding dependencies that push the SDK past its size tier
 - Adding non-permissive licenses or uncertain GDPR edge cases
 
 ---
@@ -127,33 +141,24 @@ Stop autonomous work and request human decision when:
 ## Development Commands
 
 ```bash
-
 # Setup
+npm install                     # npm workspaces
 
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
+# Build (packages/sdk -> IIFE + ESM; two esbuild calls, one format each)
+npm run build
 
-# Linting & formatting (Ruff)
+# Size gate (R-01 tiers; fails the build on breach)
+npm run check:size
 
-ruff check .
-ruff format .
+# Verification - the ONLY test artefact (see Testing & QA)
+npm run verify                  # one Playwright suite: CA-01..CA-05 on chromium + firefox + webkit
 
-# Tests
-
-pytest                          # all
-pytest tests/unit/              # unit
-pytest tests/integration/       # integration
-pytest tests/e2e/               # e2e (Playwright)
-pytest --cov=watchbug --cov-report=xml
-
-# Size check (client SDK)
-
-npm run check:size              # fails if >45 KB gzipped
+# Lint / format
+npm run lint
 
 # Run locally
-
-docker-compose up -d
-uvicorn watchbug.api.main:app --reload
+docker-compose up -d            # api + panel + db (INV-03)
+npm run dev                     # tsx watch apps/api
 ```
 
 ---
@@ -162,9 +167,11 @@ uvicorn watchbug.api.main:app --reload
 
 | Area | Convention |
 |------|------------|
-| **Python** | Ruff, mandatory type hints, `async def`, Pydantic Settings from `.env`, custom exceptions, Pydantic schemas |
-| **Client SDK (TS/JS)** | ES2020, IIFE+ESM, Shadow DOM closed, single `window.Watchbug`, destructive canvas masking |
-| **Naming** | Python: snake_case/PascalCase/UPPER_SNAKE. TS: camelCase/PascalCase/kebab-case. Tests: `test_<module>_<behavior>.py` / `*.spec.ts` |
+| **TypeScript** | ES2020 target. `import type` from `packages/contracts` in the SDK so Zod never ships to the client. |
+| **Client SDK** | IIFE + ESM dual build. Shadow DOM `closed`. Single `window.Watchbug`. Zero runtime deps. |
+| **Naming** | TS: camelCase / PascalCase; kebab-case for files. Requirement IDs: `[CATEGORY]-[NN]`. |
+| **Ports** | An interface per seam only where a real second implementation exists. Plain modules everywhere else. |
+| **Migrations** | `drizzle-kit` generated, committed and reviewable. A migration is a consultation trigger. |
 
 ---
 
@@ -172,28 +179,34 @@ uvicorn watchbug.api.main:app --reload
 
 | File | Purpose |
 |------|---------|
-| `pyproject.toml` | Project metadata, deps, tool config (Ruff, pytest, build) |
-| `.env.example` | Documented env vars (DB URL, JWT secret, CORS origins) |
-| `docker-compose.yml` | Single-file orchestration |
-| `watchbug/api/main.py` | FastAPI app factory |
-| `watchbug/api/schemas.py` | Pydantic models for `/api/incidents` |
-| `watchbug/sdk/src/index.ts` | SDK entry point |
-| `sonar-project.properties` | SonarCloud config |
+| `package.json` | npm workspaces root |
+| `.env.example` | Documented env vars (DB URL, JWT secret, CORS origins, TTLs) |
+| `docker-compose.yml` | Three services: `api`, `panel`, `db` |
+| `packages/contracts/` | The official payload schema (Zod 4), emitting `schema/report.schema.json` |
+| `packages/sdk/src/index.ts` | SDK entry point |
+| `scripts/check-size.mjs` | R-01 size gate (`node:zlib`) |
+| `.planning/REQUIREMENTS.md` | 70 v1 requirements with REQ-IDs |
+| `.planning/ROADMAP.md` | 7 phases with requirement traceability |
+| `documentation/resolution-record.md` | Decision register R-01..R-17 plus amendments A-01..A-13 |
+| `documentation/continuity-pack.md` | Session state, open questions, dead-ends |
 
 ---
 
-## Testing & QA
+## Testing & QA (R-12)
 
-| Level | Framework | Target |
-|-------|-----------|--------|
-| Unit | pytest | ≥80% on utils/formatters |
-| Integration | pytest + httpx | API schema validation |
-| E2E | Playwright | Widget isolation under hostile CSS |
-| Size | custom | ≤45 KB gzipped |
+> **Owner policy, stated twice: "DONT MAKE A BUNCH OF TESTS. Only make e2e as necessary, not unit tests."**
+> There is **no unit-test suite**, no per-function tests, no formatter tests, and **no coverage thresholds**. Do not create them.
 
-**CI enforces:** Ruff lint+format, all tests pass, coverage → SonarCloud, bundle size ≤45 KB.
+| What | Command | Covers |
+|------|---------|--------|
+| **Size gate** | `npm run check:size` | RNF-01 / CA-03 - the 45 / 25 / 80 KB tiers |
+| **One e2e suite** | `npm run verify` | CA-01..CA-05, about 20 assertions, on chromium + firefox + **webkit** |
 
-<!-- GSD:project-start source:PROJECT.md -->
+webkit is not optional: it exercises the silent WebP-to-PNG fallback. Firefox exercises the no-`ImageCapture` path.
+
+Security properties are asserted at the **artifact level**. CA-02, for example, intercepts the outgoing request, decodes the attached image, and asserts the masked region's original pixel values are absent from the encoded bytes. That is stronger evidence than any unit test, and it is the required form.
+
+---<!-- GSD:project-start source:PROJECT.md -->
 
 ## Project
 
