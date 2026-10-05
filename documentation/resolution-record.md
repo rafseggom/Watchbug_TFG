@@ -232,3 +232,129 @@ Approaches evaluated and rejected. Do not re-explore.
 | Q-04 | v1 boundary for R-06: project selector yes; is **key rotation UI** v1 or v2? Leaning v2. | REQUIREMENTS |
 | Q-05 | Degree-awarding institution's IP policy must be confirmed before the repository is public (R-07). | Release |
 | Q-06 | Default capture adapter. `getDisplayMedia({ preferCurrentTab: true })` is ≈1 KB and pixel-perfect but raises a browser share sheet on every report. DOM serialization avoids the sheet at 8–14 KB and with silent failure modes. | Phase planning |
+
+**Status after research (2026-10-05):** Q-02, Q-03, Q-04 and Q-06 are **closed** — see §5. Q-05 remains open.
+
+---
+
+## 5. Amendments — post-research (2026-10-05)
+
+> Derived from `.planning/research/` (STACK, FEATURES, ARCHITECTURE, PITFALLS, SUMMARY), committed as `34a6319`.
+> **Where §5 conflicts with §2 above, §5 governs.** The register in §1 is superseded accordingly.
+
+### A-01 · R-13 **amended** — masking primitive is not what I first recorded (evidence C-1, critical)
+
+The original R-13 permitted "block pixelation ≥ 8 px" as an equal alternative to solid fill. **That is wrong for text.**
+
+Published recovery attacks — Shacham et al. (HMM character recovery), Bishop Fox *Unredacter*, *Depix*, and Positive Security *Underactor* (including video averaging) — reconstruct **pixelated *and* blurred** text nearly perfectly at typical UI font sizes. Pixelation is therefore not an irreversible primitive.
+
+**Corrected R-13:**
+
+- **Default and only automatic primitive: flat opaque fill applied to `ImageData`.**
+- Block pixelation is **opt-in and developer-chosen**, permitted only at block size ≥ `max(8 px, 2 × cap-height)`, with the region **snapped to the block grid**, alpha forced to 255, and a lossy re-encode performed after destruction.
+- Gaussian blur remains prohibited (D-06). CSS overlays remain prohibited (SEC-02).
+
+### A-02 · R-10 **amended** — retention must cover artifacts, not just identity (evidence M-1)
+
+The original R-10 said "the report itself is kept, anonymised". **That is false**: the screenshot and the console logs are themselves personal data. Deleting `user.*` does not anonymise anything.
+
+**Corrected R-10:** TTLs cover the whole incident.
+
+| Data | TTL | Default |
+|---|---|---|
+| `user.*` identity fields | purge at N days | **30** |
+| Full incident (screenshot, `consoleLogs`, metadata) | purge at M days | **90** |
+
+Both configurable in `.env`; not surfaced in the panel in v1. The admin can delete a report or erase its identity immediately at any time (RGPD Art. 18).
+
+### A-03 · R-02 `Transport` adapter **amended** (evidence H-9)
+
+`fetch keepalive` and `sendBeacon` are **spec-capped at 64 KiB** per request body. A screenshot report is 60–150 KB and cannot ride either.
+
+**Corrected `Transport`:** plain `fetch` with an **idempotency-keyed retry**, plus an **IndexedDB durability queue** flushed on `pageshow` and on visibility change. `keepalive` / `sendBeacon` are permitted **only** for a tiny telemetry receipt (≤ 64 KiB) — never for the report body.
+
+### A-04 · `Annotator` port contract **tightened** (evidence C-2)
+
+Undo stacks, layer-stack exports and offscreen base layers keep unmasked originals alive and can be encoded. The port contract is therefore:
+
+- **one** flattened working bitmap,
+- masks applied **destructively and not undoable**,
+- annotations kept as vector strokes and flattened onto the **already-masked** bitmap,
+- a **single** `toBlob` sink.
+
+No undo stack over pre-mask state. No layer-stack export. No offscreen base layer.
+
+### A-05 · Q-06 **closed** — capture is a fallback chain (evidence H-4/H-5)
+
+`getDisplayMedia` **does not exist on iOS at all**. `preferCurrentTab` is Chromium-only and mutually exclusive with `selfBrowserSurface: 'exclude'`. Safari's 16,777,216-px canvas area cap silently produces blank captures.
+
+Chain, in order: **`DisplayMediaCapture` → `ManualFileCapture`** (file attach) → optional lazy `DomSerializeCapture` (D-08's silent failures make it third, not first). A capture-less degradation path and a **user-visible capture failure state** are mandatory. The first two links ship in v1.
+
+### A-06 · Q-02 **closed** — one binding constant set (three upstream proposals reconciled)
+
+| Constant | Value | Rationale |
+|---|---|---|
+| Console ring buffer | 100 entries, drop-oldest | bounds client memory |
+| Message length | 2,048 chars | |
+| Per-argument preview | 1,024 chars | |
+| Object serialization depth | 3 | eager serialization, no retained object refs |
+| `consoleLogs` total | **48 KB** | keeps a metadata-only flush ≤ 60 KB |
+| Request body | 5 MB hard reject | |
+| Image | **2 MB hard, ≤ 16 MP** after downscale | stays under Safari's canvas-area cap |
+| Rate limit | layered: per IP **and** per project key | SEC-05 |
+
+FEATURES' 100 KB payload / 10 MB image was rejected as self-contradictory with its own limits. PITFALLS' 64 KB console total was tightened to 48 KB so the ≤60 KB metadata-flush invariant is actually achievable.
+
+### A-07 · Q-03 **closed** — retention defaults
+
+Identity **30 days**; full incident artifact **90 days** (A-02). `.env`-configurable. Panel-configurable retention is v2.
+
+### A-08 · Q-04 **superseded** — v1 scoping register (2026-10-05)
+
+The v1 scoping block closed Q-02…Q-04 definitively and fixed the v1/v2 boundary. Where this conflicts with the earlier "key rotation is v2" lean, **this governs**.
+
+| Area | v1 decision | Notes |
+|---|---|---|
+| Annotation tools | **Five** — pen, arrow, rectangle, text, opaque mask + undo for annotation strokes only | ~14 KB lazy chunk; matches research median and RF-03's wording |
+| Triage | RF-06 **plus reopen and internal comments** | Reopen is table-stakes; comments are the highest-ranked triage extra. Assignee deliberately cut under R-05 |
+| Capture chain | **`DisplayMediaCapture` + `ManualFileCapture`** | A-05's mandatory pair. DOM-serialization stays v2 |
+| Enrichers | RF-01 core **plus** dpr/language/timezone **plus** host `appVersion` | Custom fields and network-error capture are **v2** |
+| Panel analytics | Counts and filters only | Time-series trends are v2 |
+| Projects | **Full CRUD + key rotation** | ⚠ **Supersedes the earlier v2 lean.** `PRJ-03` rename, `PRJ-04` rotate, `PRJ-05` delete are all v1 |
+| Build shape | **Vertical MVP** | `PROJECT_MODE=mvp` — every ROADMAP phase emits `**Mode:** mvp` and delivers an end-to-end user capability |
+
+⚠ **New open item created by `PRJ-04` being v1 (Q-07):** a `public_key` is embedded in already-shipped host script initialisations. Key rotation must therefore decide **grace period vs instant cut-off**, and whether the old key keeps accepting writes during a window. This is security-sensitive and must be resolved at phase planning, not improvised during execution.
+
+### A-09 · Version pins (from STACK.md, all verified live 2026-10-05)
+
+| Pin | Value | Note |
+|---|---|---|
+| Node | `24.21.0-alpine3.24` | ⚠ Node 24 enters maintenance **2026-10-20**; Node 26 becomes Active LTS **2026-10-28**. Schedule one re-pin. |
+| PostgreSQL | **18.6** | supersedes PROJECT.md's illustrative "16" |
+| Zod | **4.6.5** | native `z.toJSONSchema()`. `zod-to-json-schema` is officially deprecated. SDK imports contracts **types-only** so Zod never ships in the 45 KB bundle |
+| Drizzle | **0.45.3** + drizzle-kit **0.31.11** | chosen over Kysely 0.29.6: only Drizzle emits reviewable SQL migrations, which the migration consultation trigger needs |
+| Fastify | 5.x + `@fastify/rate-limit`, `cors`, `cookie`, `helmet`, `multipart@10.1.2` | `multipart`↔Fastify 5 mapping **UNVERIFIED** — smoke-test in the first API phase |
+| Argon2id | `@node-rs/argon2@2.2.1` | prebuilt musl binaries, no install script |
+| esbuild | **0.28.2** | ⚠ one format per build call → IIFE + ESM = two builds, and the lazy annotator must be a **second entry** (code-splitting is ESM-only). This is the likeliest R-01 budget surprise |
+| WebP fallback | detect by sniffing `blob.type` | silent PNG fallback per spec |
+| React + Vite | current | see STACK.md |
+
+**UNVERIFIED and must be checked at first build:** TS 7.x tooling ecosystem compatibility (drizzle-kit / tsx / vite plugins) — fallback to the 6.x/5.x line.
+
+### A-10 · Deployment constraint (new)
+
+`apps/panel` nginx **must reverse-proxy `/api` → `api`**, because same-origin is required for `SameSite=Lax` cookie auth. Still exactly three compose services, so INV-03 holds.
+
+### A-11 · CORS origin source (new)
+
+`.env` `WATCHBUG_CORS_ORIGINS` allowlist — SEC-04 compliant, and since it is not a schema change, no consultation trigger fires.
+
+### A-12 · Size-gate worst case (new)
+
+45 + 25 + 14 = **84 KB > 80 KB** runtime ceiling in the worst case. `check:size` needs an explicit multi-artifact scenario in the first phase, and the lazy chunk budget may need revisiting against real measurements.
+
+### Still open
+
+- **Q-05** — university IP policy before the repo is public (release gate).
+- Mask-undo UX is unvalidated (A-04 makes masks irreversible — good for security, and the UX consequence is untested).
+- GDPR claims need legal review before any public compliance statement.
