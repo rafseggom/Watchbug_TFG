@@ -94,3 +94,62 @@ El agente **debe pausar la ejecución autónoma** y generar un **Consultation Re
 - **Brecha de Presupuesto (RNF):** Imposibilidad de implementar una característica funcional sin superar el límite de 45 KB gzipped.
 - **Estrategia de Persistencia de Archivos:** Selección del método de almacenamiento binario para las capturas en el backend (DB vs FileSystem local vs S3/MinIO).
 - **Licencias y Seguridad:** Incorporación de dependencias con licencias no permisivas o incertidumbre sobre la sanitización de datos RGPD en casos límite.
+
+---
+
+## 6. Enmienda (2026-10-05) — Política de verificación y cierre de disparadores
+
+> Registro completo con evidencia y alternativas rechazadas: `documentation/resolution-record.md`.
+
+### 6.1 Derogación de §3.1 (Pruebas Unitarias) — Resolución R-12
+
+Por decisión explícita y reiterada del propietario: **no se construirá ninguna batería de pruebas unitarias.** Quedan derogados el nivel `npm run test:unit`, sus coberturas obligatorias (formateadores de fechas, manipulador de matriz de píxeles, formateadores i18n) y cualquier umbral de cobertura.
+
+La §3 se sustituye por **verificación por propiedades**:
+
+| Comando | Sustituye a | Qué verifica |
+|---------|-------------|--------------|
+| `npm run check:size` | §3.4 (sin cambios) | RNF-01 / CA-03 — límite de peso por niveles. Es un *gate* de build, no una suite |
+| `npm run verify` | §3.2 + §3.3, re-scopados | CA-01…CA-05 — **una única** suite E2E (Playwright), ≈20 aserciones |
+
+No se escribirán tests de formateadores, de i18n, ni tests por función.
+
+### 6.2 Cambio del método de verificación de CA-02 — Resolución R-12
+
+La **propiedad** de CA-02 no cambia en absoluto. Cambia su método de verificación:
+
+- ~~Test unitario del componente de canvas sobre la matriz de píxeles (`ImageData`).~~
+- **Nuevo:** el flujo E2E real abre el widget, aplica una máscara, **intercepta la petición HTTP saliente**, decodifica la imagen adjunta y comprueba que los valores de píxel originales de la región enmascarada están **ausentes en los bytes codificados**.
+
+Esto demuestra la *irreversibilidad* exigida por SEC-02 sobre el artefacto que realmente abandona el navegador: evidencia estrictamente más fuerte con menos código.
+
+### 6.3 Restricción de seguridad derivada de SEC-02 — Resolución R-13
+
+**El desenfoque gaussiano queda prohibido** como primitiva de enmascarado: es una operación lineal y parcialmente invertible por deconvolución, luego no altera los datos de forma irreversible. Solo se admite:
+
+- relleno de color sólido, o
+- pixelación por promedio de bloques con **tamaño de bloque ≥ 8 px**.
+
+La prohibición de §SEC-02 sobre capas CSS superpuestas se mantiene sin cambios.
+
+### 6.4 Disparadores de consulta del §5.2 — cerrados como resoluciones
+
+| Disparador | Resolución |
+|-----------|-----------|
+| Estrategia de persistencia de archivos | **R-04** — volumen de sistema de archivos tras el puerto `Storage`. Los binarios se sirven **solo** por la API autenticada, nunca como estáticos (evita *path traversal*) |
+| Licencias y seguridad | **R-07** — Apache-2.0 (con cesión explícita de patentes) |
+| Esquema de datos / endpoints | **R-06** — multi-proyecto mínimo (`id`, `name`, `public_key`) |
+| Contrato de API / interfaz pública del SDK | **R-15** — `packages/contracts` como esquema oficial único para CA-01 |
+| Brecha de presupuesto RNF | **R-01** — presupuesto por niveles: 45 / 25 / 80 KB gz |
+| Estrategia de aislamiento CSS/DOM | **R-14** — `mode:'closed'` + flag de build `SHADOW_MODE` para el bundle E2E |
+| Autenticación del panel (SEC-06) | **R-05** — administrador único desde `.env`, Argon2id + JWT en cookie `HttpOnly` / `SameSite` / `Secure` con TTL |
+
+Los disparadores siguen **vigentes** para cualquier decisión futura que no esté cubierta por estas resoluciones.
+
+### 6.5 Retención de datos personales — Resolución R-10
+
+Con **R-09** el panel almacena datos personales (`user.id`, `user.name`, `user.email`) aportados por el anfitrión. En consecuencia:
+
+- Los campos de identidad se **purgen automáticamente** a los **N días** (por defecto 30, configurable en `.env`); el informe se conserva anonimizado.
+- El administrador puede en cualquier momento eliminar un informe completo o borrar sus campos de identidad de forma inmediata.
+- Debe informarse al interesado conforme al art. 13 RGPD en la documentación de integración del SDK.

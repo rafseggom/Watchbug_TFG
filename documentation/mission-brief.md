@@ -82,3 +82,50 @@ El agente NO debe implementar ni diseñar arquitectura para lo siguiente en este
 - **CA-05 (Consistencia de Autenticación en Rutas):**
   - *Propiedad:* Cualquier petición no autenticada a las rutas de la API del panel (`/api/incidents/*`) debe retornar un código de estado `401 Unauthorized`.
   - *Verificación:* Pruebas de endpoints probando peticiones sin cabeceras/tokens válidos.
+
+---
+
+## 6. Enmienda (2026-10-05) — Decisiones restringidas resueltas
+
+> Registro completo, con alternativas rechazadas y evidencia: `documentation/resolution-record.md`.
+> Estado de sesión y caminos sin salida: `documentation/continuity-pack.md`.
+
+Se deja constancia de que **`AGENTS.md` no es un documento rector** (R-16): es andamiaje heredado de una configuración anterior y será regenerado por el flujo de trabajo. Los documentos rectores son este *Mission Brief*, el *Mentorship Pack* y las *ASE Instructions*.
+
+### 6.1 Decisiones del §3 (Autonomy Envelope)
+
+| Decisión restringida | Resolución |
+|---------------------|-----------|
+| Diseño de la arquitectura de la aplicación | **R-02** — hexagonal pragmático: puertos en 8 costuras (`CaptureSource`, `Redactor`, `Enricher`, `Annotator`, `Transport`, `Storage`, `AuthProvider`, `WidgetHost`), módulos planos en el resto |
+| Lenguajes de programación | **R-15** — TypeScript extremo a extremo (monorepo npm workspaces: `packages/contracts`, `packages/sdk`, `apps/api`, `apps/panel`, PostgreSQL) |
+| Formación del JSON y datos sensibles | **R-08 / R-09 / R-11** — esquema oficial único en `packages/contracts`; `environment.url` solo con *path* (se descartan *query* y *fragment*); identidad del usuario final `user: {id, name?, email?}` enviada por defecto con *opt-out*; captura en WebP con reserva PNG |
+| Esquema de BD y endpoints REST | **R-06** — multi-proyecto mínimo (`id`, `name`, `public_key`) con FK en incidencias |
+| Interfaz pública del SDK / aislamiento | **R-14** — Shadow DOM `mode:'closed'` en producción, flag de build `SHADOW_MODE` para el bundle E2E |
+
+### 6.2 Presupuesto RNF-01 — presupuesto por niveles (R-01)
+
+RNF-01 se interpreta por niveles, sin elevar su límite superior:
+
+| Nivel | Límite (gzipped) | Imposición |
+|-------|------------------|-----------|
+| `watchbug.js` — core inyectado | **≤ 45 KB** (duro) | `npm run check:size`, falla la build |
+| Cada *chunk* diferido (editor de anotación, adaptadores opcionales) | ≤ 25 KB | ídem |
+| Carga total del cliente en ejecución | ≤ 80 KB | ídem |
+
+El editor de anotación **debe** ser un *chunk* diferido. La promesa de RNF-01 es «no costar nada a la página anfitriona»: nada bloquea el hilo principal, por lo que la afirmación de Lighthouse de CA-03 (caída ≤ 2 puntos) sigue siendo defendible.
+
+### 6.3 Alcance de la entrega (R-03)
+
+Este repositorio contiene **únicamente el código del producto**. La *memoria* del TFG y la documentación de usuario son vías paralelas, fuera de este *roadmap*.
+
+### 6.4 Verificación (R-12)
+
+Únicamente **E2E y aserciones de propiedad** sobre CA-01…CA-05, más el *gate* `check:size`. No se construirá una batería de pruebas unitarias ni existirán umbrales de cobertura — ver §6.1 del *Mentorship Pack*.
+
+CA-02 conserva íntegramente su propiedad; solo cambia su método de verificación (§6.2 del *Mentorship Pack*). Derivado de SEC-02 se añade **R-13: el desenfoque gaussiano queda prohibido** como primitiva de enmascarado por ser parcialmente invertible.
+
+### 6.5 Sin recortes por calendario (R-17)
+
+El horizonte de entrega es «cuando esté terminado, completo y bien hecho». El alcance se recorta por **coherencia**, nunca por presión de calendario. Todas las puertas de calidad del *Mentorship Pack* siguen siendo obligatorias.
+
+⚠ **Pendiente antes de hacer público el repositorio (Q-05):** confirmar la política de propiedad intelectual de la universidad respecto a la licencia **Apache-2.0** (R-07).
