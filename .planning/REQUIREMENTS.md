@@ -208,16 +208,86 @@ Explicitly excluded. Documented to prevent scope creep.
 
 ## Traceability
 
-Which phases cover which requirements. **Updated during roadmap creation** — currently empty.
+Which phases cover which requirements. **Updated during roadmap creation** — every v1 requirement maps to exactly one phase (see `.planning/ROADMAP.md` § Coverage Validation).
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (pending roadmap) | | |
+| INT-01 | Phase 2 | Pending |
+| INT-02 | Phase 2 | Pending |
+| INT-03 | Phase 4 | Pending |
+| INT-04 | Phase 4 | Pending |
+| INT-05 | Phase 2 | Pending |
+| WDG-01 | Phase 2 | Pending |
+| WDG-02 | Phase 2 | Pending |
+| WDG-03 | Phase 2 | Pending |
+| WDG-04 | Phase 2 | Pending |
+| WDG-05 | Phase 2 | Pending |
+| WDG-06 | Phase 3 | Pending |
+| CAP-01 | Phase 2 | Pending |
+| CAP-02 | Phase 3 | Pending |
+| CAP-03 | Phase 3 | Pending |
+| CAP-04 | Phase 2 | Pending |
+| CAP-05 | Phase 2 | Pending |
+| ANN-01 | Phase 3 | Pending |
+| ANN-02 | Phase 3 | Pending |
+| ANN-03 | Phase 3 | Pending |
+| ANN-04 | Phase 3 | Pending |
+| ANN-05 | Phase 3 | Pending |
+| ANN-06 | Phase 3 | Pending |
+| PRV-01 | Phase 2 | Pending |
+| PRV-02 | Phase 2 | Pending |
+| PRV-03 | Phase 2 | Pending |
+| PRV-04 | Phase 3 | Pending |
+| PRV-05 | Phase 2 | Pending |
+| PRV-06 | Phase 2 | Pending |
+| PRV-07 | Phase 3 | Pending |
+| ENR-01 | Phase 4 | Pending |
+| ENR-02 | Phase 4 | Pending |
+| ENR-03 | Phase 4 | Pending |
+| ENR-04 | Phase 4 | Pending |
+| ENR-05 | Phase 4 | Pending |
+| ENR-06 | Phase 1 | Pending |
+| ING-01 | Phase 1 | Pending |
+| ING-02 | Phase 7 | Pending |
+| ING-03 | Phase 1 | Pending |
+| ING-04 | Phase 1 | Pending |
+| ING-05 | Phase 1 | Pending |
+| ING-06 | Phase 1 | Pending |
+| ING-07 | Phase 1 | Pending |
+| ING-08 | Phase 1 | Pending |
+| TRI-01 | Phase 5 | Pending |
+| TRI-02 | Phase 5 | Pending |
+| TRI-03 | Phase 5 | Pending |
+| TRI-04 | Phase 6 | Pending |
+| TRI-05 | Phase 6 | Pending |
+| TRI-06 | Phase 6 | Pending |
+| TRI-07 | Phase 6 | Pending |
+| TRI-08 | Phase 6 | Pending |
+| TRI-09 | Phase 6 | Pending |
+| TRI-10 | Phase 6 | Pending |
+| PRJ-01 | Phase 5 | Pending |
+| PRJ-02 | Phase 5 | Pending |
+| PRJ-03 | Phase 5 | Pending |
+| PRJ-04 | Phase 5 | Pending |
+| PRJ-05 | Phase 5 | Pending |
+| RET-01 | Phase 6 | Pending |
+| RET-02 | Phase 6 | Pending |
+| RET-03 | Phase 6 | Pending |
+| DEP-01 | Phase 1 | Pending |
+| DEP-02 | Phase 1 | Pending |
+| DEP-03 | Phase 5 | Pending |
+| DEP-04 | Phase 7 | Pending |
+| PRF-01 | Phase 2 | Pending |
+| PRF-02 | Phase 3 | Pending |
+| PRF-03 | Phase 3 | Pending |
+| PRF-04 | Phase 2 | Pending |
+| PRF-05 | Phase 7 | Pending |
 
 **Coverage:**
 - v1 requirements: 70 total
-- Mapped to phases: 0
-- Unmapped: 70 ⚠️
+- Mapped to phases: 70 (Phase 1: 10 · Phase 2: 18 · Phase 3: 13 · Phase 4: 7 · Phase 5: 9 · Phase 6: 10 · Phase 7: 3)
+- Duplicated across phases: 0
+- Unmapped: 0 ✓ (100% coverage)
 
 ---
 *Requirements defined: 2026-10-05*
