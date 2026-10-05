@@ -206,7 +206,9 @@ webkit is not optional: it exercises the silent WebP-to-PNG fallback. Firefox ex
 
 Security properties are asserted at the **artifact level**. CA-02, for example, intercepts the outgoing request, decodes the attached image, and asserts the masked region's original pixel values are absent from the encoded bytes. That is stronger evidence than any unit test, and it is the required form.
 
----<!-- GSD:project-start source:PROJECT.md -->
+---
+
+<!-- GSD:project-start source:PROJECT.md -->
 
 ## Project
 
