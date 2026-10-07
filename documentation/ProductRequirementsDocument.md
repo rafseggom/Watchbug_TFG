@@ -328,6 +328,7 @@ Es importante no confundirlos: son requerimientos reales que llegaron de `resolu
 | `Permissions-Policy` bloquea `display-capture` | Igual que arriba + ruta de adjunto manual (`CAP-02`) |
 | La página tiene rastreadores bloqueados y `fetch` falla | Cola durable + reintento con estado visible, nunca descarte silencioso |
 | Página con logs de consola masivos | Búfer anulado *(drop-oldest)* con aviso "N mensajes anteriores descartados" (`ENR-05`) |
+| IndexedDB bloqueada o cuota agotada (modo privado estricto) | Cola en memoria + estado visible de reintento. **Nunca** descarte silencioso (`RSK-24`) |
 
 ### 5.3 Flujo F2 — Usuario final: sugerencia sin logs *(US-2)*
 
@@ -540,6 +541,9 @@ Un requisito está **Completo** cuando:
 | **RSK-20** | Máscaras no deshacibles: consecuencia UX **no validada** | Media | *Spike* de UX de máscara en Fase 3 | 3 |
 | **RSK-21** | Falta `fetchLater()` está sin verificar | Alta | **No diseñar contra él** | — |
 | **RSK-22** | Ausencia de `getDisplayMedia` en móvil con fuente **LOW** | Media | Re-test de la matriz de captura en Fase 7 | 7 |
+| **RSK-23** | La CSP de la página anfitriona (`script-src`/`connect-src`) bloquea la carga del script o el `fetch` de ingesta | Media | Estudio ya realizado en `PITFALLS.md` H-8: entrega *first-party* desde el propio origen como perfil por defecto; documentar en la guía de integración las directivas exactas a añadir si la carga es cross-origin (`script-src https://<host-watchbug>; connect-src https://<host-watchbug>`), soporte SRI y opción módulo ES; fallo **visible**, nunca silencioso | 7 |
+| **RSK-24** | La cola de durableza falla si IndexedDB está bloqueado o revota cuota (modo privado estricto) | Media | Fallback explícito: cola **en memoria** + estado visible "no se pudo guardar — reintentar" (nunca descarte silencioso, coherente con M-6). Multi-pestaña: sin carrera nueva — la misma `Idempotency-Key` + `UNIQUE (project_id, idempotency_key)` deduplica en servidor (`ARCHITECTURE.md`), documentarlo | 7 |
+| **RSK-25** | Archivos huérfanos en el volumen: caída entre el `rename` del blob y el `INSERT` en BD, o carrera con la purga `RET-02` | Baja | Reconciliación en la rutina de purga: barrido con umbral de edad (>24 h, nunca toca subidas en vuelo) que borre blobs sin fila y detecte filas sin blob; resultados registrados en `purge_runs.details` | 6, 7 |
 
 ---
 
@@ -630,6 +634,7 @@ purge_runs   (registro de ejecuciones de purga, sin FK)
 2. Escritura: ruta temporal → `fsync` → `rename` (atómico).
 3. El volumen **solo** está montado en el servicio `api`.
 4. La ruta del blob solo se resuelve **por consulta a la base de datos**.
+5. Reconciliación de huérfanos: la rutina de purga elimina blobs sin fila con umbral de edad (>24 h) y reporta filas sin blob, registrando el resultado en `purge_runs` (`RSK-25`).
 
 ---
 
@@ -769,6 +774,7 @@ Exactamente tres servicios (`INV-03`). Sin secretos en el repositorio; `.env.exa
 | — | `@fastify/multipart` ↔ Fastify 5 y ecosistema TS 7 | *Smoke-test* Fase 1 |
 | — | **Modelo de datos (apartado 8)** | Consultation Request Pack |
 | — | Revisión legal RGPD antes de afirmar cumplimiento | Antes de publicar |
+| — | Baseline TypeScript: 7.x vs 6.x (ecosistema de tooling UNVERIFIED, `RSK-14`) | Gate en la Fase 1: smoke-test de `drizzle-kit`/`tsx`/plugins de Vite; si hay fricción → baseline 6.x |
 
 ---
 *PRD definido: 2026-10-05*
