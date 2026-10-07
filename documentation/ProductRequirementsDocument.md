@@ -5,7 +5,6 @@
 **Fecha:** 2026-10-05
 **Estado:** Aprobado (salvo los apartados marcados explícitamente)
 **Enlace a esquema interactivo:** [Canvas interactivo](https://prlens.dev/c/OEZaYBRN8dROsvU6nlxqsA)
-**Roadmap visual:** [Ver HTML en GitHub](https://github.com/rafseggom/Watchbug_TFG/blob/main/documentation/roadmap.html)
 
 > **Fuente de verdad.** `.planning/REQUIREMENTS.md` sigue siendo la referencia viva para estados y trazabilidad fase-requisito; este PRD es la **definición de producto consolidada**, revisada en los límites de milestone (regla de *Evolution* de `PROJECT.md`). Identificadores técnicos (`RF-`, `RNF-`, `INV-`, `SEC-`, `CA-`, `REQ-`) se mantienen en su forma original en inglés para que la trazabilidad con los documentos de gobierno sea exacta.
 >
