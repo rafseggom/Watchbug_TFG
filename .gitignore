@@ -11,3 +11,6 @@ node_modules/
 # GSD research scratch (non-hermetic agent output)
 .planning/research/.cache/
 .planning/research/.research-plan-input.json
+
+# PR Lens writes its previews here. They are rebuilt on demand.
+.pr-lens/
