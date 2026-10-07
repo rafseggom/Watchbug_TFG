@@ -30,6 +30,7 @@ Amendments to a governing document are appended to that document as an `## Enmie
 | R-15 | **TypeScript end-to-end** monorepo (npm workspaces) | ◆ Proposed | Agent |
 | R-16 | `AGENTS.md` is non-authoritative | ✓ Approved | Owner |
 | R-17 | **No calendar-driven descoping** — scope is cut by coherence, never by deadline pressure | ✓ Approved | Owner |
+| R-18 | **Reuse-first code creation** — search and reuse existing code before writing new | ✓ Approved | Owner |
 
 ◆ = taken by the agent under the owner's explicit "take your own decisions with the quality gate in mind" authorisation. **Override window open until the next interaction.** Reversing either is a one-entry change here plus a `git revert`.
 
@@ -202,6 +203,13 @@ Owner statement: *"Whatever decision is in AGENTS.md is not final and I did not 
 ### R-17 · No calendar-driven descoping
 
 *"The submission horizon is when it's finished completely and well done with good quality."* Scope is therefore cut by **coherence**, never by deadline pressure. Every quality gate in the Mentorship Pack remains hard. v1 is the smallest *complete and defensible* set; v2 items are deferred because they belong to a later slice, not because time ran out. The roadmapper plans for depth over breadth.
+
+### R-18 · Reuse-first code creation
+
+- **Decisión del owner (2026-10-07):** al crear código nuevo, el agente debe primero buscar en el codebase una implementación existente (grafo de código / grep) y reutilizarla o extenderla cuando la semántica coincida, en lugar de escribir desde cero — reduce complejidad y sirve al clean code, siempre que sea posible.
+- **DRY sobre la lógica de dominio:** matemáticas de redacción (masking), constantes de límites, formatters y validación de esquema — fuente única de verdad en `packages/contracts`.
+- **Excepciones:** la reutilización nunca se fuerza si rompería los puertos `R-02`, el presupuesto cero-deps del SDK (`RNF-04`/`PRF-04`) o cualquier invariante `SEC`/`INV`; reutilización entre workspaces solo a través de `packages/contracts`.
+- **Alcance:** aplica desde la Fase 1 en adelante y no cambia la política de verificación `R-12`.
 
 ---
 

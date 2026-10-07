@@ -40,6 +40,9 @@
 - **Límite de Bundle:** El script compilado del SDK cliente inyectable debe tener un tamaño $\le 45\text{ KB}$ gzipped.
 - **Carga No Bloqueante:** Debe inicializarse de forma asíncrona sin bloquear la ejecución del hilo principal de renderizado (*main thread*).
 
+### Reutilización primero (Clean Code)
+Antes de escribir código nuevo, buscar primero la implementación existente (grafo de código / grep) → reutilizar o extender cuando la semántica coincida, en lugar de escribir desde cero. DRY sobre la lógica de dominio, con `packages/contracts` como fuente única de verdad. Excepciones: la reutilización nunca se fuerza si rompería los puertos `R-02`, el presupuesto cero-deps del SDK o cualquier invariante `SEC`/`INV`; cruzar workspaces solo vía `packages/contracts`. Resolución `R-18` (no cambia la política de verificación `R-12`).
+
 ### Cobertura de Pruebas y Comandos Deterministas
 Todo desarrollo producido por el agente debe ser acompañado por baterías de pruebas asociadas a los siguientes niveles:
 
