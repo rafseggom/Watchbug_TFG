@@ -240,6 +240,7 @@ Approaches evaluated and rejected. Do not re-explore.
 | Q-04 | v1 boundary for R-06: project selector yes; is **key rotation UI** v1 or v2? Leaning v2. | REQUIREMENTS |
 | Q-05 | Degree-awarding institution's IP policy must be confirmed before the repository is public (R-07). | Release |
 | Q-06 | Default capture adapter. `getDisplayMedia({ preferCurrentTab: true })` is ≈1 KB and pixel-perfect but raises a browser share sheet on every report. DOM serialization avoids the sheet at 8–14 KB and with silent failure modes. | Phase planning |
+| Q-08 | TS 7.0.2 es la línea fijada en STACK.md/A-09; decisión de baseline 6.x si el smoke-test de tooling de la Fase 1 (`drizzle-kit`/`tsx`/plugins de Vite) falla — registrar el resultado en `continuity-pack.md`. | Phase 1 tooling / STACK.md baseline |
 
 **Status after research (2026-10-05):** Q-02, Q-03, Q-04 and Q-06 are **closed** — see §5. Q-05 remains open.
 
