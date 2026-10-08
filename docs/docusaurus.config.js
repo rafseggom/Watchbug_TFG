@@ -1,15 +1,17 @@
 // @ts-check
 
+const isCloudflare = process.env.CF_PAGES === 'true';
+
 /** @type {import('@docusaurus/types').Config} */
 const config = {
   title: 'Watchbug TFG',
   tagline: 'Documentación de investigación y recursos para Ingeniería de IA',
   favicon: 'img/favicon.ico',
 
-  url: 'https://your-github-username.github.io',
-  baseUrl: '/',
+  url: isCloudflare ? 'https://watchbugus.com' : 'https://rafseggom.github.io',
+  baseUrl: isCloudflare ? '/' : '/Watchbug_TFG/',
 
-  organizationName: 'your-github-username',
+  organizationName: 'rafseggom',
   projectName: 'watchbug-tfg',
 
   onBrokenLinks: 'warn',
