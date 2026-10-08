@@ -7,7 +7,7 @@ const config = {
   favicon: 'img/favicon.ico',
 
   url: 'https://your-github-username.github.io',
-  baseUrl: '/Watchbug_TFG/',
+  baseUrl: '/',
 
   organizationName: 'your-github-username',
   projectName: 'watchbug-tfg',
