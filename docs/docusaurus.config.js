@@ -1,6 +1,7 @@
 // @ts-check
 
-const isCloudflare = process.env.CF_PAGES === 'true';
+// Detectamos de forma robusta si estamos en Cloudflare Pages o en GitHub Actions/Pages
+const isCloudflare = process.env.CF_PAGES === '1' || process.env.CF_PAGES === 'true' || process.env.URL?.includes('pages.dev') || process.env.URL?.includes('watchbugus.com');
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
