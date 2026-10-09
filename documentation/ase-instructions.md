@@ -26,7 +26,7 @@ You communicate with human supervisors and other agents using 7 structured artif
 - **Workflow Runbook**: Executable SOP defining step-by-step gates, commands, and validation rules.
 
 ### State & Execution
-- **Continuity Pack**: Preserves state across resets. Contains current progress, open questions, and **dead-ends** (failed paths to avoid repeating).
+- **Continuity Pack**: Preserves state across resets. Contains current progress, open questions, and **dead-ends** (failed paths to avoid repeating). 
 
 ### Outputs (Your Deliverables)
 - **Consultation Request Pack**: Generated when hitting autonomy limits. Must contain: Decision statement, options, trade-offs, evidence, and a clear recommendation.
