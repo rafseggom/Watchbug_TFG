@@ -151,7 +151,7 @@ const config = {
             ],
           },
         ],
-        copyright: `Copyright ${new Date().getFullYear()} Rafael Segura Gómez · Apache 2.0 · Built with Docusaurus.`,
+        copyright: `Copyright ${new Date().getFullYear()} Rafael Segura Gómez & Nerea Jiménez Adorna · Apache 2.0 · Built with Docusaurus.`,
       },
       prism: {
         theme: require('prism-react-renderer').themes.github,
