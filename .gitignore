@@ -14,3 +14,7 @@ docs/build/
 dist/
 
 .env
+
+# Artefactos de herramientas locales (regenerables)
+.planning/research/
+.pr-lens/
