@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Watchbug SDK — Informes de errores con captura reproducible, auto-hospedado</title>
+  <meta name="description" content="Watchbug es un SDK open source de informes de errores y feedback visual. Captura la pestaña, anota el fallo y destruye los datos sensibles en el navegador antes de que salgan. Auto-hospedado con un solo docker-compose up." />
+  <link rel="canonical" href="https://www.watchbugus.com/" />
+  <link rel="alternate" hreflang="es" href="https://www.watchbugus.com/" />
+  <link rel="alternate" hreflang="en" href="https://www.watchbugus.com/en/" />
+  <link rel="alternate" hreflang="x-default" href="https://www.watchbugus.com/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Watchbug SDK — Informes de errores con captura reproducible" />
+  <meta property="og:description" content="Captura anotada + consola + metadatos. Los datos sensibles se destruyen en el navegador. Auto-hospedado con docker-compose." />
+  <meta property="og:url" content="https://www.watchbugus.com/" />
+  <meta property="og:image" content="https://www.watchbugus.com/img/og-cover.png" />
+  <meta property="og:locale" content="es_ES" />
+  <meta property="og:locale:alternate" content="en_US" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="theme-color" content="#000000" />
+  <link rel="icon" href="/img/logo.png" />
+  <link rel="apple-touch-icon" href="/img/logo.png" />
+  <link rel="stylesheet" href="/assets/landing.css" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Watchbug SDK",
+    "operatingSystem": "Web (self-hosted)",
+    "applicationCategory": "DeveloperApplication",
+    "softwareHelp": { "@type": "CreativeWork", "url": "https://www.watchbugus.com/docs/" },
+    "url": "https://www.watchbugus.com/",
+    "license": "https://github.com/rafseggom/Watchbug_TFG/blob/develop/LICENSE",
+    "isAccessibleForFree": true,
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
+    "author": { "@type": "Person", "name": "Rafael Segura Gómez" }
+  }
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Saltar al contenido</a>
+
+  <!-- Global nav: black, 44px, 12px links -->
+  <nav class="global-nav" aria-label="Navegación principal">
+    <div class="nav-inner">
+      <a class="nav-logo" href="/">
+        <img src="/img/logo.png" alt="" width="24" height="24" />
+        Watchbug
+      </a>
+      <ul class="nav-links">
+        <li><a href="#producto">Producto</a></li>
+        <li><a href="#privacidad">Privacidad</a></li>
+        <li><a href="#integracion">Integración</a></li>
+        <li><a href="#roadmap">Roadmap</a></li>
+        <li><a href="/docs/">Documentación</a></li>
+        <li><a href="/roadmap/">Tablero</a></li>
+      </ul>
+      <div class="nav-right">
+        <a class="lang-switch" href="/en/" hreflang="en" lang="en" aria-label="Switch to English">English</a>
+        <a class="btn btn--nav" href="https://github.com/rafseggom/Watchbug_TFG" rel="noopener">GitHub</a>
+      </div>
+      <details class="nav-menu">
+        <summary aria-label="Abrir menú">
+          <svg width="18" height="12" viewBox="0 0 18 12" aria-hidden="true"><path d="M0 1h18M0 6h18M0 11h18" stroke="currentColor" stroke-width="1.5"/></svg>
+        </summary>
+        <div class="nav-dropdown">
+          <a href="#producto">Producto</a>
+          <a href="#privacidad">Privacidad</a>
+          <a href="#integracion">Integración</a>
+          <a href="#roadmap">Roadmap</a>
+          <a href="/docs/">Documentación</a>
+          <a href="/roadmap/">Tablero</a>
+          <a href="https://github.com/rafseggom/Watchbug_TFG" rel="noopener">GitHub</a>
+          <a href="/en/" hreflang="en" lang="en">English</a>
+        </div>
+      </details>
+    </div>
+  </nav>
+
+  <main id="main">
+
+    <!-- HERO — light tile -->
+    <header class="tile tile--light hero">
+      <div class="container">
+        <p class="eyebrow rise rise-1">Open source · Auto-hospedado · EN / ES</p>
+        <h1 class="rise rise-2">El informe de error<br />que puedes reproducir.</h1>
+        <p class="lead rise rise-3">
+          Watchbug captura la pestaña, la consola y el entorno de tu aplicación en un solo
+          informe — y destruye los datos sensibles en el navegador, antes de que salgan de él.
+        </p>
+        <div class="cta-row rise rise-4">
+          <a class="btn btn--primary btn--lg" href="https://github.com/rafseggom/Watchbug_TFG" rel="noopener">Ver en GitHub</a>
+          <a class="btn btn--ghost btn--lg" href="/docs/">Leer la documentación</a>
+        </div>
+        <p class="hero-note rise rise-4">Una etiqueta &lt;script async&gt;. Sin build. 45&nbsp;KB gzipped.</p>
+        <figure class="shot shot--hero hero-shot rise rise-5" data-file="img/hero-widget.png" data-desc="Captura de pantalla del widget de Watchbug abierto sobre una web de ejemplo, con el botón flotante visible en la esquina inferior derecha.">
+          <img src="/img/hero-widget.png" alt="Widget de Watchbug abierto sobre una aplicación web de ejemplo, mostrando el compositor de informes con captura previsualizada." width="1120" height="700" />
+        </figure>
+      </div>
+    </header>
+
+    <!-- PRODUCTO — dark tile -->
+    <section class="tile tile--dark" id="producto" aria-labelledby="producto-h">
+      <div class="container">
+        <div class="tile-head reveal">
+          <p class="eyebrow">Qué hace</p>
+          <h2 id="producto-h">Reproduce el fallo. No lo adivines.</h2>
+          <p class="lead">
+            Cuando llega un informe, tienes lo que hace falta para reproducirlo: la imagen
+            anotada, los registros de consola y el entorno exacto en el que ocurrió.
+          </p>
+        </div>
+        <div class="split reveal" style="margin-top:56px">
+          <div class="split-text">
+            <ul class="check-list">
+              <li><strong>Captura de la pestaña</strong> con el diálogo nativo del navegador — el widget se oculta para no aparecer en su propia captura.</li>
+              <li><strong>Editor de anotación</strong>: lápiz, flechas, rectángulos, texto y enmascarado de regiones.</li>
+              <li><strong>Consola acotada</strong> — hasta 100 registros con errores, warnings y logs del momento del fallo.</li>
+              <li><strong>Metadatos completos</strong>: ruta de URL, navegador, sistema, viewport, resolución, idioma, zona horaria y versión de tu app.</li>
+              <li><strong>Feedback sin logs</strong>: tus usuarios pueden enviar sugerencias sin adjuntar la consola.</li>
+            </ul>
+          </div>
+          <figure class="shot" data-file="img/editor-annotation.png" data-desc="El editor de Watchbug: captura de pantalla con una flecha roja señalando el botón roto y una región enmascarada en negro.">
+            <img src="/img/editor-annotation.png" alt="Editor de anotación de Watchbug con una flecha y un rectángulo dibujados sobre la captura, y una región sensible enmascarada." width="560" height="420" loading="lazy" />
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- PRIVACIDAD — parchment tile -->
+    <section class="tile tile--parchment" id="privacidad" aria-labelledby="privacidad-h">
+      <div class="container">
+        <div class="tile-head reveal">
+          <p class="eyebrow">Privacidad por diseño</p>
+          <h2 id="privacidad-h">Los datos sensibles mueren en tu navegador.</h2>
+          <p class="lead">
+            El SDK nunca lee cookies, tokens ni credenciales de tu aplicación. Y lo que sí
+            captura, lo destruye de forma irreversible antes de transmitirlo.
+          </p>
+        </div>
+        <div class="split reveal" style="margin-top:56px">
+          <figure class="shot" data-file="img/masking-before-after.png" data-desc="Dos capturas lado a lado: antes (campos de contraseña y tarjeta visibles) y después (esas regiones destruidas con relleno opaco negro).">
+            <img src="/img/masking-before-after.png" alt="Comparativa antes/después: las regiones con datos sensibles aparecen destruidas con relleno opaco en la imagen final." width="560" height="420" loading="lazy" />
+          </figure>
+          <div class="split-text">
+            <ul class="check-list">
+              <li><strong>Enmascarado destructivo</strong>: los píxeles se reemplazan por relleno opaco <em>antes</em> de codificar. Sin capas CSS que puedan quitarse.</li>
+              <li><strong>Automático desde el primer frame</strong>: campos <code>type="password"</code>, patrones de tarjetas y credenciales, y cualquier elemento con <code>data-watchbug-sensitive</code>.</li>
+              <li><strong>Sin credenciales del anfitrión</strong>: solo sale tu clave pública de escritura.</li>
+              <li><strong>URL limpia</strong>: query strings y fragmentos se eliminan en origen.</li>
+              <li><strong>Ciclo de vida con TTL</strong>: la identidad se purga a los 30 días y los informes completos a los 90 (configurables).</li>
+            </ul>
+            <p><a href="/docs/">Cómo protege los datos de tu aplicación →</a></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- INTEGRACIÓN — dark tile -->
+    <section class="tile tile--dark" id="integracion" aria-labelledby="integracion-h">
+      <div class="container">
+        <div class="tile-head reveal">
+          <p class="eyebrow">Integración</p>
+          <h2 id="integracion-h">Una etiqueta. Cero build.</h2>
+          <p class="lead">
+            Sin dependencias npm de runtime, sin bloquear el hilo principal, sin romper el CSS
+            de tu página. Un solo global: <code>window.Watchbug</code>.
+          </p>
+        </div>
+        <div class="split reveal" style="margin-top:56px">
+          <div class="code-wrap">
+            <button class="copy-btn" type="button" data-copied="Copiado" aria-label="Copiar código">Copiar</button>
+            <pre class="code"><code><span class="c-com">&lt;!-- Añade esto antes de &lt;/body&gt; --&gt;</span>
+<span class="c-tag">&lt;script</span> <span class="c-attr">async</span>
+  <span class="c-attr">src</span>=<span class="c-str">"https://cdn.watchbugus.com/w.js"</span><span class="c-tag">&gt;&lt;/script&gt;</span>
+<span class="c-tag">&lt;script&gt;</span>
+  <span class="c-fn">Watchbug</span>.init({
+    <span class="c-attr">projectKey</span>: <span class="c-str">'pb_xxx…'</span>,
+    <span class="c-attr">appVersion</span>: <span class="c-str">'1.4.2'</span>
+  });
+<span class="c-tag">&lt;/script&gt;</span></code></pre>
+          </div>
+          <div class="split-text">
+            <ul class="check-list">
+              <li><strong>≤ 45 KB gzipped</strong> el core, con build que falla si se pasa.</li>
+              <li><strong>Shadow DOM cerrado</strong>: inmune al CSS hostil de tu página y sin fugas hacia ella.</li>
+              <li><strong>Cero dependencias</strong> npm en el cliente.</li>
+              <li><strong>Caída de Lighthouse ≤ 2 puntos</strong> al inyectarlo.</li>
+              <li>También como <strong>módulo ES</strong> si prefieres importarlo.</li>
+            </ul>
+            <p><a href="/docs/">Ver la guía completa de integración →</a></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- AUTO-HOSPEDAJE + PANEL — light tile -->
+    <section class="tile tile--light" aria-labelledby="selfhost-h">
+      <div class="container">
+        <div class="tile-head reveal">
+          <p class="eyebrow">Tuyo, de verdad</p>
+          <h2 id="selfhost-h">Todo en tu infraestructura. Un solo comando.</h2>
+          <p class="lead">
+            Tres contenedores — API, panel y base de datos — levantados con
+            <code>docker-compose up</code>. Ningún informe sale de tu servidor.
+          </p>
+        </div>
+        <div class="split reveal" style="margin-top:56px">
+          <div class="split-text">
+            <ul class="check-list">
+              <li><strong>Panel de triaje</strong>: lista de informes con filtros por tipo, estado y proyecto.</li>
+              <li><strong>Ciclo de vida</strong>: Pendiente → En proceso → Resuelto, con reapertura y notas internas.</li>
+              <li><strong>Multi-proyecto</strong>: crea proyectos y rota sus claves públicas.</li>
+              <li><strong>Respaldos</strong>: copia del volumen y volcado de la base de datos.</li>
+              <li><strong>Configuración en <code>.env</code></strong>: cero secretos en el repositorio.</li>
+            </ul>
+          </div>
+          <figure class="shot" data-file="img/panel-triage.png" data-desc="Captura del panel de Watchbug: barra superior con selector de proyecto, contadores por estado y tabla de informes con sus estados.">
+            <img src="/img/panel-triage.png" alt="Panel de triaje de Watchbug con contadores por estado y la lista de informes recibidos." width="560" height="420" loading="lazy" />
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- CAPACIDADES — parchment tile, utility cards -->
+    <section class="tile tile--parchment" aria-labelledby="features-h">
+      <div class="container container--wide">
+        <div class="tile-head reveal">
+          <p class="eyebrow">Por qué Watchbug</p>
+          <h2 id="features-h">Fidelidad de captura. Completitud de metadatos. Cero fugas.</h2>
+        </div>
+        <div class="card-grid reveal" style="margin-top:56px">
+          <article class="card">
+            <div class="card-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg>
+            </div>
+            <h3>Aislamiento total</h3>
+            <p>Shadow DOM cerrado: el CSS hostil de tu página no puede romper el widget, y el widget no contamina tu página.</p>
+            <span class="req-tag">INV-01 · RNF-02</span>
+          </article>
+          <article class="card">
+            <div class="card-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 15l4-4 4 4 3-3 5 5"/><circle cx="9" cy="9" r="1.5"/></svg>
+            </div>
+            <h3>Captura reproducible</h3>
+            <p>Imagen anotada + registros de consola + metadatos de entorno en cada informe de bug.</p>
+            <span class="req-tag">RF-01 · ENR-01</span>
+          </article>
+          <article class="card">
+            <div class="card-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg>
+            </div>
+            <h3>Enmascarado destructivo</h3>
+            <p>Los píxeles sensibles se destruyen en el canvas antes de codificar. Irrecuperable por diseño.</p>
+            <span class="req-tag">SEC-02 · PRV-04</span>
+          </article>
+          <article class="card">
+            <div class="card-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M13 3L5 14h6l-1 7 8-11h-6l1-7z"/></svg>
+            </div>
+            <h3>45 KB, sin frenar nada</h3>
+            <p>Carga asíncrona, cero dependencias de runtime y presupuesto de tamaño verificado en cada build.</p>
+            <span class="req-tag">RNF-01 · PRF-01</span>
+          </article>
+          <article class="card">
+            <div class="card-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 9h18M8 14h5"/></svg>
+            </div>
+            <h3>Panel de triaje</h3>
+            <p>Filtros, estados, notas internas, borrado y anonimización inmediata de la identidad.</p>
+            <span class="req-tag">RF-06 · TRI-04…10</span>
+          </article>
+          <article class="card">
+            <div class="card-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/><path d="M7 8h.01M7 17h.01"/></svg>
+            </div>
+            <h3>Auto-hospedado</h3>
+            <p>Tres servicios con un <code>docker-compose up</code>. Sin dependencias de terceros ni informes en la nube de nadie.</p>
+            <span class="req-tag">INV-03 · DEP-01</span>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ROADMAP — dark tile -->
+    <section class="tile tile--dark" id="roadmap" aria-labelledby="roadmap-h">
+      <div class="container">
+        <div class="tile-head reveal">
+          <p class="eyebrow">Roadmap público</p>
+          <h2 id="roadmap-h">Construido en fases, con evidencia.</h2>
+          <p class="lead">
+            70 requisitos trazados en 7 fases verticales. Cada una entrega algo funcionando
+            de extremo a extremo — y sus criterios de aceptación están publicados.
+          </p>
+        </div>
+        <ul class="phase-list reveal" style="margin-top:48px">
+          <li><span class="num">01</span> Contracts &amp; Ingest</li>
+          <li><span class="num">02</span> SDK Tracer Bullet</li>
+          <li><span class="num">03</span> Composer &amp; Editor</li>
+          <li><span class="num">04</span> Payload &amp; Enrichment</li>
+          <li><span class="num">05</span> Secure Admin Access</li>
+          <li><span class="num">06</span> Triage &amp; Lifecycle</li>
+          <li><span class="num">07</span> Resilience &amp; Closeout</li>
+        </ul>
+        <div class="cta-row reveal" style="margin-top:44px">
+          <a class="btn btn--primary" href="/roadmap/">Ver el tablero interactivo</a>
+          <a class="btn btn--ghost" href="/docs/">Leer la documentación</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- OPEN SOURCE — light tile, final CTA -->
+    <section class="tile tile--light" aria-labelledby="oss-h">
+      <div class="container">
+        <div class="tile-head reveal">
+          <img class="final-logo" src="/img/logo.png" alt="" width="84" height="84" loading="lazy" />
+          <p class="eyebrow">Libre para siempre</p>
+          <h2 id="oss-h">Open source. Tuyo que lo examines.</h2>
+          <p class="lead">
+            Watchbug es software libre: léelo, modifícalo, auto-hospédatlo. Sin cuentas de
+            usuario, sin cuotas, sin telemetría hacia nosotros.
+          </p>
+          <div class="cta-row" style="margin-top:36px">
+            <a class="btn btn--primary btn--lg" href="https://github.com/rafseggom/Watchbug_TFG" rel="noopener">Clonar en GitHub</a>
+            <a class="btn btn--ghost btn--lg" href="/docs/">Empezar por la guía</a>
+          </div>
+          <p class="fine" style="margin-top:24px">Licencia Apache 2.0 · Documentación en inglés y español · Sin cookies de seguimiento</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- FOOTER — parchment, dense links -->
+  <footer class="footer">
+    <div class="container container--wide">
+      <div class="footer-cols">
+        <div class="footer-brand">
+          <img src="/img/logo.png" alt="Watchbug" width="36" height="36" loading="lazy" />
+          <p>SDK open source de informes de errores y feedback visual con captura reproducible y enmascarado destructivo. Auto-hospedado.</p>
+        </div>
+        <div>
+          <h4>Producto</h4>
+          <ul>
+            <li><a href="#producto">Qué hace</a></li>
+            <li><a href="#privacidad">Privacidad</a></li>
+            <li><a href="#integracion">Integración</a></li>
+            <li><a href="#roadmap">Roadmap</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Recursos</h4>
+          <ul>
+            <li><a href="/docs/">Documentación</a></li>
+            <li><a href="/roadmap/">Tablero de requisitos</a></li>
+            <li><a href="https://github.com/rafseggom/Watchbug_TFG" rel="noopener">GitHub</a></li>
+            <li><a href="https://github.com/rafseggom/Watchbug_TFG/issues" rel="noopener">Issue tracker</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Legal</h4>
+          <ul>
+            <li><a href="/aviso-legal/">Aviso legal</a></li>
+            <li><a href="/privacidad/">Privacidad</a></li>
+            <li><a href="/cookies/">Cookies</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-legal">
+        <p>© 2026 Rafael Segura Gómez · Sevilla, España. Watchbug se distribuye bajo licencia Apache 2.0.</p>
+        <p><a href="/en/" hreflang="en" lang="en">English</a> · <a href="/aviso-legal/">Aviso legal</a> · <a href="/privacidad/">Privacidad</a> · <a href="/cookies/">Cookies</a></p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="/assets/landing.js" defer></script>
+</body>
+</html>

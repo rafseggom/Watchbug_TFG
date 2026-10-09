@@ -10,4 +10,7 @@ node_modules/
 docs/.docusaurus/
 docs/build/
 
+# Build combinado (landing + docs)
+dist/
+
 .env

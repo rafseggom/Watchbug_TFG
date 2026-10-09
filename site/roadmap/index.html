@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Watchbug SDK - Roadmap & Requisitos</title>
+    <style>
+        :root {
+            --bg-page: #0d1117;
+            --bg-board: #010409;
+            --bg-phase: #161b22;
+            --bg-card: #21262d;
+            --bg-card-hover: #30363d;
+            --border-color: #30363d;
+            --border-focus: #8b949e;
+            --text-main: #c9d1d9;
+            --text-muted: #8b949e;
+            --text-accent: #58a6ff;
+            --tag-pending: #d29922;
+            --tag-bg: rgba(210, 153, 34, 0.1);
+            --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-page);
+            color: var(--text-main);
+            font-family: var(--font-family);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        /* Cabecera */
+        .header {
+            padding: 24px 40px;
+            background: var(--bg-phase);
+            border-bottom: 1px solid var(--border-color);
+            flex-shrink: 0;
+        }
+
+        .header h1 {
+            margin: 0 0 8px 0;
+            font-size: 1.5rem;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+        }
+
+        .header p {
+            margin: 0;
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        /* Desplegable de Metadatos (CA y Leyenda) */
+        .meta-details {
+            margin: 0;
+            background: var(--bg-board);
+            border-bottom: 1px solid var(--border-color);
+            flex-shrink: 0;
+        }
+
+        .meta-summary {
+            padding: 12px 40px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            user-select: none;
+            transition: color 0.2s;
+        }
+
+        .meta-summary:hover {
+            color: var(--text-main);
+        }
+
+        .meta-content {
+            display: flex;
+            gap: 40px;
+            padding: 0 40px 24px 40px;
+        }
+
+        .meta-section {
+            flex: 1;
+        }
+
+        .meta-section h3 {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 8px;
+            margin-bottom: 12px;
+        }
+
+        .ac-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 12px;
+        }
+
+        .ac-item {
+            background: var(--bg-phase);
+            border: 1px solid var(--border-color);
+            border-left: 3px solid var(--text-accent);
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            line-height: 1.4;
+        }
+
+        .ac-item strong {
+            display: block;
+            color: var(--text-main);
+            margin-bottom: 4px;
+        }
+
+        .legend-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            font-size: 0.8rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-muted);
+        }
+
+        /* Tablero y Columnas */
+        .board-wrapper {
+            flex-grow: 1;
+            overflow-x: auto;
+            overflow-y: hidden;
+            background: var(--bg-board);
+        }
+
+        .board {
+            display: flex;
+            gap: 24px;
+            padding: 24px 40px;
+            height: calc(100% - 48px);
+            align-items: flex-start;
+        }
+
+        .phase-col {
+            min-width: 380px;
+            max-width: 380px;
+            background-color: var(--bg-phase);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            max-height: 100%;
+        }
+
+        .phase-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-color);
+            background: rgba(255,255,255,0.02);
+            border-radius: 8px 8px 0 0;
+        }
+
+        .phase-title {
+            font-weight: 600;
+            font-size: 1rem;
+            color: var(--text-main);
+            margin-bottom: 6px;
+        }
+
+        .phase-goal {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        .phase-cards {
+            padding: 16px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            overflow-y: auto;
+        }
+
+        /* Tarjetas (Tareas/Features) */
+        .card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 16px;
+            transition: all 0.2s ease;
+        }
+
+        .card:hover {
+            border-color: var(--border-focus);
+            background-color: var(--bg-card-hover);
+        }
+
+        .card-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            margin: 0 0 8px 0;
+            color: var(--text-accent);
+        }
+
+        .req-list {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .req-item {
+            font-size: 0.8rem;
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            line-height: 1.4;
+            padding-top: 6px;
+            border-top: 1px dashed var(--border-color);
+        }
+
+        .req-item:first-child {
+            border-top: none;
+            padding-top: 0;
+        }
+
+        .req-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .req-id {
+            font-family: ui-monospace, SFMono-Regular, "SF Mono", monospace;
+            font-size: 0.7rem;
+            color: var(--tag-pending);
+            background: var(--tag-bg);
+            border: 1px solid rgba(210, 153, 34, 0.2);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        .req-desc {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+        }
+
+        /* Scrollbars */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <a href="/" style="color: #58a6ff; text-decoration: none; font-size: 0.9rem;">← Volver a la web</a>
+        <h1>Watchbug SDK - Planning & Requirements</h1>
+        <p>End-to-End Vertical Slices (v1.0)</p>
+    </div>
+
+    <details class="meta-details">
+        <summary class="meta-summary">Ver Criterios de Aceptación y Leyenda de Nomenclatura</summary>
+        <div class="meta-content">
+            <div class="meta-section" style="flex: 2;">
+                <h3>Criterios de Aceptación (Release Gates)</h3>
+                <div class="ac-list" id="ac-container"></div>
+            </div>
+            <div class="meta-section" style="flex: 1;">
+                <h3>Leyenda de Requisitos</h3>
+                <div class="legend-grid" id="legend-container"></div>
+            </div>
+        </div>
+    </details>
+
+    <div class="board-wrapper">
+        <div class="board" id="board">
+            <!-- Las columnas se inyectan aquí vía JS -->
+        </div>
+    </div>
+
+    <script>
+        // 1. DATA: Criterios de Aceptación
+        const acceptanceCriteria = [
+            { id: "CA-01", text: "Todo informe enviado valida contra el esquema JSON oficial. consoleLogs es obligatorio en bug, opcional en feedback." },
+            { id: "CA-02", text: "Máscaras irreversibles: píxeles reemplazados por relleno opaco plano en el canvas ANTES de codificar a Base64/PNG." },
+            { id: "CA-03", text: "Distribuible compilado ≤ 45 KB gzipped (core). Caída de Lighthouse ≤ 2 puntos." },
+            { id: "CA-04", text: "Inmunidad CSS: el CSS hostil del anfitrión no altera la visibilidad ni el layout del widget." },
+            { id: "CA-05", text: "Cualquier petición no autenticada a rutas de la API del panel devuelve 401 Unauthorized." }
+        ];
+
+        // 2. DATA: Leyenda
+        const legendData = [
+            { id: "INT", desc: "Integration" },
+            { id: "WDG", desc: "Widget & Isolation" },
+            { id: "CAP", desc: "Capture" },
+            { id: "ANN", desc: "Annotation" },
+            { id: "PRV", desc: "Privacy & Masking" },
+            { id: "ENR", desc: "Payload & Enrichment" },
+            { id: "ING", desc: "Transport & Ingestion" },
+            { id: "TRI", desc: "Panel & Triage" },
+            { id: "PRJ", desc: "Projects" },
+            { id: "RET", desc: "Retention" },
+            { id: "DEP", desc: "Deployment & Operations" },
+            { id: "PRF", desc: "Performance Budget" }
+        ];
+
+        // 3. DATA: Fases y Requisitos Desglosados
+        const projectData = [
+            {
+                id: "ph1", title: "Fase 1: Contracts & Ingest Slice",
+                goal: "El dato cruza la red y se almacena con seguridad desde la primera línea. Monorepo y schema oficial.",
+                groups: [
+                    {
+                        title: "Deployment & Infra",
+                        reqs: [
+                            { id: "DEP-01", desc: "Un desarrollador arranca API + panel + base de datos con un único docker-compose up." },
+                            { id: "DEP-02", desc: "Un desarrollador configura todo ajuste de servidor desde .env usando .env.example." },
+                            { id: "DEP-03", desc: "Las capturas viven en un volumen FS y se sirven solo por la API autenticada." }
+                        ]
+                    },
+                    {
+                        title: "Ingestion & Security",
+                        reqs: [
+                            { id: "ING-01", desc: "Un informe (imagen + metadatos) llega al backend por HTTP." },
+                            { id: "ING-04", desc: "La API rechaza la ingesta sin clave de proyecto válida." },
+                            { id: "ING-05", desc: "La API limita la tasa por IP y por clave de proyecto." },
+                            { id: "ING-06", desc: "La API rechaza cuerpos e imágenes de tamaño excesivo." },
+                            { id: "ING-07", desc: "La API sanitiza todo texto de usuario antes de almacenarlo y renderizarlo." },
+                            { id: "ING-08", desc: "La API acepta ingesta solo desde orígenes permitidos." },
+                            { id: "ENR-06", desc: "Todo informe valida contra el esquema JSON oficial publicado." }
+                        ]
+                    }
+                ]
+            },
+            {
+                id: "ph2", title: "Fase 2: SDK Tracer Bullet",
+                goal: "Widget aislado + captura + redacción destructiva (T1). Primer flujo real de extremo a extremo.",
+                groups: [
+                    {
+                        title: "Core Widget & Isolation",
+                        reqs: [
+                            { id: "INT-01", desc: "Añadir Watchbug con una sola etiqueta <script> asíncrona." },
+                            { id: "INT-02", desc: "Inicializar con clave pública mediante window.Watchbug.init()." },
+                            { id: "INT-05", desc: "Consumo alternativo como módulo ES." },
+                            { id: "WDG-01", desc: "Apertura del widget desde un botón flotante." },
+                            { id: "WDG-02", desc: "Inmunidad total a CSS hostil del anfitrión." },
+                            { id: "WDG-03", desc: "Sin fugas de CSS hacia el documento anfitrión." },
+                            { id: "WDG-04", desc: "Único global, cero parches a prototipos." },
+                            { id: "WDG-05", desc: "El widget se dibuja sobre todo el contenido (stacking context)." },
+                            { id: "PRF-01", desc: "Script inyectado ≤ 45 KB gzipped." },
+                            { id: "PRF-04", desc: "Cero dependencias npm de runtime en el cliente." }
+                        ]
+                    },
+                    {
+                        title: "Capture & Auto-Redaction (T1)",
+                        reqs: [
+                            { id: "CAP-01", desc: "Captura de pestaña mediante el diálogo nativo del navegador." },
+                            { id: "CAP-04", desc: "La captura nunca contiene el propio widget." },
+                            { id: "CAP-05", desc: "Reducción de captura a ≤ 16 MP y ≤ 2 MB (HiDPI safety)." },
+                            { id: "PRV-01", desc: "Valores input[type=password] excluidos automáticamente." },
+                            { id: "PRV-02", desc: "Patrones de credenciales/tarjetas enmascarados automáticamente." },
+                            { id: "PRV-03", desc: "Elementos data-watchbug-sensitive enmascarados." },
+                            { id: "PRV-05", desc: "Nunca leer cookies ni storage del anfitrión." },
+                            { id: "PRV-06", desc: "Envío de URL limpia (solo ruta, sin query strings)." }
+                        ]
+                    }
+                ]
+            },
+            {
+                id: "ph3", title: "Fase 3: Composer & Editor",
+                goal: "Editor de anotaciones diferido (lazy). Herramientas de dibujo y aplicación de máscara irreversible (T2/T3).",
+                groups: [
+                    {
+                        title: "Lazy Annotator",
+                        reqs: [
+                            { id: "ANN-01", desc: "Dibujo libre." },
+                            { id: "ANN-02", desc: "Flechas." },
+                            { id: "ANN-03", desc: "Rectángulos." },
+                            { id: "ANN-04", desc: "Etiquetas de texto." },
+                            { id: "ANN-06", desc: "Deshacer trazos de anotación (máscaras irreversibles)." },
+                            { id: "WDG-06", desc: "Widget en inglés o español (auto o manual)." },
+                            { id: "PRF-02", desc: "Cada chunk diferido pesa ≤ 25 KB gzipped." },
+                            { id: "PRF-03", desc: "Carga total del cliente en ejecución ≤ 80 KB gzipped." }
+                        ]
+                    },
+                    {
+                        title: "Destructive Masking (T2/T3)",
+                        reqs: [
+                            { id: "ANN-05", desc: "Enmascarado de una región con relleno opaco por el usuario." },
+                            { id: "PRV-04", desc: "Región enmascarada destruida a nivel de píxel e irrecuperable." },
+                            { id: "PRV-07", desc: "Revisión y edición de la captura antes de enviarla." }
+                        ]
+                    },
+                    {
+                        title: "Capture Fallbacks",
+                        reqs: [
+                            { id: "CAP-02", desc: "Adjuntar una imagen local en lugar de capturar." },
+                            { id: "CAP-03", desc: "Estado de fallo claro si la captura no está disponible (permitir solo texto)." }
+                        ]
+                    }
+                ]
+            },
+            {
+                id: "ph4", title: "Fase 4: Payload & Enrichment",
+                goal: "Completar la telemetría: metadatos de entorno, consola acotada y respeto estricto a la privacidad de identidad.",
+                groups: [
+                    {
+                        title: "Console & Metadata",
+                        reqs: [
+                            { id: "ENR-01", desc: "Un informe de bug lleva siempre registros de consola." },
+                            { id: "ENR-02", desc: "Un informe de feedback puede enviarse sin registros de consola." },
+                            { id: "ENR-03", desc: "Ruta URL, UA, viewport, resolución, DPR, idioma, zona horaria y timestamp." },
+                            { id: "ENR-05", desc: "Captura de consola acotada sin recursión sobre el propio SDK." }
+                        ]
+                    },
+                    {
+                        title: "Host Context & Privacy",
+                        reqs: [
+                            { id: "ENR-04", desc: "Versión de aplicación aportada por el anfitrión." },
+                            { id: "INT-03", desc: "Adjuntar user, appVersion y custom context en init()." },
+                            { id: "INT-04", desc: "Desactivar identidad de usuario final con privacy: { userIdentity: false }." }
+                        ]
+                    }
+                ]
+            },
+            {
+                id: "ph5", title: "Fase 5: Secure Admin Access",
+                goal: "Autenticación segura del panel, protección de rutas y gestión de claves por proyecto.",
+                groups: [
+                    {
+                        title: "Auth & Routes",
+                        reqs: [
+                            { id: "TRI-01", desc: "Login admin con credenciales de .env -> Cookie JWT." },
+                            { id: "TRI-02", desc: "Cualquier petición API sin autenticar devuelve 401." },
+                            { id: "TRI-03", desc: "Logout e invalidación de sesión." }
+                        ]
+                    },
+                    {
+                        title: "Project Management",
+                        reqs: [
+                            { id: "PRJ-01", desc: "Crear proyecto y obtener clave pública de solo escritura." },
+                            { id: "PRJ-02", desc: "Seleccionar el proyecto activo." },
+                            { id: "PRJ-03", desc: "Renombrar un proyecto." },
+                            { id: "PRJ-04", desc: "Rotar la clave pública de un proyecto." },
+                            { id: "PRJ-05", desc: "Eliminar un proyecto y sus informes." }
+                        ]
+                    }
+                ]
+            },
+            {
+                id: "ph6", title: "Fase 6: Triage & Lifecycle",
+                goal: "Flujo de trabajo del desarrollador en el panel y ciclo de vida de los datos (GDPR / TTLs).",
+                groups: [
+                    {
+                        title: "Triage Panel",
+                        reqs: [
+                            { id: "TRI-04", desc: "Listar informes filtrando por tipo, estado y proyecto." },
+                            { id: "TRI-05", desc: "Ver captura, registros de consola y metadatos del informe." },
+                            { id: "TRI-06", desc: "Mover estado a Pendiente/En Proceso/Resuelto y reabrirlo." },
+                            { id: "TRI-07", desc: "Añadir comentarios internos." },
+                            { id: "TRI-08", desc: "Eliminar un informe manualmente." },
+                            { id: "TRI-10", desc: "Ver contadores por estado, tipo y proyecto." }
+                        ]
+                    },
+                    {
+                        title: "Data Retention",
+                        reqs: [
+                            { id: "TRI-09", desc: "Borrar de inmediato la identidad del usuario final (RGPD Art. 18)." },
+                            { id: "RET-01", desc: "Campos de identidad purgados automáticamente tras N días." },
+                            { id: "RET-02", desc: "Informes completos purgados automáticamente tras M días." },
+                            { id: "RET-03", desc: "Configuración de ambos TTL desde .env." }
+                        ]
+                    }
+                ]
+            },
+            {
+                id: "ph7", title: "Fase 7: Resilience & Closeout",
+                goal: "Cola de resiliencia de red (IndexedDB), comprobaciones E2E y pruebas de rendimiento finales.",
+                groups: [
+                    {
+                        title: "Durability & Network",
+                        reqs: [
+                            { id: "ING-02", desc: "Supervivencia a cierres de pestaña vía cola durable (IndexedDB)." },
+                            { id: "ING-03", desc: "Reenvíos repetidos no crean duplicados (Idempotencia)." }
+                        ]
+                    },
+                    {
+                        title: "Verification",
+                        reqs: [
+                            { id: "PRF-05", desc: "Inyectar Watchbug reduce Lighthouse en ≤ 2 puntos." },
+                            { id: "DEP-04", desc: "Respaldar y restaurar volumen de datos y base de datos." }
+                        ]
+                    }
+                ]
+            }
+        ];
+
+        // 4. RENDERIZADO
+        document.addEventListener('DOMContentLoaded', () => {
+            // Render CA
+            const acContainer = document.getElementById('ac-container');
+            acceptanceCriteria.forEach(ac => {
+                acContainer.innerHTML += `
+                    <div class="ac-item">
+                        <strong>${ac.id}</strong>
+                        ${ac.text}
+                    </div>
+                `;
+            });
+
+            // Render Legend
+            const legendContainer = document.getElementById('legend-container');
+            legendData.forEach(item => {
+                legendContainer.innerHTML += `
+                    <div class="legend-item">
+                        <span class="req-id">${item.id}</span>
+                        <span>${item.desc}</span>
+                    </div>
+                `;
+            });
+
+            // Render Board
+            const board = document.getElementById('board');
+            projectData.forEach(phase => {
+                let groupsHtml = '';
+                phase.groups.forEach(group => {
+                    let reqsHtml = '';
+                    group.reqs.forEach(req => {
+                        reqsHtml += `
+                            <div class="req-item">
+                                <div class="req-header">
+                                    <span class="req-id">${req.id}</span>
+                                </div>
+                                <span class="req-desc">${req.desc}</span>
+                            </div>
+                        `;
+                    });
+
+                    groupsHtml += `
+                        <div class="card">
+                            <h3 class="card-title">${group.title}</h3>
+                            <div class="req-list">${reqsHtml}</div>
+                        </div>
+                    `;
+                });
+
+                board.innerHTML += `
+                    <div class="phase-col">
+                        <div class="phase-header">
+                            <div class="phase-title">${phase.title}</div>
+                            <div class="phase-goal">${phase.goal}</div>
+                        </div>
+                        <div class="phase-cards">
+                            ${groupsHtml}
+                        </div>
+                    </div>
+                `;
+            });
+        });
+    </script>
+</body>
+</html>

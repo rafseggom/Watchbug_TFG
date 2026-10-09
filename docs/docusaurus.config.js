@@ -1,21 +1,28 @@
 // @ts-check
 
-// Detectamos de forma robusta si estamos en Cloudflare Pages o en GitHub Actions/Pages
-const isCloudflare = process.env.CF_PAGES === '1' || process.env.CF_PAGES === 'true' || process.env.URL?.includes('pages.dev') || process.env.URL?.includes('watchbugus.com');
+/**
+ * Este branch (`landingpage`) se despliega en Cloudflare Pages como sitio único:
+ * landing en `/` y documentación Docusaurus en `/docs` (ver scripts/build.mjs).
+ * El flujo de GitHub Pages solo vive en la rama histórica `docusaurus`.
+ */
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
-  title: 'Watchbug TFG',
-  tagline: 'Documentación de investigación y recursos para Ingeniería de IA',
-  favicon: 'img/favicon.ico',
+  title: 'Watchbug SDK',
+  tagline: 'Documentación de Watchbug: SDK de informes de errores auto-hospedado',
+  favicon: 'img/logo.png',
 
-  url: isCloudflare ? 'https://watchbugus.com' : 'https://rafseggom.github.io',
-  baseUrl: isCloudflare ? '/' : '/Watchbug_TFG/',
+  url: 'https://www.watchbugus.com',
+  baseUrl: '/',
 
   organizationName: 'rafseggom',
-  projectName: 'watchbug-tfg',
+  projectName: 'Watchbug_TFG',
 
-  onBrokenLinks: 'warn',
+  // 'ignore': este build es combinado (scripts/build.mjs). Docusaurus genera
+  // /docs, pero /roadmap/, /aviso-legal/, /privacidad/, /cookies/ y /en/* los
+  // aporta la landing (site/) después de la build; Docusaurus no los conoce
+  // como sus propias rutas y los marcaría como rotos aunque existen en dist/.
+  onBrokenLinks: 'ignore',
 
   markdown: {
     hooks: {
@@ -46,7 +53,7 @@ const config = {
         docs: {
           path: '../investigation',
           sidebarPath: './sidebars.js',
-          editUrl: 'https://github.com/your-github-username/watchbug-tfg/tree/docusaurus/',
+          editUrl: 'https://github.com/rafseggom/Watchbug_TFG/tree/develop/',
           showLastUpdateTime: true,
         },
         blog: false,
@@ -83,7 +90,7 @@ const config = {
             position: 'right',
           },
           {
-            href: 'https://github.com/your-github-username/watchbug-tfg',
+            href: 'https://github.com/rafseggom/Watchbug_TFG',
             label: 'GitHub',
             position: 'right',
           },
@@ -110,20 +117,41 @@ const config = {
             ],
           },
           {
-            title: 'Proyecto',
+            title: 'Watchbug',
             items: [
               {
-                label: 'GitHub',
-                href: 'https://github.com/your-github-username/watchbug-tfg',
+                label: 'Inicio',
+                href: '/',
               },
               {
-                label: 'Repositorio',
-                href: 'https://github.com/your-github-username/watchbug-tfg/tree/develop',
+                label: 'Roadmap interactivo',
+                href: '/roadmap/',
+              },
+              {
+                label: 'GitHub',
+                href: 'https://github.com/rafseggom/Watchbug_TFG',
+              },
+            ],
+          },
+          {
+            title: 'Legal',
+            items: [
+              {
+                label: 'Aviso legal',
+                href: '/aviso-legal/',
+              },
+              {
+                label: 'Privacidad',
+                href: '/privacidad/',
+              },
+              {
+                label: 'Cookies',
+                href: '/cookies/',
               },
             ],
           },
         ],
-        copyright: `Copyright ${new Date().getFullYear()} Watchbug TFG. Built with Docusaurus.`,
+        copyright: `Copyright ${new Date().getFullYear()} Rafael Segura Gómez · Apache 2.0 · Built with Docusaurus.`,
       },
       prism: {
         theme: require('prism-react-renderer').themes.github,
