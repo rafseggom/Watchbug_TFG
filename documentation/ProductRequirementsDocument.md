@@ -33,7 +33,7 @@ Esta frase es el árbitro de toda decisión de priorización. *Fidelidad de capt
 | G-7 | Ser arquitectura **extensible sin reescritura**: puertos donde existe una segunda implementación real | `R-02` |
 | G-8 | Mantener **evidencia verificable** en cada propiedad, sin test suite parasitaria | `R-12`, `CA-01…05` |
 
-### 1.3 No-goals (Declare the No)
+### 1.3 No-goals (Declare the No) 
 
 Exclusiones **duras**. No se diseñará ni se implementará nada de esto en este ciclo. Los puertos reservados son **costuras**, no permisos: constrir un adaptador para cualquiera de ellos sería una violación de alcance.
 
