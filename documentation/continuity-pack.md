@@ -145,6 +145,14 @@ Therefore, **the sync is done by the agent, on request, at each phase boundary**
 
 Rule of thumb: **implement → verify → close**. Never close ahead of evidence (PRD §6.2 DoD).
 
+### 6.6 Branch-per-phase + PR (decisión del propietario, 2026-10-10)
+
+- **`develop` = base siempre actualizada** (snapshot de la planificación desde `4a301c5`). No se desarrolla directamente en ella.
+- **Una rama por épica/fase**, con el template ya previsto en `config.json`: `gsd/phase-{phase}-{slug}` — p. ej. `gsd/phase-1-contracts-ingest`.
+- **Cada fase entra a `develop` mediante PR**, revisado con **PR-Lens** (el skill `pr-lens` / `.pr-lens`, ignorado en git) para llevar el control del cambio.
+- Los PRs se abren **contra `develop`** (rama por defecto del repo) y deben llevar en el body `Closes #N` por cada issue de esa fase → al mergear, **GitHub cierra esas issues automáticamente**, lo que automatiza el paso 1 de §6.5. La épica y el milestone se cierran aparte (GitHub no auto-cierra la issue padre al cerrar sus sub-issues).
+- ⚠ `config.json` → `git.branching_strategy` sigue en `"none"`. Si se quiere que GSD cree la rama de fase y el PR solo (`/gsd-ship`), hay que cambiarlo a la estrategia de fases — decisión pendiente del propietario, no se toca sin confirmación.
+
 ---
 
 ## 7. Plan vs real — Gantt de variación (deferido hasta la 1ª fase)
