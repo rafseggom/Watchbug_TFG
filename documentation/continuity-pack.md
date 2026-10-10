@@ -134,11 +134,11 @@ Initial distribution (2026-10-10): Ready to start 7 (Phase 1) · Backlog 38 · B
 
 **Source of truth is `.planning/` (`ROADMAP.md`, `STATE.md`, `REQUIREMENTS.md`). GitHub is a mirror for visibility.** GSD does **not** touch GitHub issues, milestones or Projects on its own: `/gsd-execute-phase` writes code and updates `.planning`, `/gsd-ship` opens a PR, and `/gsd-inbox` only triages incoming issues (it can `gh issue close` on template violations). Nothing in GSD closes an issue because its phase finished.
 
-Therefore, at each phase boundary, run the sync by hand (or ask the agent to):
+Therefore, **the sync is done by the agent, on request, at each phase boundary** (owner decision, 2026-10-10 — no script, no auto-close). When a phase passes verification and you say *"sincroniza GitHub"*, the agent runs:
 
-1. Phase passes verification → close every child issue of that phase with an evidence comment (commit + `VERIFICATION.md`).
+1. Close **all** child issues of that phase **together** (owner decision: issues close at *phase* completion, not per-plan — a phase is one complete e2e proof under the PRD DoD), each with an evidence comment (commits + `VERIFICATION.md`).
 2. Close the epic when all its children are closed (its checklist and sub-issue progress must be 100 %).
 3. Close the phase milestone.
 4. Move the Project items to `Done`; pull the next phase's issues into `Ready to start`.
 
-Rule of thumb: **implement → verify → close**. Never close ahead of evidence (DoD §6.2 of the PRD).
+Rule of thumb: **implement → verify → close**. Never close ahead of evidence (PRD §6.2 DoD).
