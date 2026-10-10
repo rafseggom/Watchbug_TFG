@@ -1,5 +1,10 @@
 # Gantt — Watchbug SDK v1
 
+> ## 🔒 LÍNEA BASE INMUTABLE
+> Este documento es el **plan ideal de referencia**, creado el 2026-10-10 antes de empezar a ejecutar.
+> **No se edita nunca**: ni fechas, ni alcance, ni barras. Su valor es poder compararse contra la realidad.
+> El registro real y la variación viven en `documentation/Gantt-Actual.md` (se crea al cerrar la primera fase — ver `continuity-pack.md` §7).
+
 Cronograma de cierre del proyecto: **10 oct → 31 dic 2026** (12 semanas).
 
 Fuente de verdad de las fases y requisitos: `.planning/ROADMAP.md` · fechas = *due date* de los milestones de GitHub (`Phase 1` … `Phase 7`).

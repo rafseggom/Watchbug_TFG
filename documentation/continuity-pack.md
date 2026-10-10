@@ -2,7 +2,7 @@
 
 State preserved across session resets. Read this at the start of every session (ASE §4D, *Anti-Amnesia*).
 
-**Last updated:** 2026-10-10 — GitHub project management set up (labels, milestones, 47 issues, epics, Project kanban #3). See §6.
+**Last updated:** 2026-10-10 — GitHub project management set up (labels, milestones, 47 issues, epics, Project kanban #3), see §6 · plan-vs-real variance tracking deferred until Phase 1 closes, see §7.
 
 ---
 
@@ -18,6 +18,8 @@ State preserved across session resets. Read this at the start of every session (
 | `.planning/REQUIREMENTS.md` | ✓ Complete — 70/70 v1 requirements mapped |
 | `.planning/ROADMAP.md` | ✓ Complete (2026-10-07) — 7 vertical phases, coverage 70/70 |
 | GitHub project management (labels / milestones / issues / kanban) | ✓ Complete (2026-10-10) — **§6** |
+| `documentation/Gantt.md` — línea base inmutable | ✓ Complete (2026-10-10) |
+| `documentation/Gantt-Actual.md` — real + variación | ○ Deferred — se crea al cerrar la Fase 1 (**§7**) |
 | Phase 1 planning (`/gsd-plan-phase 1`) | ○ Not started |
 
 **Next action:** `/gsd-plan-phase 1` — Contracts & Ingest Slice (milestone due 2026-10-18, issues `#5`–`#10`, epic `#45`).
@@ -142,3 +144,43 @@ Therefore, **the sync is done by the agent, on request, at each phase boundary**
 4. Move the Project items to `Done`; pull the next phase's issues into `Ready to start`.
 
 Rule of thumb: **implement → verify → close**. Never close ahead of evidence (PRD §6.2 DoD).
+
+---
+
+## 7. Plan vs real — Gantt de variación (deferido hasta la 1ª fase)
+
+**Decisión del propietario (2026-10-10):** no se genera hoy, porque no se ha empezado a ejecutar. Se activa con el cierre de la Fase 1.
+
+- **Línea base (inmutable):** `documentation/Gantt.md` — el plan ideal del 10-oct. **Nunca se edita**; su valor es poder compararse. Cualquier cambio de fecha que implique re-planificar se hace aquí solo con aprobación explícita, y anotando la enmienda.
+- **Real + variación:** `documentation/Gantt-Actual.md` — se crea al cerrar la Fase 1 (o antes, si hay algo que reportar) con barras pareadas *plan vs real* y tabla de Δ.
+
+### 7.1 Captura de fechas reales
+
+| Fase | Plan inicio | Plan fin | **Real inicio** | **Real fin** | Δ (días) |
+|------|-------------|----------|-----------------|--------------|----------|
+| 1 | 2026-10-10 | 2026-10-18 | *(se anota al arrancar)* | `closed_at` del milestone 6 | — |
+| 2 | 2026-10-18 | 2026-10-31 | *(idem)* | `closed_at` del milestone 7 | — |
+| 3 | 2026-10-31 | 2026-11-13 | | `closed_at` del milestone 8 | |
+| 4 | 2026-11-13 | 2026-11-22 | | `closed_at` del milestone 9 | |
+| 5 | 2026-11-22 | 2026-11-30 | | `closed_at` del milestone 10 | |
+| 6 | 2026-11-30 | 2026-12-12 | | `closed_at` del milestone 11 | |
+| 7 | 2026-12-12 | 2026-12-24 | | `closed_at` del milestone 12 | |
+
+**Regla de captura — el único dato que GitHub NO guarda solo es el *inicio* de cada fase.** Al arrancar cada fase (`/gsd-plan-phase N`), el agente anota `Real inicio = fecha de hoy` en esta tabla. El *fin* sale solo de `gh api repos/rafseggom/Watchbug_TFG/milestones?state=all` (`closed_at`), y el detalle por issue de los `closed_at` de las issues de esa fase.
+
+### 7.2 Métricas a calcular en `Gantt-Actual.md`
+
+1. **Δ por fase** — `real fin − plan fin` (positivo = retraso).
+2. **Deriva acumulada** contra el 31-dic-2026.
+3. **% de buffer consumido** — el buffer vale 7 días (25–31 dic); se agota al ritmo en que la deriva supere las fases tolerantes (4, 5 y 6 tienen holgura implícita).
+4. **Duración real vs planificada por fase** — detecta fases que se comieron más días de los previstos aunque llegaran "a tiempo" arrancando tarde.
+
+### 7.3 Procedimiento
+
+```
+Al ARRANCAR fase N  → §7.1: Real inicio = hoy
+Al CERRAR fase N    → durante la sincronía GitHub (§6.5):
+                      1. §7.1: Real fin = closed_at del milestone N; calcular Δ
+                      2. Crear/actualizar documentation/Gantt-Actual.md
+                      3. Gantt.md NO se toca
+```
