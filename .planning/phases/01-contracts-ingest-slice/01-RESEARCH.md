@@ -562,26 +562,32 @@ const kb = (buf) => (gzipSync(buf).length / 1024).toFixed(1);
 | A8 | Compose invocation is `docker compose` (hyphenless) — Compose v5.5.1 provides the plugin; the legacy `docker-compose` binary may be absent | Environment Availability | Low — AGENTS.md writes `docker-compose up -d`; document both or normalize in README |
 | A9 | Read endpoints (list + image) ship **unauthenticated** in Phase 1 as an explicit, documented scope decision (DEP-03 auth completes Phase 5) | Pattern 9 | Medium — security-relevant exposure if the deployment is internet-facing; mitigated by localhost port binding + PR disclosure. See Open Questions #5 |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Re-encode dependency (P1-D-10 consultation — blocks the ingest endpoint's image stage).**
    - What we know: P1-D-10 mandates server-side re-encode but requires owner consultation for heavy dependencies; STACK.md rejects `sharp`/`jimp` for *client* pixel work; `sharp` re-encodes png/webp and strips metadata by default [CITED: sharp.pixelplumbing.com/api-output]; a zero-dep structural strip/rebuild alternative exists (Pattern 2, option 2).
    - What's unclear: whether the owner accepts `sharp` (native libvips in the `api` image only) or prefers the strip/rebuild fallback (weaker against decoder-differential polyglots).
    - Recommendation: one `CONSULT`/`checkpoint:human-verify` task before the ingest implementation; implement the `hardenImage()` module seam so both backends drop in; never block the phase.
+   - **RESOLVED (disposition):** owned by 01-02 Task 1 — the dedicated `checkpoint:human-verify` P1-D-10 consultation decides `sharp` re-encode vs the zero-dep structural strip/rebuild backend (legitimacy check of `sharp` at its official npm page is part of that gate); `hardenImage()` ships as a plain module seam so either backend drops in without architectural change.
 
 2. **TS 7.x tooling gate (Q-08).**
    - What we know: STACK.md pins TS 7.0.2 with a 6.x fallback; Q-08 says the Phase-1 smoke test (`drizzle-kit`/`tsx`/Vite plugins) decides and must be recorded in `continuity-pack.md`.
    - Recommendation: run it inside the first scaffolding commit alongside the P1-D-09 multipart smoke test; fall back to 6.x on friction.
+   - **RESOLVED (disposition):** owned by 01-01 Task 2 Step 0 (the tooling smoke gate) — `drizzle-kit generate`, `tsx` boot and `vite build` run before any ingest code and the outcome is recorded in `documentation/continuity-pack.md`; on tooling friction the plan falls back to the TypeScript 6.x line and records that too.
 
 3. **Image cap semantics: 2 MB vs 4 MB (Assumption A5).**
    - What we know: A-06 "2 MB hard" (encoded image), SUMMARY "4 MB per file part" (parser), 5 MB body.
    - Recommendation: layered as in Pattern 1 (4 MB parser guard + 2 MB semantic reject + 16 MP dim guard). Lock this in the plan's constants task so the e2e fixtures assert the intended status codes (413 at both layers).
+   - **RESOLVED (disposition):** locked by 01-02's `assumption_delta_decision` as `add-alongside` — the **encoded image** (`MAX_ENCODED_IMAGE_BYTES`, 2 MB, A-06 "hard") is the contract-level noun, and `MAX_IMAGE_PART_BYTES` (4 MB multipart parser guard) remains a distinct constant layered coarser above it; 01-02's `e2e/hostile.spec.ts` rows assert 413 at both layers.
 
 4. **Daily quota enforcement durability.** The in-memory limiter resets on API restart — the 2,000/day per project quota is best-effort in a single-node self-hosted deployment (INV-03 forbids Redis). Document the caveat in `.env.example`/integration docs; revisit only if the owner raises it.
+   - **RESOLVED (disposition):** owned by 01-03 Flagged Assumption #2 — the in-memory limiter stays (INV-03 forbids a fourth container/Redis), the best-effort-across-restarts caveat is documented in `.env.example` and the integration docs, and the point is revisited only if the owner raises it.
 
 5. **Phase-1 read-surface exposure (Assumption A9).** List + blob endpoints are unauthenticated until Phase 5 by explicit scope. Recommendation: bind `api`/`panel` published ports to `127.0.0.1` in the committed compose file for dev posture, state the exposure in the PR, and revisit at Phase 5 with `AuthProvider`.
+   - **RESOLVED (disposition):** owned by 01-01 Task 2 Step 3 (compose published ports bound to `127.0.0.1`) plus 01-01 Flagged Assumption #3 (the exposure is stated in the phase PR; `T-01-01` notes the seam); the read surface is revisited at Phase 5 when `AuthProvider` wraps it (DEP-03).
 
 6. **`Idempotency-Key` header absence policy.** Recommended: 400 when absent on `POST /api/incidents` (the CA-01 wire shape includes it). Alternative: accept and treat the request as non-idempotent. Cheap to decide in the plan.
+   - **RESOLVED (disposition):** the recommendation is adopted — **400-when-absent**. A `POST /api/incidents` without the `Idempotency-Key` header is rejected with 400 and the standard structured error body (`{ statusCode, error, message }`) and stores nothing. Executable form lives in 01-01: a `must_haves.truths` entry, a Task 2 acceptance criterion, and the matching `e2e/ingest.spec.ts` missing-header row. Rationale: the header is part of the CA-01 wire shape and `incidents.idempotency_key` is `NOT NULL`, so accepting keyless requests would force either a server-invented key (breaking the idempotency-key-is-client-owned contract) or a nullable column (breaking CA-01 and the replay semantics); 400-when-absent keeps the wire shape, the schema, and the idempotency contract consistent. (Chosen over the "accept as non-idempotent" alternative for exactly that reason.)
 
 ## Environment Availability
 
