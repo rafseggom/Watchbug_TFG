@@ -171,13 +171,15 @@ Decisión del propietario (2026-10-10, refinada 2026-10-12):
 - El epic se cierra cuando todas sus hijas están cerradas (checklist y barra de sub-issues al 100 %).
 - El milestone se cierra con la fase.
 
-### 8.2 Cierre por REQ-IDs (convención propuesta — pendiente de formalizar)
+### 8.2 Los REQ-IDs repartidos entre planes señalan que no toca cerrar
 
-Refinamiento derivado de §7.3, **aún no escrito en `CONVENTIONS.md`** (ese archivo está vacío; proponente: sesión 2026-10-12, pendiente de aprobación del propietario):
+**Decisión del propietario, 2026-10-12** (hogar canónico: `CONVENTIONS.md`; derivada de §7.3). Consistente con §8.1, no la sustituye:
 
-> Una issue se **cierra** cuando **todos** los REQ-IDs que cita están cubiertos por planes completados. Si sus REQ-IDs se reparten entre varios planes, se **avanza el estado, no se cierra**. Las habilitadoras sin REQ (`#5`) se cierran con el plan que las consume.
+> Cuando los REQ-IDs de una issue **se reparten entre varios planes**, eso es una **señal de que la issue no se cierra hasta que la fase esté completa y todos sus REQ-IDs estén cubiertos** — no un atajo para cerrarla antes. Mientras la fase siga en marcha, **avanza el estado** (`In Progress`, `Testing/Review`) y déjala sin cerrar; se cierra con el resto de la fase.
 
-Con esta regla, `#8` deja de ser trampa: tras el plan `01-01` su storage+idempotencia está hecho pero el endurecimiento no — "avanzar" es correcto, "cerrar" sería mentira.
+Y las habilitadoras sin REQ-ID (`#5`) se cierran con el plan que las consume, al completarse la fase.
+
+Con esta regla, `#9` deja de ser trampa: su alcance (`ING-04`…`ING-08`) abarca tres planes, así que se va moviendo de estado según avancen, pero no se cierra hasta que la Fase 1 esté completa. "Cerrar" en la wave 2 sería mentira; "avanzar el estado" es correcto.
 
 ### 8.3 Procedimiento de sincronización (a petición, en frontera de fase)
 
