@@ -166,7 +166,7 @@ Rule of thumb: **implement → verify → close**. Never close ahead of evidence
 
 | Fase | Plan inicio | Plan fin | **Real inicio** | **Real fin** | Δ (días) |
 |------|-------------|----------|-----------------|--------------|----------|
-| 1 | 2026-10-10 | 2026-10-18 | *(se anota al arrancar)* | `closed_at` del milestone 6 | — |
+| 1 | 2026-10-10 | 2026-10-18 | 2026-10-11 | `closed_at` del milestone 6 | +1 (inicio; discuss de fase hecho el 2026-10-11) |
 | 2 | 2026-10-18 | 2026-10-31 | *(idem)* | `closed_at` del milestone 7 | — |
 | 3 | 2026-10-31 | 2026-11-13 | | `closed_at` del milestone 8 | |
 | 4 | 2026-11-13 | 2026-11-22 | | `closed_at` del milestone 9 | |
