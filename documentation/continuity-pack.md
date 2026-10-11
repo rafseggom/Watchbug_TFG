@@ -79,6 +79,8 @@ Failed or rejected paths. **Do not re-explore.** Full rationale in `resolution-r
 
 ## 6. GitHub project management (created 2026-10-10)
 
+> ⚠ **Esta sección es el registro histórico de la sesión de creación (2026-10-10).** La referencia **viva** es [`documentation/management.md`](management.md), que añade los cambios de 2026-10-12 (PR `#2` fuera del board, issues de la Fase 1 asignadas, épica `#45` a Backlog, issue `#52` creada, campo `Wave` probado y revertido) y las reglas de cierre/sincronización. **Si algo contradice, manda `management.md`.**
+
 Repo `rafseggom/Watchbug_TFG` · Project **#3 "Kanban Watchbug TFG"** (https://github.com/users/rafseggom/projects/3).
 Tooling: **`gh` CLI** authenticated as `rafseggom` (scopes `repo`, `read:org`, `workflow`, `project`). There is no GitHub MCP server in this environment — all GitHub operations go through `gh`.
 
