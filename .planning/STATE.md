@@ -2,16 +2,16 @@
 gsd_state_version: "1.0"
 current_phase: 1
 current_phase_name: Contracts & Ingest Slice
-status: planning
+status: executing
 stopped_at: Phase 1 context gathered
-last_updated: "2026-10-11T19:41:31.601Z"
+last_updated: "2026-10-11T21:48:05.868Z"
 last_activity: 2026-10-07
 last_activity_desc: ROADMAP.md created (7 vertical MVP slices, 70/70 v1 requirements mapped), STATE.md initialized
-state_head: 0e0af4d2414d0587ee77ded8a45c0f5b0eee45ad
+state_head: 93c63f786ff2f853a5c3e5440d7758acf31f3fa0
 progress:
   total_phases: 7
   completed_phases: 0
-  total_plans: 0
+  total_plans: 4
   completed_plans: 0
   percent: 0
 ---
@@ -27,9 +27,9 @@ See: .planning/PROJECT.md (updated 2026-10-05)
 
 ## Current Position
 
-Phase: 1 of 7 (Contracts & Ingest Slice)
+Phase: 1 (Contracts & Ingest Slice) — READY TO EXECUTE
 Plan: 0 of TBD in current phase
-Status: Ready to plan
+Status: Ready to execute
 Last activity: 2026-10-07 - Completed quick task 261007-pm7: Add reuse-first coding rule (R-18) and 4 Gemini review entries (CSP, IndexedDB fallback, orphan blobs, TS 6-vs-7 gate)
 
 Progress: [░░░░░░░░░░] 0%
@@ -64,6 +64,7 @@ Recent decisions affecting current work:
 - [Roadmap] Hard sequencing locked: `WidgetHost` isolation strategy and redaction ordering **T1** are fixed in Phase 2 (first build of the widget); **T2/T3** + the C-2 `Annotator` contract (one flattened bitmap, non-undoable masks, single `toBlob` sink) in Phase 3. R-12: verification is one Playwright suite (CA-01…CA-05) + `check:size` — no unit tests, ever.
 - [Phase 1] Scope note: the hardened blob route ships here (C-3/C-4) but DEP-03's "served only through the authenticated API" completes in Phase 5 when auth exists. TTL columns land in the initial migration (M-1/A-02) to avoid schema retrofits.
 - [Phase 4] INT-03's `custom` = init-scoped context riding every report (v1); distinct from ANN-V2-03 per-report custom fields (v2).
+- [Phase 1 · OVERRIDE 2026-10-11 · decision-coverage gate] The `check.decision-coverage-plan` gate returned `passed: false, reason: could-not-parse` because CONTEXT.md's local decision IDs use the `P1-D-NN` grammar, which the parser does not support (it accepts `D-NN`, `D4-NN`, `D-NN — title`). Developer chose "Proceed — parser false positive": the gate's intent is already satisfied — the plan-checker's dimension-7 audit verified all 12 `P1-D-01…P1-D-12` decisions map to plan tasks with no deferred idea implemented and no scope reduction. No plan or CONTEXT.md change was made. **verify-phase must re-surface this:** if its decision-coverage counterpart reports the same `could-not-parse` on `P1-D-NN`, treat it as this same recorded false positive, not as a dropped decision.
 
 ### Pending Todos
 
