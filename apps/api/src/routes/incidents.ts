@@ -278,30 +278,47 @@ export async function registerIncidentsRoutes(app: FastifyInstance, deps: RouteD
     const { key } = await storage.put(hardened.bytes, hardened.ext, projectId);
 
     const now = Date.now();
-    const inserted = await db
-      .insert(incidents)
-      .values({
-        projectId,
-        idempotencyKey,
-        type: cleanMeta.type,
-        title: cleanMeta.title,
-        note: cleanMeta.note ?? null,
-        url: cleanMeta.url ?? null,
-        userId: cleanMeta.user?.id ?? null,
-        userName: cleanMeta.user?.name ?? null,
-        userEmail: cleanMeta.user?.email ?? null,
-        identityPurgeAt: new Date(now + config.ttlIdentityDays * DAY_MS),
-        artifactPurgeAt: new Date(now + config.ttlArtifactDays * DAY_MS),
-        storageKey: key,
-        contentType: hardened.ext === 'png' ? 'image/png' : 'image/webp',
-      })
-      .onConflictDoNothing({ target: [incidents.projectId, incidents.idempotencyKey] })
-      .returning({ id: incidents.id });
+    // WR-03: the blob is written BEFORE the insert (required for idempotent
+    // conflict handling), so ANY insert failure must delete it — a rowless
+    // blob is invisible to the TTL purge jobs (they purge by row) and would
+    // leak in the attachments volume forever, exactly when the DB is in
+    // trouble and the leak grows fastest.
+    let inserted: { id: string }[];
+    try {
+      inserted = await db
+        .insert(incidents)
+        .values({
+          projectId,
+          idempotencyKey,
+          type: cleanMeta.type,
+          title: cleanMeta.title,
+          note: cleanMeta.note ?? null,
+          url: cleanMeta.url ?? null,
+          userId: cleanMeta.user?.id ?? null,
+          userName: cleanMeta.user?.name ?? null,
+          userEmail: cleanMeta.user?.email ?? null,
+          identityPurgeAt: new Date(now + config.ttlIdentityDays * DAY_MS),
+          artifactPurgeAt: new Date(now + config.ttlArtifactDays * DAY_MS),
+          storageKey: key,
+          contentType: hardened.ext === 'png' ? 'image/png' : 'image/webp',
+        })
+        .onConflictDoNothing({ target: [incidents.projectId, incidents.idempotencyKey] })
+        .returning({ id: incidents.id });
+    } catch (err) {
+      await storage.delete(key).catch((cleanupErr) => {
+        console.error('[watchbug] orphaned blob delete failed after insert error (WR-03):', cleanupErr);
+      });
+      throw err;
+    }
 
     if (inserted.length === 0) {
       // Replay: the uniqueness index won the race. The blob written for this
       // attempt is unreferenced — delete it, then serve the original id.
-      await storage.delete(key);
+      // Best-effort (WR-03): a failed cleanup must not fail the replay (a
+      // 500 + retry would only leak a second blob); it is logged for ops.
+      await storage.delete(key).catch((cleanupErr) => {
+        console.error('[watchbug] replay blob delete failed (WR-03):', cleanupErr);
+      });
       // WR-01: the conflict is detected on `(project_id, idempotency_key)`,
       // so the replay lookup MUST be scoped to the same pair — an unscoped
       // lookup could return a DIFFERENT project's incident with the same
