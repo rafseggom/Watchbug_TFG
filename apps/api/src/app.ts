@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import multipart from '@fastify/multipart';
+import { MAX_IMAGE_PART_BYTES } from '@watchbug/contracts/constants';
 
 /**
  * Composition root (R-02: one per process).
@@ -9,14 +10,6 @@ import multipart from '@fastify/multipart';
  * before any ingest endpoint exists (T-01-05). Steps 3-4 add the rest of the
  * plugin stack, the DB client and the real routes.
  */
-
-/**
- * A-06 receive limit for the single image part. Inlined for the Step-0 smoke so
- * the risk-first commit has no cross-package dependency; Step 1 lands
- * `@watchbug/contracts` and this module imports `MAX_IMAGE_PART_BYTES` from the
- * single source instead (R-18).
- */
-const MAX_IMAGE_PART_BYTES = 4 * 1024 * 1024;
 
 /**
  * The T-01-05 mitigation: multipart limits are declared explicitly because
