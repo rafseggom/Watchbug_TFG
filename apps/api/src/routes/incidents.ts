@@ -254,6 +254,20 @@ export async function registerIncidentsRoutes(app: FastifyInstance, deps: RouteD
       });
     }
 
+    // A-06's 2 MB cap is a cap on the STORED artifact, not only on the input:
+    // a low-quality noisy input well under the cap can re-encode to far more
+    // (WR-02), and nothing downstream re-checks it — the blob route would
+    // stream whatever size landed. Re-cap the hardened bytes with the same
+    // contract constant and the same structured 413 body as the input cap.
+    if (hardened.bytes.length > MAX_ENCODED_IMAGE_BYTES) {
+      return reply.code(413).send(
+        failure(
+          413,
+          `re-encoded image is ${hardened.bytes.length} bytes; the contract allows at most ${MAX_ENCODED_IMAGE_BYTES} (MAX_ENCODED_IMAGE_BYTES)`,
+        ),
+      );
+    }
+
     // Stage 6 — plain-text sanitization, then re-validate the contract so
     // whatever reaches storage is guaranteed to validate (ENR-06).
     const cleanMeta = sanitizeAndValidate(meta.meta);
