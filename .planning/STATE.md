@@ -2,17 +2,17 @@
 gsd_state_version: "1.0"
 current_phase: 01
 current_phase_name: Contracts & Ingest Slice
-status: executing
-stopped_at: Completed 01-03-PLAN.md
-last_updated: "2026-10-12T20:13:56.795Z"
+status: verifying
+stopped_at: Completed 01-04-PLAN.md
+last_updated: "2026-10-12T21:26:30.321Z"
 last_activity: 2026-10-12
 last_activity_desc: Phase 01 execution started
-state_head: 800fa0aa149aefe67de071e5155f35aac9642836
+state_head: ba499f382768e1c618ac47eeda48f92f2f096f86
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 4
-  completed_plans: 3
+  completed_plans: 4
   percent: 0
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-10-05)
 
 Phase: 01 (Contracts & Ingest Slice) — EXECUTING
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-10-12 — Phase 01 execution started
 
 Progress: [░░░░░░░░░░] 0%
@@ -59,6 +59,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01 P01 | 01:45:00 | 3 tasks | 57 files |
 | Phase 01 P02 | 40min | 3 tasks | 16 files |
 | Phase 01 P03 | 37min | 3 tasks | 10 files |
+| Phase 01 P04 | 45min | 3 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -83,6 +84,11 @@ Recent decisions affecting current work:
 - [Phase 01]: 01-03: e2e rate-limit maxima 1200/600/2000 (local .env) - byKey and byDay share one bucket identity, so D>K is required to prove the per-key boundary and D<2K keeps the daily row to one 65s window wait; production defaults 10/30/2000 unchanged
 - [Phase 01]: 01-03: ingest preHandler chain locked as bodyCaps(onRequest) -> ingestRateLimit -> originGate -> projectKeyGate -> handler (limits before CORS before key before any write); origin enforcement is route-level, @fastify/cors is app-level for headers/preflight
 - [Phase 01]: 01-03: all three limiters increment before any 429 decision (rejected requests consume every quota); GET list no longer consults X-Project-Key - write-only key per H-7/DEP-03
+- [Phase 01]: 01-04: toPlainText decodes sanitize-html's re-escapes only when the decoded value cannot re-open a tag (2 < 3 & 4 > 1 round-trips literally; entity-encoded payloads and <title> RCDATA stay escaped so no markup-shaped text reaches storage)
+- [Phase 01]: 01-04: text caps count Unicode code points, not UTF-16 units - Zod 4.6.5 maxLength semantics (probe-verified), matching the published JSON Schema; the plan's code-units premise was corrected in the e2e rows, not in the contract
+- [Phase 01]: 01-04: ingest order kept validate -> sanitise -> re-validate: post-sanitise re-validation guarantees a stored value never exceeds the cap it validated against (200 '&' stores as 200 chars)
+- [Phase 01]: 01-04: empty-state e2e rows intercept GET /api/incidents with [] (shared stack is never empty); /api/setup, the EmptyState component and the emitted curl stay real, and one row spawns the emitted snippet verbatim (201 -> visible after reload)
+- [Phase 01]: 01-04: meta JSON content-type defect closed - the multipart loop re-stringifies an object field back to JSON text (curl -F shape ingests 201); CA-01 schema untouched; deferred-items entry 1 marked RESOLVED
 
 ### Pending Todos
 
@@ -119,6 +125,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-12T20:13:56.756Z
-Stopped at: Completed 01-03-PLAN.md
+Last session: 2026-10-12T21:26:30.266Z
+Stopped at: Completed 01-04-PLAN.md
 Resume file: None

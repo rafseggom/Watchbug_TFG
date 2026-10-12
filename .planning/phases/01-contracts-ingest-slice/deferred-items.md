@@ -28,6 +28,12 @@ Entries are appended newest-last within each run.
 - **Suggested owner:** plan 01-04 (panel/curl onboarding) or a small `01-05`
   fix-up — it is a client-experience bug, not a security one (the rejected
   payload is never stored).
+- **RESOLVED in plan 01-04** (Task 1, commit `ddaef5a`): the meta part is
+  re-stringified when multipart JSON-parses it
+  (`typeof part.value === 'string' ? … : JSON.stringify(part.value)`), with an
+  e2e row that sends `meta` with `Content-Type: application/json` (201) and a
+  row that executes the empty state's emitted onboarding `curl` verbatim
+  against the stack (`e2e/ingest.spec.ts`, commit `ba499f3`).
 
 **2. `npm audit`: 4 moderate advisories in `drizzle-kit`'s dev-only `esbuild` chain**
 - **Found during:** Task 2 (`npm install sharp@0.35.5` prints the audit summary).

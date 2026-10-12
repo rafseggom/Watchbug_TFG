@@ -102,7 +102,7 @@ A requirement is **Complete** when:
 - [x] **ING-04**: The API rejects ingestion without a valid project key
 - [x] **ING-05**: The API rate-limits per IP and per project key (SEC-05)
 - [x] **ING-06**: The API rejects oversized bodies and images
-- [ ] **ING-07**: The API sanitises all user-supplied text before storage and before panel rendering (SEC-05)
+- [x] **ING-07**: The API sanitises all user-supplied text before storage and before panel rendering (SEC-05)
 - [x] **ING-08**: The API accepts ingestion only from allowlisted origins
 
 ### Panel & Triage
@@ -253,7 +253,7 @@ Which phases cover which requirements. **Updated during roadmap creation** — e
 | ING-04 | Phase 1 | Complete |
 | ING-05 | Phase 1 | Complete |
 | ING-06 | Phase 1 | Complete |
-| ING-07 | Phase 1 | Pending |
+| ING-07 | Phase 1 | Complete |
 | ING-08 | Phase 1 | Complete |
 | TRI-01 | Phase 5 | Pending |
 | TRI-02 | Phase 5 | Pending |
