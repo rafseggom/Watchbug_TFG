@@ -1,0 +1,6 @@
+# e2e fixtures are byte-exact artifacts: the PNG/WebP are encoder output the
+# suite re-sniffs, the hostile SVG/GIF are deliberately malformed payloads, and
+# the decode bomb is a hand-built PNG whose bytes are the assertion. Never let
+# core.autocrlf rewrite them (the polyglot GIF has no NUL byte, so git would
+# otherwise misdetect it as text and inject CRLF on checkout).
+e2e/fixtures/* -text
