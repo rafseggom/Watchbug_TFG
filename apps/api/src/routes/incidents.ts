@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import { desc, eq } from 'drizzle-orm';
 import type { AppConfig } from '../config';
 import type { AppDb } from '../db/client';
@@ -68,18 +68,7 @@ function badRequest(reply: FastifyReply, message: string): FastifyReply {
 export async function registerIncidentsRoutes(app: FastifyInstance, deps: RouteDeps): Promise<void> {
   const { db, storage, config } = deps;
 
-  app.post('/api/incidents', {
-    // SEC-05: per-project-key ceiling on top of the global per-IP limiter —
-    // one project cannot starve the instance (RATE_LIMIT_PER_KEY_PER_MIN).
-    config: {
-      rateLimit: {
-        max: config.rateLimitPerKeyPerMin,
-        timeWindow: '1 minute',
-        keyGenerator: (req: FastifyRequest) =>
-          String(req.headers['x-project-key'] ?? req.ip),
-      },
-    },
-  }, async (req, reply) => {
+  app.post('/api/incidents', async (req, reply) => {
     const idempotencyKey = req.headers['idempotency-key'];
     if (typeof idempotencyKey !== 'string' || idempotencyKey.trim() === '') {
       return badRequest(
@@ -216,7 +205,11 @@ export async function registerIncidentsRoutes(app: FastifyInstance, deps: RouteD
     return reply.send(rows.map(toListRow));
   });
 
-  app.get('/api/incidents/:id/image', async (req, reply) => {
+  app.get('/api/incidents/:id/image', {
+    // This route declares its own hardened header set (plan Step 4); helmet's
+    // global pass would *duplicate* X-Content-Type-Options ("nosniff, nosniff").
+    config: { helmet: false },
+  }, async (req, reply) => {
     const { id } = req.params as { id: string };
     if (!UUID_RE.test(id)) return reply.code(404).send({
       statusCode: 404,

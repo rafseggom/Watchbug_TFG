@@ -32,7 +32,7 @@ async function main(): Promise<void> {
   });
 
   try {
-    await app.listen({ port: config.port, host: '127.0.0.1' });
+    await app.listen({ port: config.port, host: config.host });
   } catch (err) {
     app.log.error(err);
     process.exit(1);

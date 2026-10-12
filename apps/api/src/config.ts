@@ -40,6 +40,8 @@ export interface AppConfig {
   rateLimitPerProjectPerDay: number;
   dataDir: string;
   port: number;
+  /** Listen address — loopback for host dev, `0.0.0.0` inside the api container (nginx reaches it by service name). */
+  host: string;
   trustProxy: boolean;
 }
 
@@ -142,6 +144,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     ),
     dataDir: readDataDir(env),
     port: readInt(env, 'PORT', 3000),
+    host: readString(env, 'WATCHBUG_HOST') ?? '127.0.0.1',
     trustProxy: readBool(env, 'WATCHBUG_TRUST_PROXY', false),
   };
 }

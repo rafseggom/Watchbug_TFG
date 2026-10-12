@@ -1,7 +1,5 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import helmet from '@fastify/helmet';
-import cors from '@fastify/cors';
-import rateLimit from '@fastify/rate-limit';
 import multipart from '@fastify/multipart';
 import { MAX_IMAGE_PART_BYTES } from '@watchbug/contracts/constants';
 import type { AppConfig } from './config';
@@ -13,11 +11,14 @@ import { registerIncidentsRoutes } from './routes/incidents';
 /**
  * Composition root (R-02: one per process).
  *
- * Registers the plugin stack in defence order — helmet, CORS (scoped to the
- * configured origins), the multipart parser with the explicit A-06 receive
- * limits, rate limiting (SEC-05) — then the CA-01 routes and the structured
- * JSON error mapper. `trustProxy` is deliberately left at its configured
- * default (false) and must only ever be set explicitly — Pitfall 5.
+ * Registers the plugin stack in defence order — helmet, the multipart parser
+ * with the explicit A-06 receive limits — then the CA-01 routes and the
+ * structured JSON error mapper. `trustProxy` stays at its configured default
+ * (false) and must only ever be set explicitly — Pitfall 5.
+ *
+ * The `@fastify/rate-limit` and `@fastify/cors` plugins are registered by
+ * plan **01-03** (ING-05 layered limiters, CORS origins); the error mapper
+ * already maps their 429/400 shapes so that landing is a pure addition.
  */
 
 /**
@@ -51,26 +52,9 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   });
 
   await app.register(helmet);
-  // Same-origin in the shipped compose topology (A-10); explicit origins are
-  // CORS defence-in-depth for out-of-compose dev only (SEC-05).
-  await app.register(cors, {
-    origin: config.corsOrigins.length > 0 ? config.corsOrigins : false,
-  });
   await app.register(multipart, {
     limits: MULTIPART_LIMITS,
     throwFileSizeLimit: true,
-  });
-  await app.register(rateLimit, {
-    global: true,
-    max: config.rateLimitPerIpPerMin,
-    timeWindow: '1 minute',
-    keyGenerator: (req) => req.ip,
-    // A rate-limit breach is a structured client error, not a 500.
-    errorResponseBuilder: (req, context) => ({
-      statusCode: 429,
-      error: 'Too Many Requests',
-      message: `rate limit exceeded; retry in ${context.after}`,
-    }),
   });
 
   app.get('/api/health', async (_req, reply) => {
