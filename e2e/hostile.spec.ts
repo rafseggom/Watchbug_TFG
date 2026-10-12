@@ -452,3 +452,167 @@ test('ING-04 concurrency: a parallel burst of invalid-key requests each receives
   const after = (await (await request.get('/api/incidents')).json() as unknown[]).length;
   expect(after).toBe(before);
 });
+
+/**
+ * ING-05 (T-01-12) — the three composed limiters.
+ *
+ * Each row isolates ONE dimension, so a pass can never be satisfied by the
+ * wrong limiter:
+ *
+ *  - **per key**: one fresh `X-Project-Key`, one *fresh forwarded IP per
+ *    request* (the per-IP bucket can never be the one that trips), firing
+ *    exactly `RATE_LIMIT_PER_KEY_PER_MIN` requests — none 429 — then
+ *    `max+1` → 429 (inclusive boundary).
+ *  - **per IP**: one fresh key *and one fresh forwarded IP for the whole
+ *    window*, firing exactly `RATE_LIMIT_PER_IP_PER_MIN` requests, then
+ *    `max+1` → 429. The key's own counters stay far below their maxima.
+ *  - **per day**: one fresh key accumulating `RATE_LIMIT_PER_PROJECT_PER_DAY`
+ *    requests across per-key windows (a fresh IP per request keeps the per-IP
+ *    bucket out of it), then the next request → 429.
+ *
+ * All rows speak **directly to the API origin** so the `X-Forwarded-For`
+ * header is the only forwarded identity (nginx would append its own).
+ * That requires `WATCHBUG_TRUST_PROXY=true` in `.env` (Pitfall 5, asserted
+ * by config, not assumed).
+ *
+ * Boundaries are derived from the configured maxima in `.env` — the same
+ * file the api reads — never hardcoded here.
+ */
+
+/** Deterministic unique forwarded IPs (10.0.x.x): one per request, ≤ 65 535 per run. */
+let ipSequence = 0;
+function freshIp(): string {
+  ipSequence += 1;
+  const n = ipSequence;
+  return `10.${(n >>> 16) & 255}.${(n >>> 8) & 255}.${n & 255}`;
+}
+
+/** A random per-run IP in a range the deterministic sequence never uses. */
+function randomIp(): string {
+  return `10.${64 + Math.floor(Math.random() * 64)}.${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}`;
+}
+
+/** A well-formed, never-seeded `wkbt_` key: its own per-key and per-day buckets. */
+function freshProjectKey(): string {
+  const hex = `${randomUUID().replace(/-/g, '')}${randomUUID().replace(/-/g, '')}`;
+  return `wkbt_${hex.slice(0, 32)}`;
+}
+
+/** The maxima the api is configured with — parsed from the `.env` it reads. */
+function rateLimitConfig(): { perKeyPerMin: number; perIpPerMin: number; perProjectPerDay: number } {
+  const envFile = readFileSync(resolve(repoRoot, '.env'), 'utf8');
+  const read = (name: string): number => {
+    const match = new RegExp(`^${name}=(\\d+)$`, 'm').exec(envFile);
+    if (match === null) {
+      throw new Error(`.env must set ${name} to an integer — the boundary rows derive their maxima from it`);
+    }
+    return Number(match[1]);
+  };
+  const config = {
+    perKeyPerMin: read('WATCHBUG_RATE_LIMIT_PER_KEY_PER_MIN'),
+    perIpPerMin: read('WATCHBUG_RATE_LIMIT_PER_IP_PER_MIN'),
+    perProjectPerDay: read('WATCHBUG_RATE_LIMIT_PER_PROJECT_PER_DAY'),
+  };
+  // Each row isolates one dimension; the configured order is what makes the
+  // *other* two limiters unable to trip first. Fail loud if a future `.env`
+  // edit breaks the ordering instead of producing a silently wrong pass.
+  if (config.perKeyPerMin >= config.perProjectPerDay) {
+    throw new Error(
+      `WATCHBUG_RATE_LIMIT_PER_KEY_PER_MIN (${config.perKeyPerMin}) must be below ` +
+        `WATCHBUG_RATE_LIMIT_PER_PROJECT_PER_DAY (${config.perProjectPerDay}) — otherwise the daily limiter masks the per-key boundary`,
+    );
+  }
+  if (config.perIpPerMin >= config.perKeyPerMin) {
+    throw new Error(
+      `WATCHBUG_RATE_LIMIT_PER_IP_PER_MIN (${config.perIpPerMin}) must be below ` +
+        `WATCHBUG_RATE_LIMIT_PER_KEY_PER_MIN (${config.perKeyPerMin}) — otherwise the per-key limiter masks the per-IP boundary`,
+    );
+  }
+  return config;
+}
+
+interface ProbeResult {
+  status: number;
+  json: Record<string, unknown> | null;
+  retryAfter: string | undefined;
+}
+
+/** JSON probe straight to the API: reaches the preHandlers and never the ingest body. */
+async function postProbe(
+  request: import('@playwright/test').APIRequestContext,
+  opts: { key?: string; ip: string },
+): Promise<ProbeResult> {
+  const headers: Record<string, string> = { 'content-type': 'application/json', 'X-Forwarded-For': opts.ip };
+  if (opts.key !== undefined) headers['X-Project-Key'] = opts.key;
+  const res = await request.post(`${API_ORIGIN}/api/incidents`, { headers, data: { probe: 'ing-05' } });
+  const contentType = res.headers()['content-type'] ?? '';
+  const json = contentType.includes('application/json')
+    ? ((await res.json()) as Record<string, unknown>)
+    : null;
+  return { status: res.status(), json, retryAfter: res.headers()['retry-after'] };
+}
+
+/** A 429 must be structured, name the dimension that tripped, and carry a whole-second Retry-After ≥ 1. */
+function expectRateLimited(res: ProbeResult, dimension: string): void {
+  expect(res.status).toBe(429);
+  expect(res.json).not.toBeNull();
+  expect(res.json?.statusCode).toBe(429);
+  expect(res.json?.error).toBe('Too Many Requests');
+  expect(String(res.json?.message)).toContain(dimension);
+  expect(res.retryAfter, 'a 429 must carry Retry-After').toBeDefined();
+  expect(String(res.retryAfter)).toMatch(/^\d+$/); // integer of whole seconds — never fractional
+  expect(Number(res.retryAfter)).toBeGreaterThanOrEqual(1); // never 0
+}
+
+test('ING-05 per key: exactly RATE_LIMIT_PER_KEY_PER_MIN requests pass on a fresh key, max+1 is 429 + Retry-After', async ({ request }) => {
+  test.setTimeout(120_000);
+  const { perKeyPerMin } = rateLimitConfig();
+  const key = freshProjectKey();
+  for (let i = 1; i <= perKeyPerMin; i++) {
+    // Fresh forwarded IP per request: only the per-key bucket can accumulate.
+    const res = await postProbe(request, { key, ip: freshIp() });
+    expect(res.status, `request ${i} of ${perKeyPerMin} must not be rate limited (inclusive boundary)`).not.toBe(429);
+  }
+  const over = await postProbe(request, { key, ip: freshIp() });
+  expectRateLimited(over, 'RATE_LIMIT_PER_KEY_PER_MIN');
+});
+
+test('ING-05 per IP: exactly RATE_LIMIT_PER_IP_PER_MIN requests pass from one forwarded IP, max+1 is 429 + Retry-After', async ({ request }) => {
+  test.setTimeout(120_000);
+  const { perIpPerMin } = rateLimitConfig();
+  const key = freshProjectKey();
+  const ip = randomIp(); // one client identity for the whole window
+  for (let i = 1; i <= perIpPerMin; i++) {
+    const res = await postProbe(request, { key, ip });
+    expect(res.status, `request ${i} of ${perIpPerMin} must not be rate limited (inclusive boundary)`).not.toBe(429);
+  }
+  const over = await postProbe(request, { key, ip });
+  expectRateLimited(over, 'RATE_LIMIT_PER_IP_PER_MIN');
+});
+
+test('ING-05 per day: the daily project quota trips at RATE_LIMIT_PER_PROJECT_PER_DAY + 1 with Retry-After', async ({ request }) => {
+  test.setTimeout(600_000);
+  const { perKeyPerMin, perProjectPerDay } = rateLimitConfig();
+  const key = freshProjectKey();
+  let sent = 0;
+  while (sent < perProjectPerDay) {
+    const batch = Math.min(perKeyPerMin, perProjectPerDay - sent);
+    for (let start = 0; start < batch; start += 50) {
+      const chunk = Math.min(50, batch - start);
+      const results = await Promise.all(
+        Array.from({ length: chunk }, () => postProbe(request, { key, ip: freshIp() })),
+      );
+      for (const res of results) {
+        sent += 1;
+        expect(res.status, `request ${sent} of ${perProjectPerDay} must pass while the daily quota lasts`).not.toBe(429);
+      }
+    }
+    if (sent < perProjectPerDay) {
+      // The per-key minute window must expire between batches (or the
+      // per-key limiter would mask the daily one); the day window must not.
+      await new Promise((resolveSleep) => setTimeout(resolveSleep, 65_000));
+    }
+  }
+  const over = await postProbe(request, { key, ip: freshIp() });
+  expectRateLimited(over, 'RATE_LIMIT_PER_PROJECT_PER_DAY');
+});
