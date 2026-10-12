@@ -101,7 +101,7 @@ A requirement is **Complete** when:
 - [x] **ING-03**: A retried submission does not create a duplicate report
 - [ ] **ING-04**: The API rejects ingestion without a valid project key
 - [ ] **ING-05**: The API rate-limits per IP and per project key (SEC-05)
-- [ ] **ING-06**: The API rejects oversized bodies and images
+- [x] **ING-06**: The API rejects oversized bodies and images
 - [ ] **ING-07**: The API sanitises all user-supplied text before storage and before panel rendering (SEC-05)
 - [ ] **ING-08**: The API accepts ingestion only from allowlisted origins
 
@@ -252,7 +252,7 @@ Which phases cover which requirements. **Updated during roadmap creation** — e
 | ING-03 | Phase 1 | Complete |
 | ING-04 | Phase 1 | Pending |
 | ING-05 | Phase 1 | Pending |
-| ING-06 | Phase 1 | Pending |
+| ING-06 | Phase 1 | Complete |
 | ING-07 | Phase 1 | Pending |
 | ING-08 | Phase 1 | Pending |
 | TRI-01 | Phase 5 | Pending |

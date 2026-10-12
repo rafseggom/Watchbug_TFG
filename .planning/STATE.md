@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 01
 current_phase_name: Contracts & Ingest Slice
 status: executing
-stopped_at: Completed 01-01-PLAN.md
-last_updated: "2026-10-12T17:24:37.685Z"
+stopped_at: Completed 01-02-PLAN.md
+last_updated: "2026-10-12T19:01:05.596Z"
 last_activity: 2026-10-12
 last_activity_desc: Phase 01 execution started
-state_head: 3757285a1c6717a29376023b4a7be88ea496204f
+state_head: e08e11c3c0dcf33000ba779103f5c9ef5aa1e70a
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 4
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-05)
 ## Current Position
 
 Phase: 01 (Contracts & Ingest Slice) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-10-12 — Phase 01 execution started
 
@@ -57,6 +57,7 @@ Progress: [░░░░░░░░░░] 0%
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 01 P01 | 01:45:00 | 3 tasks | 57 files |
+| Phase 01 P02 | 40min | 3 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -75,6 +76,9 @@ Recent decisions affecting current work:
 - [Phase 01]: rate-limit and cors plugins deferred to plan 01-03 per the plan's own artifact table (ING-05 is 01-03's requirement); installing them in 01-01 caused 429s that broke the e2e suite
 - [Phase 01]: Hardening backend for 01-01 is the zero-dep structural strip/rebuild (P1-D-10 fallback); sharp stays 01-02's checkpoint
 - [Phase 01]: Storage.put(bytes, ext, projectId) - the on-disk layout mandates the projectId segment (deviation vs research sketch put(bytes, ext))
+- [Phase 01]: P1-D-10 backend decided at plan 01-02 Task 1: sharp@0.35.5 (owner sign-off) - root re-encode is the hardening control; the zero-dep structural strip moved to structure.ts as a pre-codec guard that no longer claims to be one
+- [Phase 01]: multipart fieldSize raised from the researchs 4 KB to MAX_META_BYTES (64 KB): busboy truncates fields silently, so a contract-sized meta (note up to 5000 chars) could never parse at 4 KB
+- [Phase 01]: busboy runs with preservePath: true - its default basename() rewrote ../../../etc/passwd.png to passwd.png before the C-4 rule could reject it
 
 ### Pending Todos
 
@@ -111,6 +115,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-12T17:24:37.637Z
-Stopped at: Completed 01-01-PLAN.md
+Last session: 2026-10-12T19:01:05.552Z
+Stopped at: Completed 01-02-PLAN.md
 Resume file: None
