@@ -616,3 +616,90 @@ test('ING-05 per day: the daily project quota trips at RATE_LIMIT_PER_PROJECT_PE
   const over = await postProbe(request, { key, ip: freshIp() });
   expectRateLimited(over, 'RATE_LIMIT_PER_PROJECT_PER_DAY');
 });
+
+/**
+ * ING-08 (T-01-13, A-11) — the `WATCHBUG_CORS_ORIGINS` allowlist with the
+ * Origin-present rule (Pitfall 9):
+ *
+ *  - a **present** `Origin` must be on the allowlist, else 403 structured and
+ *    nothing is stored;
+ *  - an allowlisted origin is accepted AND gets the CORS allow headers for
+ *    exactly that origin;
+ *  - **no** `Origin` header (curl / server-side — P1-D-07's onboarding
+ *    flow) is accepted.
+ *
+ * The allowlisted origin is read from the same `.env` the api reads, so the
+ * row can never drift from the deployed configuration.
+ */
+
+function allowedOrigin(): string {
+  const envFile = readFileSync(resolve(repoRoot, '.env'), 'utf8');
+  const match = /^WATCHBUG_CORS_ORIGINS=(.*)$/m.exec(envFile);
+  const first = match?.[1]?.split(',').map((o) => o.trim()).filter(Boolean)[0];
+  if (first === undefined) {
+    throw new Error('.env must set WATCHBUG_CORS_ORIGINS to at least one origin — the ING-08 rows need one');
+  }
+  return first;
+}
+
+function ingestWithOrigin(
+  request: import('@playwright/test').APIRequestContext,
+  origin: string | undefined,
+): Promise<import('@playwright/test').APIResponse> {
+  const headers: Record<string, string> = {
+    'X-Project-Key': KEY,
+    'Idempotency-Key': `e2e-origin-${randomUUID()}`,
+  };
+  if (origin !== undefined) headers['Origin'] = origin;
+  return request.post('/api/incidents', {
+    multipart: {
+      meta: META,
+      image: { name: 'shot.png', mimeType: 'image/png', buffer: png },
+    },
+    headers,
+  });
+}
+
+test('ING-08 trio: non-allowlisted Origin → 403 + nothing stored; allowlisted Origin → 201 + CORS headers; no Origin → 201', async ({ request }) => {
+  const allowed = allowedOrigin();
+
+  // 1. Present but NOT allowlisted → structured 403, list unchanged.
+  const before = (await (await request.get('/api/incidents')).json() as unknown[]).length;
+  const rejected = await ingestWithOrigin(request, 'https://evil.example');
+  expect(rejected.status()).toBe(403);
+  const body = (await rejected.json()) as Record<string, unknown>;
+  expect(body.statusCode).toBe(403);
+  expect(body.error).toBe('Forbidden');
+  const after = (await (await request.get('/api/incidents')).json() as unknown[]).length;
+  expect(after).toBe(before); // nothing was stored
+
+  // 2. Allowlisted → accepted, with the CORS allow headers for that origin.
+  const accepted = await ingestWithOrigin(request, allowed);
+  expect(accepted.status()).toBe(201);
+  expect(accepted.headers()['access-control-allow-origin']).toBe(allowed);
+
+  // 3. No Origin header (curl / server-side onboarding, P1-D-07) → accepted.
+  const curl = await ingestWithOrigin(request, undefined);
+  expect(curl.status()).toBe(201);
+});
+
+test(`ING-08 concurrency: a mixed parallel burst yields per-request decisions matching each request's own Origin`, async ({ request }) => {
+  const allowed = allowedOrigin();
+  const origins: Array<string | undefined> = [
+    allowed,
+    'https://evil.example',
+    allowed,
+    'https://not-in-the-list.example',
+    allowed,
+    undefined, // header-less client mixed into the burst
+  ];
+  const results = await Promise.all(origins.map((origin) => ingestWithOrigin(request, origin)));
+  for (const [i, res] of results.entries()) {
+    const origin = origins[i];
+    if (origin === undefined || origin === allowed) {
+      expect(res.status(), `request ${i} (Origin: ${String(origin)}) must be accepted`).toBe(201);
+    } else {
+      expect(res.status(), `request ${i} (Origin: ${String(origin)}) must be rejected 403`).toBe(403);
+    }
+  }
+});
