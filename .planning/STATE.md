@@ -1,18 +1,18 @@
 ---
 gsd_state_version: "1.0"
-current_phase: 1
+current_phase: 01
 current_phase_name: Contracts & Ingest Slice
 status: executing
-stopped_at: Phase 1 context gathered
-last_updated: "2026-10-11T21:48:05.868Z"
-last_activity: 2026-10-07
-last_activity_desc: ROADMAP.md created (7 vertical MVP slices, 70/70 v1 requirements mapped), STATE.md initialized
-state_head: 93c63f786ff2f853a5c3e5440d7758acf31f3fa0
+stopped_at: Completed 01-01-PLAN.md
+last_updated: "2026-10-12T17:24:37.685Z"
+last_activity: 2026-10-12
+last_activity_desc: Phase 01 execution started
+state_head: 3757285a1c6717a29376023b4a7be88ea496204f
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 4
-  completed_plans: 0
+  completed_plans: 1
   percent: 0
 ---
 
@@ -23,14 +23,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-05)
 
 **Core value:** When a bug report lands, the developer can reproduce the bug from it — and neither the report nor its screenshot ever leaves the developer's own infrastructure.
-**Current focus:** Phase 1 — Contracts & Ingest Slice
+**Current focus:** Phase 01 — Contracts & Ingest Slice
 
 ## Current Position
 
-Phase: 1 (Contracts & Ingest Slice) — READY TO EXECUTE
-Plan: 0 of TBD in current phase
+Phase: 01 (Contracts & Ingest Slice) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-10-07 - Completed quick task 261007-pm7: Add reuse-first coding rule (R-18) and 4 Gemini review entries (CSP, IndexedDB fallback, orphan blobs, TS 6-vs-7 gate)
+Last activity: 2026-10-12 — Phase 01 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -52,6 +52,11 @@ Progress: [░░░░░░░░░░] 0%
 - Trend: n/a
 
 *Updated after each plan completion*
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 01 P01 | 01:45:00 | 3 tasks | 57 files |
 
 ## Accumulated Context
 
@@ -65,6 +70,11 @@ Recent decisions affecting current work:
 - [Phase 1] Scope note: the hardened blob route ships here (C-3/C-4) but DEP-03's "served only through the authenticated API" completes in Phase 5 when auth exists. TTL columns land in the initial migration (M-1/A-02) to avoid schema retrofits.
 - [Phase 4] INT-03's `custom` = init-scoped context riding every report (v1); distinct from ANN-V2-03 per-report custom fields (v2).
 - [Phase 1 · OVERRIDE 2026-10-11 · decision-coverage gate] The `check.decision-coverage-plan` gate returned `passed: false, reason: could-not-parse` because CONTEXT.md's local decision IDs use the `P1-D-NN` grammar, which the parser does not support (it accepts `D-NN`, `D4-NN`, `D-NN — title`). Developer chose "Proceed — parser false positive": the gate's intent is already satisfied — the plan-checker's dimension-7 audit verified all 12 `P1-D-01…P1-D-12` decisions map to plan tasks with no deferred idea implemented and no scope reduction. No plan or CONTEXT.md change was made. **verify-phase must re-surface this:** if its decision-coverage counterpart reports the same `could-not-parse` on `P1-D-NN`, treat it as this same recorded false positive, not as a dropped decision.
+- [Phase 01]: A-13: five type-only @types/* devDependencies owner-approved to make npm run lint pass (question gate; recorded in documentation/resolution-record.md A-13)
+- [Phase 01]: Q-08 tooling gate PASS under typescript 7.0.2 - the documented 6.x fallback was not taken
+- [Phase 01]: rate-limit and cors plugins deferred to plan 01-03 per the plan's own artifact table (ING-05 is 01-03's requirement); installing them in 01-01 caused 429s that broke the e2e suite
+- [Phase 01]: Hardening backend for 01-01 is the zero-dep structural strip/rebuild (P1-D-10 fallback); sharp stays 01-02's checkpoint
+- [Phase 01]: Storage.put(bytes, ext, projectId) - the on-disk layout mandates the projectId segment (deviation vs research sketch put(bytes, ext))
 
 ### Pending Todos
 
@@ -101,6 +111,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-11T10:11:25.370Z
-Stopped at: Phase 1 context gathered
-Resume file: .planning/phases/01-contracts-ingest-slice/01-CONTEXT.md
+Last session: 2026-10-12T17:24:37.637Z
+Stopped at: Completed 01-01-PLAN.md
+Resume file: None
