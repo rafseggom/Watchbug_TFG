@@ -1,10 +1,12 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import helmet from '@fastify/helmet';
 import multipart from '@fastify/multipart';
+import rateLimit from '@fastify/rate-limit';
 import type { AppConfig } from './config';
 import type { AppDb } from './db/client';
 import { seedProject } from './boot/seed';
 import { MULTIPART_RECEIVE_OPTIONS } from './ingest/caps';
+import { createIngestRateLimit, resolveIngestRateLimits } from './plugins/rate-limit';
 import type { Storage } from './ports';
 import { registerIncidentsRoutes } from './routes/incidents';
 
@@ -12,13 +14,14 @@ import { registerIncidentsRoutes } from './routes/incidents';
  * Composition root (R-02: one per process).
  *
  * Registers the plugin stack in defence order — helmet, the multipart parser
- * with the explicit A-06 receive limits — then the CA-01 routes and the
- * structured JSON error mapper. `trustProxy` stays at its configured default
- * (false) and must only ever be set explicitly — Pitfall 5.
- *
- * The `@fastify/rate-limit` and `@fastify/cors` plugins are registered by
- * plan **01-03** (ING-05 layered limiters, CORS origins); the error mapper
- * already maps their 429/400 shapes so that landing is a pure addition.
+ * with the explicit A-06 receive limits (the caps layer), then
+ * `@fastify/rate-limit` with `global: false` (ING-05: no route is limited
+ * implicitly — only the three manual ingest limiters built below), then the
+ * CA-01 routes whose preHandler chain is `ingestRateLimit → origin allowlist
+ * → project-key gate → handler`, and the structured JSON error mapper.
+ * `trustProxy` stays at its configured default (false) and must only ever be
+ * set explicitly — Pitfall 5; it is what makes `req.ip` (the per-IP limiter's
+ * key) honour `X-Forwarded-For` behind the compose nginx edge.
  *
  * The multipart limits themselves live in `ingest/caps.ts` (plan 01-02): that
  * module owns every layered size cap, so the parser ceiling and the
@@ -44,6 +47,12 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
 
   await app.register(helmet);
   await app.register(multipart, MULTIPART_RECEIVE_OPTIONS);
+  // ING-05 (T-01-12): manual limiters only — `global: false` means no route
+  // is rate-limited implicitly; the ingest route wires its own composed
+  // `ingestRateLimit` preHandler below (registered before the routes, so the
+  // `createRateLimit` decorator exists at build time — caps → rate limits →
+  // CORS → route handlers).
+  await app.register(rateLimit, { global: false });
 
   app.get('/api/health', async (_req, reply) => {
     try {
@@ -57,7 +66,18 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   // Idempotent boot-time project seed (P1-D-01) — safe to run on every boot.
   await seedProject(db, config.projectKey);
 
-  await registerIncidentsRoutes(app, { config, db, storage });
+  // Three composed limiters (per key / per IP / per project per day), maxima
+  // from config — empty env values fall back to the contracts constants.
+  const ingestRateLimit = createIngestRateLimit(
+    app,
+    resolveIngestRateLimits({
+      perKeyPerMin: config.rateLimitPerKeyPerMin,
+      perIpPerMin: config.rateLimitPerIpPerMin,
+      perProjectPerDay: config.rateLimitPerProjectPerDay,
+    }),
+  );
+
+  await registerIncidentsRoutes(app, { config, db, storage, ingestRateLimit });
 
   /**
    * Structured error mapper: every client-visible failure is

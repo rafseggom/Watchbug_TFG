@@ -57,6 +57,12 @@ export interface RouteDeps {
   config: AppConfig;
   db: AppDb;
   storage: Storage;
+  /**
+   * The composed ING-05 preHandler (`plugins/rate-limit.ts`). It runs as the
+   * route's **first** preHandler — before the project-key gate, so a
+   * rejected key still consumes quota (limits → key → handler).
+   */
+  ingestRateLimit: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
 }
 
 interface ProjectRow {
@@ -123,7 +129,10 @@ export async function registerIncidentsRoutes(app: FastifyInstance, deps: RouteD
     (req as GatedRequest)[PROJECT_ID] = project.id;
   };
 
-  app.post('/api/incidents', { onRequest: [bodyCaps], preHandler: [projectKeyGate] }, async (req, reply) => {
+  app.post(
+    '/api/incidents',
+    { onRequest: [bodyCaps], preHandler: [deps.ingestRateLimit, projectKeyGate] },
+    async (req, reply) => {
     const idempotencyKey = req.headers['idempotency-key'];
     if (typeof idempotencyKey !== 'string' || idempotencyKey.trim() === '') {
       return badRequest(

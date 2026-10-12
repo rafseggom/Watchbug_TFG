@@ -1,0 +1,124 @@
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import {
+  RATE_LIMIT_PER_KEY_PER_MIN,
+  RATE_LIMIT_PER_IP_PER_MIN,
+  RATE_LIMIT_PER_PROJECT_PER_DAY,
+} from '@watchbug/contracts/constants';
+
+/**
+ * ING-05 / SEC-05 (T-01-12) — the three composed ingest limiters.
+ *
+ * `@fastify/rate-limit` is registered with `global: false` in `app.ts`
+ * (nothing is limited implicitly); this module builds the three **manual**
+ * limiters via `fastify.createRateLimit()` and composes them into one
+ * `preHandler` that runs as the route's first preHandler — before the
+ * project-key gate, so a rejected key still consumes quota (RESEARCH
+ * Pattern 6, ordered chain `rate limits → CORS → key lookup → … → write`).
+ *
+ * Dimensions (each env-configurable, defaults from
+ * `packages/contracts/src/constants.ts` — R-18 single source, no literals):
+ *
+ *   - `RATE_LIMIT_PER_KEY_PER_MIN`  — per `x-project-key` value, per minute
+ *   - `RATE_LIMIT_PER_IP_PER_MIN`   — per resolved client IP, per minute
+ *   - `RATE_LIMIT_PER_PROJECT_PER_DAY` — per `x-project-key` value, per day
+ *
+ * Store: the plugin's in-memory store — the only option under INV-03 (a
+ * Redis store would be a fourth container; STACK.md's rejected list). The
+ * documented caveat: counters are process-local, so the daily quota is
+ * **best-effort across restarts** (single-node self-hosting — Pitfall 5).
+ *
+ * IP identity comes from `req.ip`, which honours `X-Forwarded-For` only
+ * because `trustProxy` is configured explicitly from `WATCHBUG_TRUST_PROXY`
+ * (`false` by default; the compose/nginx deployment sets `true` because
+ * nginx is the only edge and sets the header — trusting it blindly lets
+ * clients spoof each other's IPs, and behind a NAT every user behind the
+ * shared egress IP shares one bucket; both caveats are documented in
+ * `.env.example`).
+ */
+
+export interface IngestRateLimits {
+  perKeyPerMin: number;
+  perIpPerMin: number;
+  perProjectPerDay: number;
+}
+
+/**
+ * Effective maxima: the configured value, falling back to the binding
+ * contract constant. `config.ts` applies the same constants as its
+ * empty-value defaults, so an unset `WATCHBUG_RATE_LIMIT_*` lands on
+ * exactly `RATE_LIMIT_PER_KEY_PER_MIN` / `RATE_LIMIT_PER_IP_PER_MIN` /
+ * `RATE_LIMIT_PER_PROJECT_PER_DAY` from `@watchbug/contracts/constants`.
+ */
+export function resolveIngestRateLimits(configured?: Partial<IngestRateLimits>): IngestRateLimits {
+  return {
+    perKeyPerMin: configured?.perKeyPerMin ?? RATE_LIMIT_PER_KEY_PER_MIN,
+    perIpPerMin: configured?.perIpPerMin ?? RATE_LIMIT_PER_IP_PER_MIN,
+    perProjectPerDay: configured?.perProjectPerDay ?? RATE_LIMIT_PER_PROJECT_PER_DAY,
+  };
+}
+
+/**
+ * `Retry-After`: an integer count of **whole seconds**, the ceiling of the
+ * remaining window with a minimum of 1 — never 0 (that would tell the
+ * client to retry instantly) and never fractional.
+ */
+export function retryAfterSeconds(ttlInSeconds: number): number {
+  return Math.max(1, Math.ceil(ttlInSeconds));
+}
+
+/**
+ * Builds the composed `preHandler`. Every request increments **all three**
+ * counters before the handler can run (the concurrency guarantee: at most
+ * `max` requests pass a window even under a parallel burst); if one or more
+ * dimensions are exceeded, the first in the documented order answers with a
+ * structured 429 + `retry-after`.
+ */
+export function createIngestRateLimit(
+  app: FastifyInstance,
+  limits: IngestRateLimits,
+): (req: FastifyRequest, reply: FastifyReply) => Promise<void> {
+  const projectKeyOf = (req: FastifyRequest): string => String(req.headers['x-project-key'] ?? '');
+
+  const byKey = app.createRateLimit({
+    max: limits.perKeyPerMin,
+    timeWindow: '1 minute',
+    keyGenerator: projectKeyOf,
+  });
+  const byIp = app.createRateLimit({
+    max: limits.perIpPerMin,
+    timeWindow: '1 minute',
+    keyGenerator: (req) => req.ip,
+  });
+  const byDay = app.createRateLimit({
+    max: limits.perProjectPerDay,
+    timeWindow: '1 day',
+    keyGenerator: projectKeyOf,
+  });
+
+  return async function ingestRateLimit(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+    // Increment all three first, then decide — a request rejected by one
+    // dimension still consumes quota in the other two.
+    const keyStatus = await byKey(req);
+    const ipStatus = await byIp(req);
+    const dayStatus = await byDay(req);
+
+    const exceeded =
+      !keyStatus.isAllowed && keyStatus.isExceeded
+        ? { status: keyStatus, name: 'RATE_LIMIT_PER_KEY_PER_MIN', max: limits.perKeyPerMin, scope: 'per project key per minute' }
+        : !ipStatus.isAllowed && ipStatus.isExceeded
+          ? { status: ipStatus, name: 'RATE_LIMIT_PER_IP_PER_MIN', max: limits.perIpPerMin, scope: 'per IP per minute' }
+          : !dayStatus.isAllowed && dayStatus.isExceeded
+            ? { status: dayStatus, name: 'RATE_LIMIT_PER_PROJECT_PER_DAY', max: limits.perProjectPerDay, scope: 'per project per day' }
+            : null;
+    if (exceeded === null) return;
+
+    reply.header('retry-after', String(retryAfterSeconds(exceeded.status.ttlInSeconds)));
+    reply
+      .code(429)
+      .send({
+        statusCode: 429,
+        error: 'Too Many Requests',
+        message: `rate limit exceeded: ${exceeded.name} (${exceeded.max} ${exceeded.scope})`,
+      });
+  };
+}
