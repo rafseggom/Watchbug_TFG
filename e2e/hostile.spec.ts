@@ -6,11 +6,14 @@ import { connect } from 'node:net';
 import { resolve } from 'node:path';
 
 /**
- * ING-06 / C-3 / C-4 — the hostile-submission group.
+ * ING-06 / C-3 / C-4 / ING-07 — the hostile-submission group.
  *
  * Every row here asserts that a hostile payload is rejected with its
  * *structured* status code (roadmap success criterion 4) and never reaches
- * storage. Rows are deliberately layered:
+ * storage — or, for the ING-07 rows (SEC-05 pass 1), that hostile *text* is
+ * stored sanitised: markup removed, plain text preserved literally, control
+ * characters stripped, caps counting Unicode code points (Zod `maxLength`
+ * semantics). Rows are deliberately layered:
  *
  *  - **oversize**: nginx `client_max_body_size 5m` at the panel origin, the
  *    `Content-Length` pre-read + streaming counter at `MAX_BODY_BYTES`, the
@@ -702,4 +705,219 @@ test(`ING-08 concurrency: a mixed parallel burst yields per-request decisions ma
       expect(res.status(), `request ${i} (Origin: ${String(origin)}) must be rejected 403`).toBe(403);
     }
   }
+});
+
+/**
+ * ING-07 (SEC-05 pass 1, C-3) — sanitise on write.
+ *
+ * Hostile *text* (as opposed to hostile image bytes) is accepted and stored,
+ * but never with its markup intact: `sanitize-html` with an empty allowlist
+ * runs over every user string before the contract re-validation, and the C-3
+ * double control is completed on the render side (pass 2) in the rows that
+ * assert the panel's DOM.
+ *
+ * The properties asserted here are the plan's own edges:
+ *
+ *  - **markup removed, payload text kept in document order** — the img-onerror
+ *    payload, `<script>`, `javascript:`, UTF-7 and BOM strings all store as
+ *    plain text with no raw `<` around them;
+ *  - **text-preserving** — `2 < 3 & 4 > 1` round-trips as that exact literal,
+ *    `<b>a</b><i>b</i>` stores as `ab`;
+ *  - **empty edge** — a zero-length `title` is a structured 400, an absent
+ *    optional `note`/`user` stores as `null`, never `""`;
+ *  - **encoding edge** — caps follow the contract's `maxLength` semantics
+ *    (Unicode code points; identical to code units for the ASCII boundary):
+ *    inclusive at the cap, one over is 400, and a value that sanitises
+ *    *wider* than its input (`&` → `&amp;`) still never exceeds the cap it
+ *    was validated against;
+ *  - **control characters** — stripped from the stored string in the same pass.
+ *
+ * Row 1 rows send the meta part the way the panel/SDK do (Playwright
+ * `multipart`, a plain string field); the JSON-content-type shape of the
+ * onboarding curl is covered in `e2e/ingest.spec.ts`.
+ */
+
+const BOM = String.fromCharCode(0xfeff);
+const NUL = String.fromCharCode(0);
+const VT = String.fromCharCode(0x0b);
+const US = String.fromCharCode(0x1f);
+
+/** POST an arbitrary meta object with the valid fixture image. */
+async function postMeta(
+  request: import('@playwright/test').APIRequestContext,
+  meta: Record<string, unknown>,
+): Promise<{ status: number; body: Record<string, unknown> }> {
+  const res = await request.post('/api/incidents', {
+    multipart: {
+      meta: JSON.stringify(meta),
+      image: { name: 'shot.png', mimeType: 'image/png', buffer: png },
+    },
+    headers: { 'X-Project-Key': KEY, 'Idempotency-Key': `e2e-ing07-${randomUUID()}` },
+  });
+  return { status: res.status(), body: (await res.json()) as Record<string, unknown> };
+}
+
+/** The stored row exactly as `GET /api/incidents` serves it (pass 1 artifact). */
+async function storedRow(
+  request: import('@playwright/test').APIRequestContext,
+  id: string,
+): Promise<Record<string, unknown>> {
+  const list = (await (await request.get('/api/incidents')).json()) as Array<Record<string, unknown>>;
+  const row = list.find((r) => r.id === id);
+  expect(row, `incident ${id} must appear in the list`).toBeDefined();
+  return row as Record<string, unknown>;
+}
+
+const BASE_META = {
+  type: 'bug' as const,
+  title: 'ING-07 probe',
+  url: '/ing-07',
+};
+
+test('ING-07 pass 1: hostile text payloads are stored with all markup removed (img-onerror, script, BOM, UTF-7, entity-encoded)', async ({ request }) => {
+  // 1. The canonical img-onerror payload with surrounding text: the tag
+  //    disappears entirely, the surrounding text stays (document order, the
+  //    two spaces are the tag's removal seam).
+  const imgTitle = await postMeta(request, {
+    ...BASE_META,
+    title: 'Hello <img src=x onerror=alert(1)> world',
+    note: '<script>document.cookie</script>Leaky notes',
+    user: { id: 'u-1', name: '<img src=x onerror=alert(1)>Admin', email: 'bad<script>alert(1)</script>@x.com' },
+  });
+  expect(imgTitle.status).toBe(201);
+  const imgRow = await storedRow(request, imgTitle.body.id as string);
+  expect(imgRow.title).toBe('Hello  world');
+  expect(imgRow.note).toBe('Leaky notes');
+  expect((imgRow.user as { name: string }).name).toBe('Admin');
+  expect((imgRow.user as { email: string }).email).toBe('bad@x.com');
+  // No raw markup survives anywhere in the stored strings.
+  for (const value of [imgRow.title, imgRow.note, JSON.stringify(imgRow.user)]) {
+    expect(value).not.toContain('<');
+    expect(value).not.toContain('>');
+    expect(value).not.toContain('onerror=');
+  }
+
+  // 2. The raw `"><img …>` payload: the tag is gone, the quote pair remains.
+  const quote = await postMeta(request, { ...BASE_META, title: '"><img src=x onerror=alert(1)>' });
+  expect(quote.status).toBe(201);
+  expect((await storedRow(request, quote.body.id as string)).title).toBe('">');
+
+  // 3. `javascript:` is inert as plain text — stored verbatim, and pass 2
+  //    never linkifies it (the render-side rows assert the DOM).
+  const jsUri = await postMeta(request, { ...BASE_META, title: 'javascript:alert(1)' });
+  expect(jsUri.status).toBe(201);
+  expect((await storedRow(request, jsUri.body.id as string)).title).toBe('javascript:alert(1)');
+
+  // 4. UTF-7 style payload: it never contains a raw `<`, so it is stored as
+  //    the literal text it is (decoding it is the consumer's problem, and the
+  //    panel renders text only).
+  const utf7 = await postMeta(request, { ...BASE_META, title: '+ADw-script+AD4-alert(1)+ADw-/script+AD4-' });
+  expect(utf7.status).toBe(201);
+  const utf7Row = await storedRow(request, utf7.body.id as string);
+  expect(utf7Row.title).toBe('+ADw-script+AD4-alert(1)+ADw-/script+AD4-');
+  expect(utf7Row.title).not.toContain('<');
+
+  // 5. UTF-16 BOM in front of the payload: the BOM is a control character and
+  //    is stripped with the tag, leaving the literal text behind it.
+  const bom = await postMeta(request, { ...BASE_META, title: `${BOM}Login <img src=x onerror=alert(1)> failed` });
+  expect(bom.status).toBe(201);
+  expect((await storedRow(request, bom.body.id as string)).title).toBe('Login  failed');
+
+  // 6. Entity-encoded markup must stay entity-encoded: decoding it on write
+  //    would store raw `<img …>` text — the entity form is the markup-free
+  //    form, both for a bare payload and inside a `<title>` RCDATA container
+  //    (which sanitize-html preserves as escaped text).
+  const entity = await postMeta(request, { ...BASE_META, title: '&lt;img src=x onerror=alert(1)&gt;' });
+  expect(entity.status).toBe(201);
+  expect((await storedRow(request, entity.body.id as string)).title).toBe('&lt;img src=x onerror=alert(1)&gt;');
+
+  const titleTag = await postMeta(request, { ...BASE_META, title: '<title><img src=x onerror=alert(1)></title>' });
+  expect(titleTag.status).toBe(201);
+  expect((await storedRow(request, titleTag.body.id as string)).title).toBe('&lt;img src=x onerror=alert(1)&gt;');
+});
+
+test('ING-07 pass 1: plain text with angle brackets round-trips exactly; styled fragments keep document order', async ({ request }) => {
+  // Text-preserving stripping: `2 < 3 & 4 > 1` is plain text (the `<` opens
+  // no tag), so it must come back from GET /api/incidents byte-for-byte —
+  // NOT entity-escaped, or the panel would render "2 &lt; 3 &amp; 4 &gt; 1".
+  const plain = await postMeta(request, { ...BASE_META, title: '2 < 3 & 4 > 1' });
+  expect(plain.status).toBe(201);
+  expect((await storedRow(request, plain.body.id as string)).title).toBe('2 < 3 & 4 > 1');
+
+  // Adjacent styled fragments: tags dropped, surviving text concatenated in
+  // document order — `ab`, never `ba`, never `a b`.
+  const fragments = await postMeta(request, { ...BASE_META, title: '<b>a</b><i>b</i>' });
+  expect(fragments.status).toBe(201);
+  expect((await storedRow(request, fragments.body.id as string)).title).toBe('ab');
+});
+
+test('ING-07 empty edge: a zero-length title is rejected 400; absent optional fields are stored as null', async ({ request }) => {
+  // Markup-only title case: `title: ""` fails the contract before sanitising
+  // (min(1)) — a structured 400, never an empty stored title.
+  const empty = await postMeta(request, { ...BASE_META, title: '' });
+  expect(empty.status).toBe(400);
+  expect(empty.body.statusCode).toBe(400);
+  expect(empty.body.error).toBe('Bad Request');
+
+  // Absent optional `note` and `user` stay absent: the row stores NULL, and
+  // the list projection reports `null` — never an empty-string coercion.
+  const minimal = await postMeta(request, { type: 'bug', title: 'absent optional fields' });
+  expect(minimal.status).toBe(201);
+  const row = await storedRow(request, minimal.body.id as string);
+  expect(row.note).toBeNull();
+  expect(row.url).toBeNull();
+  expect(row.user).toBeNull();
+});
+
+test('ING-07 encoding edge: caps count Unicode code points (inclusive at the cap, one over is 400) and sanitised output never exceeds its cap', async ({ request }) => {
+  // Inclusive boundary: exactly MAX_TITLE_CHARS (200 UTF-16 code units).
+  const atCap = 'a'.repeat(200);
+  const ok = await postMeta(request, { ...BASE_META, title: atCap });
+  expect(ok.status).toBe(201);
+  expect((await storedRow(request, ok.body.id as string)).title).toBe(atCap);
+
+  // One unit over the cap → structured 400.
+  const overCap = await postMeta(request, { ...BASE_META, title: 'a'.repeat(201) });
+  expect(overCap.status).toBe(400);
+  expect(overCap.body.statusCode).toBe(400);
+
+  // Astral characters: Zod 4's `maxLength` counts **Unicode code points**
+  // (the same semantics JSON Schema gives `maxLength`), not UTF-16 code
+  // units — so 200 emoji (400 UTF-16 units) is exactly at the cap, and the
+  // 201st code point trips it. The ASCII rows above are identical under
+  // either counting; this pair pins the astral boundary to the published
+  // contract's own semantics.
+  const emojiAtCap = '😀'.repeat(200); // 200 code points / 400 UTF-16 units
+  const emojiOk = await postMeta(request, { ...BASE_META, title: emojiAtCap });
+  expect(emojiOk.status).toBe(201);
+  expect((await storedRow(request, emojiOk.body.id as string)).title).toBe(emojiAtCap);
+  const emojiOver = await postMeta(request, { ...BASE_META, title: `${emojiAtCap}😀` }); // 201 code points
+  expect(emojiOver.status).toBe(400);
+  expect(emojiOver.body.statusCode).toBe(400);
+
+  // Sanitising can widen a value (`&` → `&amp;`): 200 `&` is a legal title
+  // and must still *store* as 200 characters — never be rejected for
+  // exceeding the cap on its own escape, and never be stored wider than the
+  // cap it validated against.
+  const amps = '&'.repeat(200);
+  const ampOk = await postMeta(request, { ...BASE_META, title: amps });
+  expect(ampOk.status).toBe(201);
+  const ampRow = await storedRow(request, ampOk.body.id as string);
+  expect(ampRow.title).toBe(amps);
+  expect((ampRow.title as string).length).toBeLessThanOrEqual(200);
+});
+
+test('ING-07: control characters are stripped from every user string on write', async ({ request }) => {
+  // NUL is rejected by PostgreSQL itself (text may not contain U+0000), so
+  // without the strip the insert cannot even happen; VT/US pass through as
+  // ordinary characters. All three must be gone from the stored value.
+  const title = `evil${NUL}${VT}${US}payload`;
+  const res = await postMeta(request, { ...BASE_META, title, note: `line one${VT}line two` });
+  expect(res.status).toBe(201);
+  const row = await storedRow(request, res.body.id as string);
+  expect(row.title).toBe('evilpayload');
+  expect(row.note).toBe('line oneline two');
+  expect(row.title).not.toContain(NUL);
+  expect(row.title).not.toContain(VT);
+  expect(row.title).not.toContain(US);
 });
