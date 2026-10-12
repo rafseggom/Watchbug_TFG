@@ -76,11 +76,9 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
    * `{ statusCode, error, message }` JSON — no stack traces, no internal
    * messages from foreign errors leaking to the client.
    */
-  app.setErrorHandler((err, _req, reply) => {
-    const statusCode =
-      typeof err.statusCode === 'number' && err.statusCode >= 400 && err.statusCode < 500
-        ? err.statusCode
-        : 500;
+  app.setErrorHandler((err: unknown, _req, reply) => {
+    const candidate = typeof err === 'object' && err !== null && 'statusCode' in err ? err.statusCode : undefined;
+    const statusCode = typeof candidate === 'number' && candidate >= 400 && candidate < 500 ? candidate : 500;
 
     if (statusCode === 500) {
       // Log the real cause server-side; the client gets a generic body.
@@ -91,7 +89,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     const error = statusCode === 400 ? 'Bad Request' : statusCode === 401 ? 'Unauthorized'
       : statusCode === 404 ? 'Not Found' : statusCode === 413 ? 'Payload Too Large'
       : statusCode === 429 ? 'Too Many Requests' : 'Error';
-    return reply.code(statusCode).send({ statusCode, error, message: err.message });
+    const message = err instanceof Error ? err.message : 'request failed';
+    return reply.code(statusCode).send({ statusCode, error, message });
   });
 
   app.setNotFoundHandler((_req, reply) =>

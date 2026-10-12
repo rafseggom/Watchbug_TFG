@@ -15,7 +15,7 @@ import type { ReportMeta } from '@watchbug/contracts/types';
  * consisted of markup is rejected rather than stored empty.
  */
 
-const PLAIN_TEXT = { allowedTags: [], allowedAttributes: {} } as const;
+const PLAIN_TEXT = { allowedTags: [], allowedAttributes: {} };
 
 export function toPlainText(value: string): string {
   return sanitizeHtml(value, PLAIN_TEXT);

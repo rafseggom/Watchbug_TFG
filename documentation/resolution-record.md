@@ -362,6 +362,24 @@ The v1 scoping block closed Q-02…Q-04 definitively and fixed the v1/v2 boundar
 
 45 + 25 + 14 = **84 KB > 80 KB** runtime ceiling in the worst case. `check:size` needs an explicit multi-artifact scenario in the first phase, and the lazy chunk budget may need revisiting against real measurements.
 
+### A-13 · Type-only devDependencies approved (2026-10-12, plan 01-01)
+
+The owner approved five **type-only** `@types/*` devDependencies outside the A-09/Task-1 install set, explicitly to make `npm run lint` (per-workspace `tsc`) pass:
+
+| Package | Pin | Why it is required |
+|---|---|---|
+| `@types/node` | `24.19.2` (matches the Node 24 runtime) | `apps/api` uses `process`, `node:fs`, `node:crypto`, `node:zlib` |
+| `@types/react` | `19.3.0` | JSX intrinsics + hook types in `apps/panel` |
+| `@types/react-dom` | `19.3.0` | `createRoot` |
+| `@types/pg` | `8.23.1` | `pg` ships no bundled types |
+| `@types/sanitize-html` | `2.16.2` | `sanitize-html` ships no bundled types |
+
+No runtime impact (type declarations only — erased at compile time, zero bytes in any
+bundle; R-01 and the SDK's zero-runtime-dependency rule are untouched). Taken as a
+`question` gate during 01-01 Task 2 close-out; recorded here per the decision-log
+policy. Decision trace: owner answer "Selecciona la opción 1 … deja constancia de esta
+adición de dependencias de desarrollo en el documento correspondiente".
+
 ### Still open
 
 - **Q-05** — university IP policy before the repo is public (release gate).
