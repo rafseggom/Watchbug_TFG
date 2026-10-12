@@ -543,11 +543,11 @@ interface ProbeResult {
 /** JSON probe straight to the API: reaches the preHandlers and never the ingest body. */
 async function postProbe(
   request: import('@playwright/test').APIRequestContext,
-  opts: { key?: string; ip: string },
+  opts: { key?: string; ip: string; baseUrl?: string },
 ): Promise<ProbeResult> {
   const headers: Record<string, string> = { 'content-type': 'application/json', 'X-Forwarded-For': opts.ip };
   if (opts.key !== undefined) headers['X-Project-Key'] = opts.key;
-  const res = await request.post(`${API_ORIGIN}/api/incidents`, { headers, data: { probe: 'ing-05' } });
+  const res = await request.post(`${opts.baseUrl ?? API_ORIGIN}/api/incidents`, { headers, data: { probe: 'ing-05' } });
   const contentType = res.headers()['content-type'] ?? '';
   const json = contentType.includes('application/json')
     ? ((await res.json()) as Record<string, unknown>)
@@ -708,6 +708,53 @@ test('CR-01: NBSP-padded X-Project-Key shares the padded key\'s bucket — paddi
     `X-Project-Key: \xA0${key}\xA0\xA0\r\nX-Forwarded-For: ${freshIp()}\r\n`,
   );
   expectRateLimited(bothPadded, 'RATE_LIMIT_PER_KEY_PER_MIN');
+});
+
+/**
+ * CR-02 — `trustProxy: true` resolved `req.ip` from the LEFTMOST
+ * `X-Forwarded-For` entry, i.e. from attacker-controlled bytes. Two rows, one
+ * per exposure:
+ *
+ *  - **direct**: a forged leftmost entry must never become `req.ip`; the
+ *    hop adjacent to the trusted edge (rightmost) owns the per-IP bucket.
+ *  - **proxy**: nginx must overwrite the client's `X-Forwarded-For` at the
+ *    panel edge — a forged entry must not ride the proxy into a fresh bucket.
+ */
+test('CR-02 (direct): a forged leftmost X-Forwarded-For entry never becomes req.ip — the asserted rightmost hop owns the per-IP bucket', async ({ request }) => {
+  test.setTimeout(180_000);
+  const { perIpPerMin } = rateLimitConfig();
+  const key = freshProjectKey();
+  const asserted = randomIp(); // the hop adjacent to the trusted edge — the identity that must win
+  for (let i = 1; i <= perIpPerMin; i++) {
+    const forged = randomIp(); // attacker-prepended entry, varied per request
+    const res = await postProbe(request, { key, ip: `${forged}, ${asserted}` });
+    expect(res.status, `request ${i} must bucket on the asserted hop, not on the forged leftmost entry`).not.toBe(429);
+  }
+  const over = await postProbe(request, { key, ip: `${randomIp()}, ${asserted}` });
+  expectRateLimited(over, 'RATE_LIMIT_PER_IP_PER_MIN');
+});
+
+test('CR-02 (proxy): nginx overwrites the client X-Forwarded-For — a forged entry cannot ride the panel edge into a fresh per-IP bucket', async ({ request }) => {
+  test.setTimeout(180_000);
+  const { perIpPerMin } = rateLimitConfig();
+  const key = freshProjectKey();
+  const forged = randomIp();
+
+  // Exhaust the forged identity's per-IP bucket with direct probes (a
+  // single-entry XFF resolves to `forged` under any trust configuration that
+  // honours the suite's loopback test entry).
+  for (let i = 1; i <= perIpPerMin; i++) {
+    const res = await postProbe(request, { key, ip: forged });
+    expect(res.status, `request ${i} of ${perIpPerMin} must not be rate limited (inclusive boundary)`).not.toBe(429);
+  }
+  const over = await postProbe(request, { key, ip: forged });
+  expectRateLimited(over, 'RATE_LIMIT_PER_IP_PER_MIN');
+
+  // The SAME forged entry arriving through the panel origin: nginx must have
+  // REPLACED it with the real client address, so this request is bucketed
+  // under the real client — never under the exhausted forged identity.
+  const viaPanel = await postProbe(request, { key, ip: forged, baseUrl: '' });
+  expect(viaPanel.status, 'the forged X-Forwarded-For entry must not survive the nginx edge').not.toBe(429);
 });
 
 /**
