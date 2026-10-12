@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 01
 current_phase_name: Contracts & Ingest Slice
 status: executing
-stopped_at: Completed 01-02-PLAN.md
-last_updated: "2026-10-12T19:01:05.596Z"
+stopped_at: Completed 01-03-PLAN.md
+last_updated: "2026-10-12T20:13:56.795Z"
 last_activity: 2026-10-12
 last_activity_desc: Phase 01 execution started
-state_head: e08e11c3c0dcf33000ba779103f5c9ef5aa1e70a
+state_head: 800fa0aa149aefe67de071e5155f35aac9642836
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 4
-  completed_plans: 2
+  completed_plans: 3
   percent: 0
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-05)
 ## Current Position
 
 Phase: 01 (Contracts & Ingest Slice) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-10-12 — Phase 01 execution started
 
@@ -58,6 +58,7 @@ Progress: [░░░░░░░░░░] 0%
 |------|----------|-------|-------|
 | Phase 01 P01 | 01:45:00 | 3 tasks | 57 files |
 | Phase 01 P02 | 40min | 3 tasks | 16 files |
+| Phase 01 P03 | 37min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -79,6 +80,9 @@ Recent decisions affecting current work:
 - [Phase 01]: P1-D-10 backend decided at plan 01-02 Task 1: sharp@0.35.5 (owner sign-off) - root re-encode is the hardening control; the zero-dep structural strip moved to structure.ts as a pre-codec guard that no longer claims to be one
 - [Phase 01]: multipart fieldSize raised from the researchs 4 KB to MAX_META_BYTES (64 KB): busboy truncates fields silently, so a contract-sized meta (note up to 5000 chars) could never parse at 4 KB
 - [Phase 01]: busboy runs with preservePath: true - its default basename() rewrote ../../../etc/passwd.png to passwd.png before the C-4 rule could reject it
+- [Phase 01]: 01-03: e2e rate-limit maxima 1200/600/2000 (local .env) - byKey and byDay share one bucket identity, so D>K is required to prove the per-key boundary and D<2K keeps the daily row to one 65s window wait; production defaults 10/30/2000 unchanged
+- [Phase 01]: 01-03: ingest preHandler chain locked as bodyCaps(onRequest) -> ingestRateLimit -> originGate -> projectKeyGate -> handler (limits before CORS before key before any write); origin enforcement is route-level, @fastify/cors is app-level for headers/preflight
+- [Phase 01]: 01-03: all three limiters increment before any 429 decision (rejected requests consume every quota); GET list no longer consults X-Project-Key - write-only key per H-7/DEP-03
 
 ### Pending Todos
 
@@ -115,6 +119,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-12T19:01:05.552Z
-Stopped at: Completed 01-02-PLAN.md
+Last session: 2026-10-12T20:13:56.756Z
+Stopped at: Completed 01-03-PLAN.md
 Resume file: None

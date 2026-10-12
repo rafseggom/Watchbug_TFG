@@ -55,12 +55,12 @@ Plans:
 - [x] 01-02-PLAN.md — Hostile payload rejection: layered size caps, image control stack (sniff/structure/guard/harden), hardened blob route (C-3/C-4), P1-D-10 re-encode consultation
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 01-03-PLAN.md — Ingest gatekeeping: project-key 401s, layered rate limits (key/IP/day), origin allowlist
+- [x] 01-03-PLAN.md — Ingest gatekeeping: project-key 401s, layered rate limits (key/IP/day), origin allowlist
 
 **Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 01-04-PLAN.md — Text safety end-to-end (ING-07) + panel first-run experience: en/es i18n and onboarding curl empty state
 
-**Plans:** 2/4 plans executed
+**Plans:** 3/4 plans executed
 **UI hint**: yes
 **Rationale / Risks:** This merges the research "contracts & skeleton" and "ingest slice" rows deliberately: a contracts-only phase would be a horizontal layer, while the synthetic tracer (fixture upload → row → image in the browser) is the smallest *end-to-end* proof that TB-1→TB-2→TB-5 holds. **C-3/C-4 land here, at first ingest** — webp/png magic-byte allowlist with SVG rejected unconditionally (SVG is an active text format = image-borne XSS), re-encode on ingest where feasible to kill polyglots/EXIF, `nosniff` + `Content-Disposition: attachment` + `CSP: default-src 'none'; sandbox` on blobs, and path-traversal-proof `Storage` from the first line: server-generated UUIDv4 keys at `projectId/<xx>/<uuid>.<ext>`, tmp→fsync→rename writes, DB-lookup-only key resolution (the request never names a file), volume mounted **only** in `api` with a CI compose assertion. **H-7:** layered caps in the reconciled A-06 constant set (5 MB body, 4 MB part, 64 KB meta, `Content-Length` pre-read plus streaming counter, decode-bomb header guard) — the schema constants live in `packages/contracts` so client clamps stay UX-only. **A-12/M-2:** `check:size` ships in Phase 1 with an explicit **multi-artifact scenario** (core + lazy editor + optional-adapter lanes) so the 45+25+14 = 84 KB > 80 KB worst case is visible from day one. **M-1/A-02:** TTL columns (identity + artifacts) exist in the initial Drizzle migration — retrofits are migrations = consultation triggers. ENR-06 delivers schema *validation*; CA-01's console-conditional clause completes in Phase 4 with ENR-01/02. DEP-03's "served only through the **authenticated** API" completes in Phase 5 once auth exists — this phase ships the hardened blob route but makes no auth claim. ⚠ UNVERIFIED: `@fastify/multipart` ↔ Fastify 5 mapping — smoke-test here; base64-in-JSON fallback is a contract change = consultation trigger.
 
@@ -192,7 +192,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Contracts & Ingest Slice | 2/4 | In Progress|  |
+| 1. Contracts & Ingest Slice | 3/4 | In Progress|  |
 | 2. SDK Tracer Bullet: Widget, Capture & Auto-Redaction | 0/TBD | Not started | - |
 | 3. Report Composer & Annotation Editor (lazy) | 0/TBD | Not started | - |
 | 4. Report Payload & Enrichment | 0/TBD | Not started | - |
