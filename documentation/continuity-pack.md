@@ -212,3 +212,15 @@ Human reviewed `.planning/research/STACK.md` (Version Verification Table) and `.
 **NOT approved in this batch:** `sharp` — it is not in plan 01-01's set and carries its own `checkpoint:human-verify` in plan **01-02** (P1-D-10 consultation). It must not be installed until that gate is cleared.
 
 **Standing rule from the approval:** no package may be silently swapped for a non-STACK.md alternative; a swap is a consultation, not an edit.
+
+### 8.2 [Q-08] TypeScript 7.0.2 tooling gate — PASS, no 6.x fallback (2026-10-12)
+
+Plan 01-01 Task 2 Step 0 ran the Q-08 smoke test under the pinned `typescript@7.0.2` **before any ingest code**, as 01-RESEARCH.md Pitfall 8 prescribes:
+
+- `drizzle-kit generate` on a scratch schema → emitted `drizzle/0000_*.sql` + `meta/` snapshot under `.planning/research/.cache/q08/`.
+- `tsx apps/api/src/index.ts` → `GET /api/health` → `200 {"status":"ok"}` (Fastify 5.12.5 + tsx 4.23.15).
+- `vite build` of the panel shell → `✓ built` (Vite 8.3.2, 14 modules).
+
+**Disposition:** Q-08 resolves as **PASS** — the toolchain stays on TypeScript 7.0.2 and the documented 6.x fallback is **not** taken. Re-verified in-session before this record was written.
+
+**Open item (type-only deps):** `npm run lint` runs `tsc` across the workspaces and cannot typecheck `apps/api` (`node:fs` / `process`) or `apps/panel` (JSX / `react-dom/client`) without type-only devDeps (`@types/node`, `@types/react`, `@types/react-dom`, plus `@types/pg` and `@types/sanitize-html` for untyped runtime deps). Those are **outside the 17 approved pins**, so nothing has been installed — a human decision is required (approve type-only devDeps vs. scope `lint` down). This does not affect `npm run build`, `check:size`, `check:compose` or the e2e suite.

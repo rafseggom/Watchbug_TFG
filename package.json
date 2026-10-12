@@ -1,0 +1,28 @@
+{
+  "name": "watchbug",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Watchbug — open-source, self-hostable bug-reporting and visual-feedback SDK (npm workspaces monorepo).",
+  "license": "Apache-2.0",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "npm run build -w @watchbug/contracts && npm run build -w @watchbug/sdk && npm run build -w @watchbug/api && npm run build -w @watchbug/panel",
+    "check:size": "node scripts/check-size.mjs",
+    "check:compose": "node scripts/check-compose.mjs",
+    "verify": "playwright test",
+    "lint": "npm run typecheck --workspaces --if-present",
+    "dev": "tsx watch apps/api/src/index.ts",
+    "key:gen": "node scripts/gen-key.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2"
+  }
+}
