@@ -621,6 +621,96 @@ test('ING-05 per day: the daily project quota trips at RATE_LIMIT_PER_PROJECT_PE
 });
 
 /**
+ * CR-01 — key-normalization asymmetry: the limiter bucketed on the RAW
+ * `X-Project-Key` header while the gate trims it. Node's HTTP parser strips
+ * only SP/HTAB OWS, so an NBSP (U+00A0) padding byte survives to
+ * `req.headers`, `trim()` removes it, and the padded variant is ACCEPTED by
+ * the gate as the same project while being counted in a FRESH bucket —
+ * minting unlimited per-key/per-day quota from one public key.
+ *
+ * The padded probes speak **raw bytes** over a socket so the `0xA0` byte
+ * reaches the wire exactly as an exploit client would send it (no client
+ * library re-encoding in between).
+ */
+async function postProbeRaw(headersLine: string): Promise<ProbeResult> {
+  const socket = connect(3000, '127.0.0.1');
+  socket.on('error', () => {
+    /* the server may reset the connection after answering — the response, if
+     * any, has already been collected by the reader below. */
+  });
+  await once(socket, 'connect');
+
+  const body = JSON.stringify({ probe: 'ing-05' });
+  const requestText =
+    'POST /api/incidents HTTP/1.1\r\n' +
+    'Host: 127.0.0.1:3000\r\n' +
+    'Content-Type: application/json\r\n' +
+    `Content-Length: ${Buffer.byteLength(body)}\r\n` +
+    'Connection: close\r\n' +
+    headersLine +
+    '\r\n' +
+    body;
+  socket.write(requestText, 'latin1');
+
+  let received = '';
+  await new Promise<void>((resolveRead) => {
+    socket.on('data', (data) => {
+      received += data.toString('latin1');
+    });
+    socket.on('close', () => resolveRead());
+    setTimeout(resolveRead, 20_000).unref();
+  });
+  socket.destroy();
+
+  const headEnd = received.indexOf('\r\n\r\n');
+  const head = headEnd === -1 ? received : received.slice(0, headEnd);
+  const statusMatch = /^HTTP\/1\.[01] (\d{3})/.exec(head);
+  const retryAfter = /(?:^|\r\n)retry-after:\s*(\d+)/i.exec(head)?.[1];
+  let json: Record<string, unknown> | null = null;
+  if (headEnd !== -1) {
+    const text = received.slice(headEnd + 4).trim();
+    if (text.length > 0) {
+      try {
+        json = JSON.parse(text) as Record<string, unknown>;
+      } catch {
+        json = null;
+      }
+    }
+  }
+  return {
+    status: statusMatch === null ? 0 : Number(statusMatch[1]),
+    json,
+    retryAfter,
+  };
+}
+
+test('CR-01: NBSP-padded X-Project-Key shares the padded key\'s bucket — padding never mints fresh per-key quota', async ({ request }) => {
+  test.setTimeout(180_000);
+  const { perKeyPerMin } = rateLimitConfig();
+  const key = freshProjectKey();
+
+  // 1) Fill the plain key's per-minute bucket exactly to its max: none may 429.
+  for (let i = 1; i <= perKeyPerMin; i++) {
+    const res = await postProbe(request, { key, ip: freshIp() });
+    expect(res.status, `request ${i} of ${perKeyPerMin} must not be rate limited (inclusive boundary)`).not.toBe(429);
+  }
+
+  // 2) Same key with one trailing NBSP byte (0xA0) on the wire: the gate trims
+  //    and accepts it as the same project, so the limiter MUST count it in the
+  //    same bucket → request max+1 is 429 + Retry-After.
+  const suffixPadded = await postProbeRaw(
+    `X-Project-Key: ${key}\xA0\r\nX-Forwarded-For: ${freshIp()}\r\n`,
+  );
+  expectRateLimited(suffixPadded, 'RATE_LIMIT_PER_KEY_PER_MIN');
+
+  // 3) Leading + double-trailing NBSP padding must not mint another bucket either.
+  const bothPadded = await postProbeRaw(
+    `X-Project-Key: \xA0${key}\xA0\xA0\r\nX-Forwarded-For: ${freshIp()}\r\n`,
+  );
+  expectRateLimited(bothPadded, 'RATE_LIMIT_PER_KEY_PER_MIN');
+});
+
+/**
  * ING-08 (T-01-13, A-11) — the `WATCHBUG_CORS_ORIGINS` allowlist with the
  * Origin-present rule (Pitfall 9):
  *
