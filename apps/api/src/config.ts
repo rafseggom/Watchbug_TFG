@@ -42,7 +42,12 @@ export interface AppConfig {
   port: number;
   /** Listen address — loopback for host dev, `0.0.0.0` inside the api container (nginx reaches it by service name). */
   host: string;
-  trustProxy: boolean;
+  /**
+   * CR-02 — Fastify's `trustProxy`: `false` (default), blanket `true`
+   * (trust every hop — spoofable, see {@link readTrustProxy}), or the list
+   * of trusted proxy addresses/CIDRs the deployment actually controls.
+   */
+  trustProxy: boolean | string[];
 }
 
 function fatal(message: string): never {
@@ -79,6 +84,31 @@ function readBool(env: Record<string, string | undefined>, name: string, fallbac
   if (raw === 'true') return true;
   if (raw === 'false') return false;
   fatal(`${name} in ${ENV_FILE} must be "true" or "false" (got "${env[name]}").`);
+}
+
+/**
+ * `WATCHBUG_TRUST_PROXY` (CR-02): a TRUST LIST — the exact hops the
+ * deployment controls — instead of blanket `true`. With a list, `req.ip`
+ * (the per-IP limiter's key) is resolved from the first **untrusted**
+ * `X-Forwarded-For` entry walking outwards from the socket, so a
+ * client-forged entry can never own the bucket; blanket `true` trusts every
+ * hop and takes the attacker-controlled LEFTMOST entry. `true`/`false` keep
+ * their documented boolean meanings. Invalid entries throw at Fastify
+ * construction, i.e. boot fails loud naming the variable.
+ */
+function readTrustProxy(env: Record<string, string | undefined>): boolean | string[] {
+  const raw = readString(env, 'WATCHBUG_TRUST_PROXY');
+  if (raw === undefined) return false;
+  if (raw === 'true') return true;
+  if (raw === 'false') return false;
+  const entries = raw.split(',').map((entry) => entry.trim()).filter(Boolean);
+  if (entries.length === 0) {
+    fatal(
+      `WATCHBUG_TRUST_PROXY in ${ENV_FILE} must be "true", "false", or a comma-separated list of ` +
+        `trusted proxy addresses/CIDRs (got "${env.WATCHBUG_TRUST_PROXY}").`,
+    );
+  }
+  return entries;
 }
 
 function readProjectKey(env: Record<string, string | undefined>): string {
@@ -145,6 +175,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     dataDir: readDataDir(env),
     port: readInt(env, 'PORT', 3000),
     host: readString(env, 'WATCHBUG_HOST') ?? '127.0.0.1',
-    trustProxy: readBool(env, 'WATCHBUG_TRUST_PROXY', false),
+    trustProxy: readTrustProxy(env),
   };
 }

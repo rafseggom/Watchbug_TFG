@@ -474,9 +474,10 @@ test('ING-04 concurrency: a parallel burst of invalid-key requests each receives
  *    bucket out of it), then the next request → 429.
  *
  * All rows speak **directly to the API origin** so the `X-Forwarded-For`
- * header is the only forwarded identity (nginx would append its own).
- * That requires `WATCHBUG_TRUST_PROXY=true` in `.env` (Pitfall 5, asserted
- * by config, not assumed).
+ * header is the only forwarded identity (nginx would overwrite it with the
+ * real client address — CR-02). That requires a `WATCHBUG_TRUST_PROXY`
+ * trust configuration in `.env` that honours this loopback test entry (the
+ * shipped trust list or `true` — Pitfall 5), asserted by config, not assumed.
  *
  * Boundaries are derived from the configured maxima in `.env` — the same
  * file the api reads — never hardcoded here.

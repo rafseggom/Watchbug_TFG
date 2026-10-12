@@ -28,13 +28,14 @@ import { PROJECT_KEY_PATTERN } from '../config';
  * documented caveat: counters are process-local, so the daily quota is
  * **best-effort across restarts** (single-node self-hosting — Pitfall 5).
  *
- * IP identity comes from `req.ip`, which honours `X-Forwarded-For` only
- * because `trustProxy` is configured explicitly from `WATCHBUG_TRUST_PROXY`
- * (`false` by default; the compose/nginx deployment sets `true` because
- * nginx is the only edge and sets the header — trusting it blindly lets
- * clients spoof each other's IPs, and behind a NAT every user behind the
- * shared egress IP shares one bucket; both caveats are documented in
- * `.env.example`).
+ * IP identity comes from `req.ip`, which honours `X-Forwarded-For` only for
+ * TRUSTED hops: `WATCHBUG_TRUST_PROXY` is a TRUST LIST (CR-02 — the compose
+ * nginx edge, which OVERWRITES the header with `$remote_addr`, plus the
+ * local loopback entry the verify suite needs), never blanket `true`:
+ * blanket trust would resolve `req.ip` from the attacker-controlled
+ * LEFTMOST entry and make this limiter spoofable. Behind a NAT every user
+ * behind the shared egress IP still shares one bucket; both caveats are
+ * documented in `.env.example`.
  */
 
 export interface IngestRateLimits {

@@ -22,8 +22,11 @@ import { registerSetupRoutes } from './routes/setup';
  * CA-01 routes whose preHandler chain is `ingestRateLimit → origin allowlist
  * → project-key gate → handler`, and the structured JSON error mapper.
  * `trustProxy` stays at its configured default (false) and must only ever be
- * set explicitly — Pitfall 5; it is what makes `req.ip` (the per-IP limiter's
- * key) honour `X-Forwarded-For` behind the compose nginx edge.
+ * set explicitly — Pitfall 5. CR-02: the secure explicit value is a TRUST
+ * LIST (the compose nginx edge + the local loopback entry), never blanket
+ * `true`; with a list, `req.ip` (the per-IP limiter's key) is the first
+ * UNTRUSTED `X-Forwarded-For` entry, so a client-forged entry can never own
+ * the bucket — blanket `true` would take the attacker-controlled leftmost.
  *
  * The multipart limits themselves live in `ingest/caps.ts` (plan 01-02): that
  * module owns every layered size cap, so the parser ceiling and the
