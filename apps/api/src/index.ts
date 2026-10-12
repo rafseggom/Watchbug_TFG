@@ -5,11 +5,14 @@ import { buildApp, type FastifyInstance } from './app';
 // `config.ts` loader (P1-D-02, SEC-04).
 const port = Number(process.env.PORT ?? 3000);
 
-const app = await buildApp();
+async function main(): Promise<void> {
+  const app = await buildApp();
 
-if (process.env.WATCHBUG_SMOKE === '1') {
-  await runMultipartSmoke(app);
-} else {
+  if (process.env.WATCHBUG_SMOKE === '1') {
+    await runMultipartSmoke(app);
+    return;
+  }
+
   try {
     await app.listen({ port, host: '127.0.0.1' });
   } catch (err) {
@@ -17,6 +20,11 @@ if (process.env.WATCHBUG_SMOKE === '1') {
     process.exit(1);
   }
 }
+
+main().catch((err: unknown) => {
+  console.error('[watchbug] fatal at boot:', err);
+  process.exit(1);
+});
 
 /**
  * P1-D-09 multipart smoke (the phase's first risk commit): parse a real
@@ -35,7 +43,7 @@ async function runMultipartSmoke(app: FastifyInstance): Promise<void> {
   }
   const base = `http://127.0.0.1:${address.port}`;
 
-  // Minimal valid 1×1 PNG (89 bytes) — enough for the parser, not for decoding.
+  // Minimal valid 1×1 PNG (70 bytes) — enough for the parser, not for decoding.
   const png = Buffer.from(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
     'base64',
