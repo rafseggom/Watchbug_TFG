@@ -1,137 +1,52 @@
-import { crc32 } from 'node:zlib';
+import sharp from 'sharp';
+import { MAX_IMAGE_PIXELS } from '@watchbug/contracts/constants';
 import type { ImageExt } from '@watchbug/contracts/types';
-import { readDimensions } from './guard';
 import { sniffImage } from './sniff';
 
 /**
- * Stage 4: container hardening — the zero-dep **structural strip/rebuild**
- * backend (Pattern 2 option 2, the documented fallback of P1-D-10).
+ * Stage 5: the mandatory **root re-encode** (P1-D-10, decided `sharp` at the
+ * plan 01-02 Task 1 consultation gate).
  *
- * P1-D-10 (heavy dependency, e.g. `sharp`) is consultation-gated in plan 01-02,
- * so this plan ships the backend that needs no new dependency and no pixel
- * decode: only allowlisted container chunks survive the rewrite, so EXIF/XMP/
- * ICCP, `tEXt` annotations, trailing data and container-level polyglots are
- * dropped **before anything touches disk** (T-01-04, SEC-02) — and because no
- * decoder runs, a decode bomb cannot be weaponised here by construction.
+ * Every accepted image is decoded and written back out by libvips before
+ * anything reaches disk. That is the control the structural strip in
+ * `structure.ts` cannot be: a decoder-differential polyglot — a file whose
+ * bytes decode differently in different decoders — survives any amount of
+ * container rewriting, and only a real decode → re-encode reduces it to the
+ * pixels one decoder actually produced.
  *
- * Same container in, same container out (P1-D-12). The swap to a re-encode
- * backend happens behind this function's contract:
- * `hardenImage(bytes) → { bytes, ext, w, h }`.
+ * Contract of this stage (unchanged from plan 01-01, so the seam stays a
+ * plain module and no second backend competes with it):
+ *
+ *   `hardenImage(bytes) → { bytes, ext, w, h }`
+ *
+ * - **Same format in, same format out** (P1-D-12): PNG → PNG, WebP → WebP, so
+ *   the A-06 caps are compared like for like and R-11's WebP→PNG fallback
+ *   promise is not pre-empted here.
+ * - **Metadata stripped by default** — sharp's documented default is "strip
+ *   all metadata and convert to the device-independent sRGB colour space", so
+ *   no EXIF/XMP/IPTC payload from the input can reach the stored bytes
+ *   (SEC-02, M-1). `keepMetadata()`/`withMetadata()` are deliberately never
+ *   called.
+ * - **Processing-time guard** — `timeout({ seconds })` plus
+ *   `limitInputPixels` bound the decode, so a crafted file that passes the
+ *   header-dimension check (T-01-08) still cannot pin a worker.
  */
 
 export type HardenResult =
   | { ok: true; bytes: Uint8Array; ext: ImageExt; w: number; h: number }
   | { ok: false; statusCode: 400; message: string };
 
-type Rebuild = { bytes: Buffer } | { error: string };
+/** T-01-08: how long one decode/re-encode may run before sharp aborts it. */
+const HARDEN_TIMEOUT_SECONDS = 5;
 
-/** PNG chunks that survive: everything else (ancillary/metadata) is dropped. */
-const PNG_ALLOWED = new Set(['IHDR', 'PLTE', 'IDAT', 'IEND']);
-/** WebP chunks that survive; animations (ANIM/ANMF) are rejected outright. */
-const WEBP_ALLOWED = new Set(['VP8X', 'VP8 ', 'VP8L', 'ALPH']);
-const WEBP_ANIMATION = new Set(['ANIM', 'ANMF']);
-
-const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
-
-function rebuildPng(buf: Buffer): Rebuild {
-  if (buf.length < 8 || !buf.subarray(0, 8).equals(PNG_SIGNATURE)) {
-    return { error: 'not a PNG file (signature mismatch)' };
-  }
-
-  const parts: Buffer[] = [buf.subarray(0, 8)];
-  let offset = 8;
-  let sawIHDR = false;
-  let sawIEND = false;
-
-  while (offset < buf.length) {
-    if (offset + 8 > buf.length) return { error: 'PNG ends inside a chunk header' };
-    const length = buf.readUInt32BE(offset);
-    const type = buf.toString('latin1', offset + 4, offset + 8);
-    const dataStart = offset + 8;
-    const dataEnd = dataStart + length;
-    if (dataEnd + 4 > buf.length) return { error: `PNG chunk ${type} is truncated` };
-
-    if (offset === 8 && type !== 'IHDR') return { error: 'PNG does not begin with IHDR' };
-    if (type === 'IHDR' && sawIHDR) return { error: 'PNG declares IHDR twice' };
-    if (type === 'IEND' && length !== 0) return { error: 'PNG IEND chunk must be empty' };
-
-    // CRC covers the chunk type + data; a mismatch means the file is corrupt
-    // or tampered with — reject rather than re-emit something we cannot verify.
-    const expectedCrc = buf.readUInt32BE(dataEnd);
-    const actualCrc = crc32(buf.subarray(offset + 4, dataEnd)) >>> 0;
-    if (expectedCrc !== actualCrc) return { error: `PNG chunk ${type} fails its CRC check` };
-
-    if (PNG_ALLOWED.has(type)) {
-      const header = Buffer.alloc(8);
-      header.writeUInt32BE(length, 0);
-      header.write(type, 4, 'latin1');
-      const crc = Buffer.alloc(4);
-      crc.writeUInt32BE(actualCrc, 0);
-      parts.push(header, buf.subarray(dataStart, dataEnd), crc);
-    }
-
-    if (type === 'IHDR') sawIHDR = true;
-    offset = dataEnd + 4;
-    if (type === 'IEND') {
-      sawIEND = true;
-      break;
-    }
-  }
-
-  if (!sawIHDR) return { error: 'PNG has no IHDR chunk' };
-  if (!sawIEND) return { error: 'PNG has no IEND chunk' };
-  if (offset !== buf.length) return { error: 'PNG contains trailing data after IEND' };
-
-  return { bytes: Buffer.concat(parts) };
+/** Client-facing message shape — never echo raw codec internals verbatim. */
+function codecMessage(err: unknown): string {
+  const detail = err instanceof Error ? err.message.split('\n')[0] : '';
+  const cleaned = detail.replace(/\s+/g, ' ').slice(0, 160);
+  return `image rejected by the re-encode stage${cleaned === '' ? '' : `: ${cleaned}`}`;
 }
 
-function rebuildWebp(buf: Buffer): Rebuild {
-  if (buf.length < 12 || buf.toString('latin1', 0, 4) !== 'RIFF' || buf.toString('latin1', 8, 12) !== 'WEBP') {
-    return { error: 'not a WebP file (RIFF/WEBP signature mismatch)' };
-  }
-
-  const declaredSize = buf.readUInt32LE(4);
-  if (8 + declaredSize > buf.length) return { error: 'WebP is truncated (declared RIFF size exceeds the file)' };
-  if (8 + declaredSize < buf.length) {
-    return { error: 'WebP contains trailing data past its declared RIFF size' };
-  }
-
-  const parts: Buffer[] = [buf.subarray(0, 12)];
-  let offset = 12;
-  let sawImageChunk = false;
-
-  while (offset + 8 <= buf.length) {
-    const type = buf.toString('latin1', offset, offset + 4);
-    const size = buf.readUInt32LE(offset + 4);
-    const dataStart = offset + 8;
-    const dataEnd = dataStart + size;
-    if (dataEnd > buf.length) return { error: `WebP chunk ${type} is truncated` };
-
-    if (WEBP_ANIMATION.has(type)) return { error: 'animated WebP (ANIM/ANMF) is not accepted' };
-
-    if (WEBP_ALLOWED.has(type)) {
-      if (type === 'VP8 ' || type === 'VP8L') sawImageChunk = true;
-      const header = Buffer.alloc(8);
-      header.write(type, 0, 'latin1');
-      header.writeUInt32LE(size, 4);
-      const data = buf.subarray(dataStart, dataEnd);
-      // Chunks are padded to an even byte boundary; the pad belongs to the file
-      // but not to the chunk size.
-      parts.push(header, size % 2 === 1 ? Buffer.concat([data, Buffer.alloc(1)]) : data);
-    }
-
-    offset = dataEnd + (size % 2);
-  }
-
-  if (offset !== buf.length) return { error: 'WebP contains bytes after its last chunk' };
-  if (!sawImageChunk) return { error: 'WebP contains no VP8/VP8L image data' };
-
-  const body = Buffer.concat(parts);
-  body.writeUInt32LE(body.length - 8, 4); // recompute the RIFF size
-  return { bytes: body };
-}
-
-export function hardenImage(input: Uint8Array): HardenResult {
+export async function hardenImage(input: Uint8Array): Promise<HardenResult> {
   const ext = sniffImage(input);
   if (ext === null) {
     return {
@@ -142,11 +57,22 @@ export function hardenImage(input: Uint8Array): HardenResult {
   }
 
   const buf = Buffer.isBuffer(input) ? input : Buffer.from(input);
-  const rebuilt = ext === 'png' ? rebuildPng(buf) : rebuildWebp(buf);
-  if ('error' in rebuilt) return { ok: false, statusCode: 400, message: `image rejected: ${rebuilt.error}` };
 
-  const dims = readDimensions(rebuilt.bytes, ext);
-  if (dims === null) return { ok: false, statusCode: 400, message: 'hardened image header could not be read' };
+  try {
+    const pipeline = sharp(buf, {
+      // T-01-08: refuse to even open an image larger than the A-06 pixel cap.
+      limitInputPixels: MAX_IMAGE_PIXELS,
+      // sharp's default for untrusted input; stated here so it cannot drift.
+      failOn: 'warning',
+    }).timeout({ seconds: HARDEN_TIMEOUT_SECONDS });
 
-  return { ok: true, bytes: rebuilt.bytes, ext, w: dims.width, h: dims.height };
+    const { data, info } =
+      ext === 'png'
+        ? await pipeline.png().toBuffer({ resolveWithObject: true })
+        : await pipeline.webp().toBuffer({ resolveWithObject: true });
+
+    return { ok: true, bytes: data, ext, w: info.width, h: info.height };
+  } catch (err) {
+    return { ok: false, statusCode: 400, message: codecMessage(err) };
+  }
 }

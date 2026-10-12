@@ -1,10 +1,10 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import helmet from '@fastify/helmet';
 import multipart from '@fastify/multipart';
-import { MAX_IMAGE_PART_BYTES } from '@watchbug/contracts/constants';
 import type { AppConfig } from './config';
 import type { AppDb } from './db/client';
 import { seedProject } from './boot/seed';
+import { MULTIPART_RECEIVE_OPTIONS } from './ingest/caps';
 import type { Storage } from './ports';
 import { registerIncidentsRoutes } from './routes/incidents';
 
@@ -19,21 +19,12 @@ import { registerIncidentsRoutes } from './routes/incidents';
  * The `@fastify/rate-limit` and `@fastify/cors` plugins are registered by
  * plan **01-03** (ING-05 layered limiters, CORS origins); the error mapper
  * already maps their 429/400 shapes so that landing is a pure addition.
+ *
+ * The multipart limits themselves live in `ingest/caps.ts` (plan 01-02): that
+ * module owns every layered size cap, so the parser ceiling and the
+ * `Content-Length`/streaming-counter gates cannot drift apart (T-01-05,
+ * Pitfall 1 — `bodyLimit` alone does not bound a multipart body).
  */
-
-/**
- * The T-01-05 mitigation: multipart limits are declared explicitly because
- * `bodyLimit` alone does not bound a multipart body (Pitfall 1) — each part type
- * gets its own ceiling and `throwFileSizeLimit` aborts the oversized upload.
- */
-export const MULTIPART_LIMITS = {
-  files: 1,
-  fileSize: MAX_IMAGE_PART_BYTES,
-  fields: 8,
-  fieldSize: 4096,
-  headerPairs: 1024,
-  parts: 16,
-} as const;
 
 export interface AppDeps {
   config: AppConfig;
@@ -52,10 +43,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   });
 
   await app.register(helmet);
-  await app.register(multipart, {
-    limits: MULTIPART_LIMITS,
-    throwFileSizeLimit: true,
-  });
+  await app.register(multipart, MULTIPART_RECEIVE_OPTIONS);
 
   app.get('/api/health', async (_req, reply) => {
     try {

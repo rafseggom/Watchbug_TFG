@@ -1,24 +1,37 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { desc, eq } from 'drizzle-orm';
+import { MAX_ENCODED_IMAGE_BYTES } from '@watchbug/contracts/constants';
 import type { AppConfig } from '../config';
 import type { AppDb } from '../db/client';
 import { incidents, projects } from '../db/schema';
 import { validateMeta } from '../ingest/validate-meta';
 import { sniffImage } from '../ingest/sniff';
 import { assertDecodeSafe } from '../ingest/guard';
+import { validateStructure } from '../ingest/structure';
 import { hardenImage } from '../ingest/harden';
 import { sanitizeAndValidate } from '../ingest/sanitize';
+import {
+  BodyByteCounter,
+  BodyCapExceeded,
+  bodyCaps,
+  failure,
+  mapMultipartError,
+  receiveImagePart,
+  validateClientFilename,
+} from '../ingest/caps';
 import type { Storage } from '../ports';
 
 /**
  * CA-01 route surface (Task 2 Step 4).
  *
- * `POST /api/incidents` runs the ordered ingest chain — multipart parse → meta
- * validate → project-key lookup → sniff → guard → harden → sanitize →
- * `Storage.put` → idempotent insert — cheap guards first, codecs never (the
- * structural harden backend does not decode). The idempotency guarantee is the
- * **database** unique index `(project_id, idempotency_key)`, never an
- * application-level check-then-insert (ING-03, Pattern 4).
+ * `POST /api/incidents` runs the ordered ingest chain — body caps → multipart
+ * parse → client-filename rule → meta validate → project-key lookup →
+ * semantic size cap → sniff → structure → guard → re-encode → sanitize →
+ * `Storage.put` → idempotent insert. Cheap guards first, the codec last: no
+ * hostile byte ever reaches libvips without having passed the container and
+ * dimension checks. The idempotency guarantee is the **database** unique index
+ * `(project_id, idempotency_key)`, never an application-level
+ * check-then-insert (ING-03, Pattern 4).
  *
  * `GET /api/incidents/:id/image` resolves the blob key **from the database
  * row only** — a request never names a file (R-04, C-4).
@@ -68,7 +81,7 @@ function badRequest(reply: FastifyReply, message: string): FastifyReply {
 export async function registerIncidentsRoutes(app: FastifyInstance, deps: RouteDeps): Promise<void> {
   const { db, storage, config } = deps;
 
-  app.post('/api/incidents', async (req, reply) => {
+  app.post('/api/incidents', { onRequest: [bodyCaps] }, async (req, reply) => {
     const idempotencyKey = req.headers['idempotency-key'];
     if (typeof idempotencyKey !== 'string' || idempotencyKey.trim() === '') {
       return badRequest(
@@ -80,17 +93,38 @@ export async function registerIncidentsRoutes(app: FastifyInstance, deps: RouteD
       return badRequest(reply, `Idempotency-Key must be at most ${MAX_IDEMPOTENCY_KEY_CHARS} characters`);
     }
 
+    const counter = new BodyByteCounter();
     let metaRaw: string | undefined;
     let imageBytes: Uint8Array | undefined;
+    let clientFilename: string | undefined;
 
-    for await (const part of req.parts()) {
-      if (part.type === 'field' && part.fieldname === 'meta') {
-        metaRaw = String(part.value);
-      } else if (part.type === 'file' && part.fieldname === 'image') {
-        // Bounded by the multipart `fileSize` limit (413 via throwFileSizeLimit).
-        const chunks: Buffer[] = [];
-        for await (const chunk of part.file) chunks.push(chunk as Buffer);
-        imageBytes = Buffer.concat(chunks);
+    try {
+      for await (const part of req.parts()) {
+        if (part.type === 'field' && part.fieldname === 'meta') {
+          metaRaw = String(part.value);
+          counter.add(Buffer.byteLength(metaRaw, 'utf8'));
+        } else if (part.type === 'file' && part.fieldname === 'image') {
+          // Streams to a server-named tmp file while counting the bytes;
+          // the tmp file is unlinked here whatever happens next (ING-06,
+          // Pitfall 2 — a cut-off part is rejected, never stored).
+          const received = await receiveImagePart(part, counter);
+          clientFilename = received.filename;
+          imageBytes = received.bytes;
+        }
+      }
+    } catch (err) {
+      const mapped = mapMultipartError(err);
+      if (mapped === null) throw err;
+      if (err instanceof BodyCapExceeded) req.raw.destroy();
+      return reply.code(mapped.statusCode).send(mapped);
+    }
+
+    // C-4 — the client filename is metadata only. Names shaped like an attack
+    // are rejected before anything else looks at the payload.
+    if (clientFilename !== undefined) {
+      const filenameFailure = validateClientFilename(clientFilename);
+      if (filenameFailure !== null) {
+        return reply.code(filenameFailure.statusCode).send(filenameFailure);
       }
     }
 
@@ -109,6 +143,17 @@ export async function registerIncidentsRoutes(app: FastifyInstance, deps: RouteD
 
     if (imageBytes === undefined) return badRequest(reply, 'the "image" part is missing');
 
+    // A-06 semantic cap — checked on the bytes actually read, before any
+    // codec work (the 4 MB multipart limit above it is only the parser guard).
+    if (imageBytes.length > MAX_ENCODED_IMAGE_BYTES) {
+      return reply.code(413).send(
+        failure(
+          413,
+          `image is ${imageBytes.length} bytes; the contract allows at most ${MAX_ENCODED_IMAGE_BYTES} (MAX_ENCODED_IMAGE_BYTES)`,
+        ),
+      );
+    }
+
     // Stage 2 — magic bytes only, never the client-declared Content-Type.
     const sniffed = sniffImage(imageBytes);
     if (sniffed === null) {
@@ -118,16 +163,23 @@ export async function registerIncidentsRoutes(app: FastifyInstance, deps: RouteD
       );
     }
 
-    // Stage 3 — dimensions from the header, before any pixel work.
-    const guard = assertDecodeSafe(imageBytes, sniffed);
+    // Stage 3 — container structure: chunk allowlists, no animation, no
+    // trailing data; metadata chunks are dropped here (C-3, P1-D-11).
+    const structure = validateStructure(imageBytes, sniffed);
+    if (!structure.ok) return badRequest(reply, structure.message);
+
+    // Stage 4 — dimensions from the header, before any pixel work.
+    const guard = assertDecodeSafe(structure.bytes, sniffed);
     if (!guard.ok) return reply.code(guard.statusCode).send({
       statusCode: guard.statusCode,
       error: 'Bad Request',
       message: guard.message,
     });
 
-    // Stage 4 — structural strip/rebuild: metadata chunks dropped, CRCs verified.
-    const hardened = hardenImage(imageBytes);
+    // Stage 5 — P1-D-10 root re-encode (sharp): decode → re-encode in the same
+    // format (P1-D-12), metadata stripped, processing-time guarded. The bytes
+    // that reach storage are libvips' output, not the submitted container.
+    const hardened = await hardenImage(structure.bytes);
     if (!hardened.ok) {
       return reply.code(hardened.statusCode).send({
         statusCode: hardened.statusCode,
@@ -136,7 +188,7 @@ export async function registerIncidentsRoutes(app: FastifyInstance, deps: RouteD
       });
     }
 
-    // Stage 5 — plain-text sanitization, then re-validate the contract so
+    // Stage 6 — plain-text sanitization, then re-validate the contract so
     // whatever reaches storage is guaranteed to validate (ENR-06).
     const cleanMeta = sanitizeAndValidate(meta.meta);
     if (cleanMeta === null) {

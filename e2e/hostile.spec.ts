@@ -189,20 +189,32 @@ async function postChunkedWithoutContentLength(): Promise<string> {
 
   const mebibyte = Buffer.alloc(1024 * 1024, 0x41);
   const cap = 32 * 1024 * 1024;
+  const pause = (ms: number): Promise<void> => new Promise((resolvePause) => setTimeout(resolvePause, ms));
   let written = 0;
+
+  // Paced writes: the body must still be in flight when the server's counter
+  // reaches the cap, otherwise this row could pass on the parser's own error
+  // instead of on the streaming abort it is named for.
   while (written < cap && !socket.destroyed && !received.startsWith('HTTP/')) {
-    if (!socket.write(frame(mebibyte)) /* backpressure: wait for drain */) {
-      await Promise.race([once(socket, 'drain'), once(socket, 'close').catch(() => [])]);
+    try {
+      socket.write(frame(mebibyte));
+    } catch {
+      break; // the server closed the connection mid-upload
     }
     written += mebibyte.length;
+    await pause(10);
   }
+
   try {
-    socket.write('0\r\n\r\n');
+    if (!received.startsWith('HTTP/')) socket.write('0\r\n\r\n');
   } catch {
     /* already closed by the server — the answer is what matters */
   }
 
-  const text = await response;
+  const text = await Promise.race([
+    response,
+    pause(20_000).then(() => received),
+  ]);
   socket.destroy();
   return text;
 }

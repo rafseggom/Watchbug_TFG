@@ -1,5 +1,6 @@
 import { resolve } from 'node:path';
-import { buildApp, MULTIPART_LIMITS } from './app';
+import { buildApp } from './app';
+import { MULTIPART_RECEIVE_OPTIONS } from './ingest/caps';
 import { loadConfig } from './config';
 import { createDb } from './db/client';
 import { FsStorage } from './storage/fs-storage';
@@ -59,7 +60,7 @@ async function runMultipartSmoke(): Promise<void> {
   const { default: multipart } = await import('@fastify/multipart');
 
   const app = Fastify({ logger: false });
-  await app.register(multipart, { limits: MULTIPART_LIMITS, throwFileSizeLimit: true });
+  await app.register(multipart, MULTIPART_RECEIVE_OPTIONS);
 
   app.post('/api/_smoke/multipart', async (req, reply) => {
     let meta: string | undefined;
