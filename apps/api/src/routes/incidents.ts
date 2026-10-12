@@ -1,7 +1,7 @@
-import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { desc, eq } from 'drizzle-orm';
 import { MAX_ENCODED_IMAGE_BYTES } from '@watchbug/contracts/constants';
-import type { AppConfig } from '../config';
+import { PROJECT_KEY_PATTERN, type AppConfig } from '../config';
 import type { AppDb } from '../db/client';
 import { incidents, projects } from '../db/schema';
 import { validateMeta } from '../ingest/validate-meta';
@@ -24,14 +24,22 @@ import type { Storage } from '../ports';
 /**
  * CA-01 route surface (Task 2 Step 4).
  *
- * `POST /api/incidents` runs the ordered ingest chain — body caps → multipart
- * parse → client-filename rule → meta validate → project-key lookup →
- * semantic size cap → sniff → structure → guard → re-encode → sanitize →
- * `Storage.put` → idempotent insert. Cheap guards first, the codec last: no
- * hostile byte ever reaches libvips without having passed the container and
- * dimension checks. The idempotency guarantee is the **database** unique index
+ * `POST /api/incidents` runs the ordered ingest chain — body caps (onRequest)
+ * → rate limits → origin allowlist → project-key gate (preHandlers, in that
+ * order) → multipart parse → client-filename rule → meta validate → semantic
+ * size cap → sniff → structure → guard → re-encode → sanitize → `Storage.put`
+ * → idempotent insert. Cheap guards first, the codec last: no hostile byte
+ * ever reaches libvips without having passed the container and dimension
+ * checks. The idempotency guarantee is the **database** unique index
  * `(project_id, idempotency_key)`, never an application-level
  * check-then-insert (ING-03, Pattern 4).
+ *
+ * ING-04 (T-01-14): the project-key gate is a **preHandler** — it runs after
+ * the abuse limits but before any meta/image work and before any
+ * `Storage.put`, so a rejected submission writes nothing. Missing, malformed
+ * and unknown keys all produce the *same* structured 401 (no existence
+ * oracle). The key is **write-only**: `GET` routes never consult it (H-7,
+ * DEP-03 completes in Phase 5).
  *
  * `GET /api/incidents/:id/image` resolves the blob key **from the database
  * row only** — a request never names a file (R-04, C-4).
@@ -55,7 +63,7 @@ interface ProjectRow {
   id: string;
 }
 
-/** Project key → row, or null (missing header and unknown key look identical from outside). */
+/** Project row → id, or null (missing header and unknown key look identical from outside). */
 async function findProject(db: AppDb, publicKey: string | undefined): Promise<ProjectRow | null> {
   if (publicKey === undefined || publicKey.trim() === '') return null;
   const rows = await db
@@ -66,13 +74,22 @@ async function findProject(db: AppDb, publicKey: string | undefined): Promise<Pr
   return rows[0] ?? null;
 }
 
+/**
+ * The **one** 401 body any key failure produces (ING-04, T-01-14): missing,
+ * malformed and unknown keys are indistinguishable byte-for-byte — the
+ * response never reveals whether a key exists.
+ */
 function unauthorized(reply: FastifyReply): FastifyReply {
   return reply.code(401).send({
     statusCode: 401,
     error: 'Unauthorized',
-    message: 'X-Project-Key is missing or does not match a known project',
+    message: 'invalid or missing project key',
   });
 }
+
+/** Stash of the gate-resolved project id on the request (set only by `projectKeyGate`). */
+const PROJECT_ID = Symbol('watchbug.projectId');
+type GatedRequest = FastifyRequest & { [PROJECT_ID]?: string };
 
 function badRequest(reply: FastifyReply, message: string): FastifyReply {
   return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message });
@@ -81,7 +98,32 @@ function badRequest(reply: FastifyReply, message: string): FastifyReply {
 export async function registerIncidentsRoutes(app: FastifyInstance, deps: RouteDeps): Promise<void> {
   const { db, storage, config } = deps;
 
-  app.post('/api/incidents', { onRequest: [bodyCaps] }, async (req, reply) => {
+  /**
+   * ING-04 — the first write-side gate after the abuse limits: format check
+   * against P1-D-03's own `PROJECT_KEY_PATTERN` (never a duplicated regex),
+   * then a **parameterised** lookup of `projects.public_key` (never
+   * string-built SQL). All three failure shapes — missing header, malformed
+   * key, unknown key — fall through to the same `unauthorized()` body, so the
+   * 401 doubles as no key-existence oracle. The resolved project id is
+   * stashed on the request for the insert; the read endpoints never receive
+   * it (the key authenticates ingest only — H-7, DEP-03).
+   */
+  const projectKeyGate = async (req: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    const raw = req.headers['x-project-key'];
+    const key = typeof raw === 'string' ? raw.trim() : '';
+    if (key === '' || !PROJECT_KEY_PATTERN.test(key)) {
+      unauthorized(reply);
+      return;
+    }
+    const project = await findProject(db, key);
+    if (project === null) {
+      unauthorized(reply);
+      return;
+    }
+    (req as GatedRequest)[PROJECT_ID] = project.id;
+  };
+
+  app.post('/api/incidents', { onRequest: [bodyCaps], preHandler: [projectKeyGate] }, async (req, reply) => {
     const idempotencyKey = req.headers['idempotency-key'];
     if (typeof idempotencyKey !== 'string' || idempotencyKey.trim() === '') {
       return badRequest(
@@ -138,8 +180,10 @@ export async function registerIncidentsRoutes(app: FastifyInstance, deps: RouteD
       });
     }
 
-    const project = await findProject(db, req.headers['x-project-key'] as string | undefined);
-    if (project === null) return unauthorized(reply);
+    // ING-04's gate already ran (preHandler): the request carries the
+    // project id it resolved with a parameterised lookup — nothing below
+    // ever re-reads or re-checks the key.
+    const projectId = (req as GatedRequest)[PROJECT_ID]!;
 
     if (imageBytes === undefined) return badRequest(reply, 'the "image" part is missing');
 
@@ -195,13 +239,13 @@ export async function registerIncidentsRoutes(app: FastifyInstance, deps: RouteD
       return badRequest(reply, 'meta no longer validates after sanitization (e.g. a markup-only title)');
     }
 
-    const { key } = await storage.put(hardened.bytes, hardened.ext, project.id);
+    const { key } = await storage.put(hardened.bytes, hardened.ext, projectId);
 
     const now = Date.now();
     const inserted = await db
       .insert(incidents)
       .values({
-        projectId: project.id,
+        projectId,
         idempotencyKey,
         type: cleanMeta.type,
         title: cleanMeta.title,
@@ -239,20 +283,11 @@ export async function registerIncidentsRoutes(app: FastifyInstance, deps: RouteD
     return reply.code(201).send({ id: inserted[0].id });
   });
 
-  app.get('/api/incidents', async (req, reply) => {
-    // The panel (same-origin, Phase-5 auth later) may list without a key on a
-    // single-project instance; a *wrong* key is still rejected loudly.
-    const rawKey = req.headers['x-project-key'];
-    if (rawKey !== undefined) {
-      const project = await findProject(db, rawKey as string);
-      if (project === null) return unauthorized(reply);
-      const rows = await db
-        .select()
-        .from(incidents)
-        .where(eq(incidents.projectId, project.id))
-        .orderBy(desc(incidents.createdAt));
-      return reply.send(rows.map(toListRow));
-    }
+  app.get('/api/incidents', async (_req, reply) => {
+    // H-7 / DEP-03: the project key is WRITE-ONLY — it authenticates ingest
+    // and is never consulted by a read endpoint (Phase 5's AuthProvider gates
+    // reads; until then the read surface is deliberately ungated and the
+    // deployment is loopback-bound — recorded DEP-03 seam).
     const rows = await db.select().from(incidents).orderBy(desc(incidents.createdAt));
     return reply.send(rows.map(toListRow));
   });
