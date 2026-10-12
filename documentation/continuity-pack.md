@@ -194,3 +194,21 @@ Al CERRAR fase N    → durante la sincronía GitHub (§6.5):
                       2. Crear/actualizar documentation/Gantt-Actual.md
                       3. Gantt.md NO se toca
 ```
+
+---
+
+## 8. Phase 1 execution log
+
+### 8.1 [LEGITIMACY GATE] Plan 01-01 Task 1 — pinned dependency set APPROVED (2026-10-12)
+
+**Gate:** `checkpoint:human-verify` · `gate="blocking-human"` (plan 01-01 Task 1) · **Result: `approved`** — recorded before any `npm install` / `docker pull` ran anywhere in the phase (Task 1 acceptance criterion).
+
+Human reviewed `.planning/research/STACK.md` (Version Verification Table) and `.planning/phases/01-contracts-ingest-slice/01-RESEARCH.md` § Package Legitimacy Audit, **including the disclosed discrepancy** that `typescript`, `vite`, `react`/`react-dom`, `@vitejs/plugin-react` and `tsx` have no audit row and rest on STACK.md verification alone.
+
+**Approved — npm (17 pinned packages):** `fastify@5.12.5`, `@fastify/multipart@10.1.2`, `@fastify/rate-limit@11.2.0`, `@fastify/cors@11.3.0`, `@fastify/helmet@13.1.1`, `drizzle-orm@0.45.3`, `drizzle-kit@0.31.11`, `pg@8.23.1`, `zod@4.6.5`, `sanitize-html@2.18.0`, `react@19.3.0`, `react-dom@19.3.0`, `vite@8.3.2`, `@vitejs/plugin-react@6.1.2`, `typescript@7.0.2`, `esbuild@0.28.2`, `@playwright/test@1.63.0`, `tsx@4.23.15`.
+
+**Approved — Docker images (3):** `node:24.21.0-alpine3.24`, `nginx:1.30.5-alpine3.24`, `postgres:18.6-alpine3.24`.
+
+**NOT approved in this batch:** `sharp` — it is not in plan 01-01's set and carries its own `checkpoint:human-verify` in plan **01-02** (P1-D-10 consultation). It must not be installed until that gate is cleared.
+
+**Standing rule from the approval:** no package may be silently swapped for a non-STACK.md alternative; a swap is a consultation, not an edit.
