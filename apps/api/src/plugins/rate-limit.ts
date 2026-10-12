@@ -4,6 +4,7 @@ import {
   RATE_LIMIT_PER_IP_PER_MIN,
   RATE_LIMIT_PER_PROJECT_PER_DAY,
 } from '@watchbug/contracts/constants';
+import { PROJECT_KEY_PATTERN } from '../config';
 
 /**
  * ING-05 / SEC-05 (T-01-12) — the three composed ingest limiters.
@@ -77,7 +78,19 @@ export function createIngestRateLimit(
   app: FastifyInstance,
   limits: IngestRateLimits,
 ): (req: FastifyRequest, reply: FastifyReply) => Promise<void> {
-  const projectKeyOf = (req: FastifyRequest): string => String(req.headers['x-project-key'] ?? '');
+  /**
+   * CR-01 — the bucket key must be normalized EXACTLY like the ING-04 gate
+   * normalizes it (`raw.trim()` + `PROJECT_KEY_PATTERN`), or whitespace
+   * padding (e.g. an NBSP byte the HTTP parser keeps) is accepted by the gate
+   * as the same project while minting a fresh bucket per padding — unlimited
+   * per-key/per-day quota from one public key. Anything that cannot be a real
+   * project key shares ONE bucket, so garbage keys never get free quota either.
+   */
+  const projectKeyOf = (req: FastifyRequest): string => {
+    const raw = req.headers['x-project-key'];
+    const key = (typeof raw === 'string' ? raw : '').trim();
+    return PROJECT_KEY_PATTERN.test(key) ? key : '';
+  };
 
   const byKey = app.createRateLimit({
     max: limits.perKeyPerMin,
