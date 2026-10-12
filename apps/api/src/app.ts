@@ -105,6 +105,12 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
    * messages from foreign errors leaking to the client.
    */
   app.setErrorHandler((err: unknown, _req, reply) => {
+    // WR-05: if a reply was already sent (the streaming-413 watcher answers
+    // independently of the route lifecycle), this is the in-flight request
+    // unwinding in the reply's wake — never log it as an unhandled error and
+    // never attempt a second `reply.send` on the sent reply.
+    if (reply.sent) return;
+
     const candidate = typeof err === 'object' && err !== null && 'statusCode' in err ? err.statusCode : undefined;
     const statusCode = typeof candidate === 'number' && candidate >= 400 && candidate < 500 ? candidate : 500;
 

@@ -157,7 +157,9 @@ function watchStreamBytes(req: FastifyRequest, reply: FastifyReply): void {
   const start = socket.bytesRead;
 
   const timer = setInterval(() => {
-    if (reply.raw.writableEnded || socket.destroyed) {
+    // WR-05: `reply.sent` joins the guard — if the route (or a previous tick)
+    // already answered, the watcher must never send a second reply.
+    if (reply.sent || reply.raw.writableEnded || socket.destroyed) {
       clearInterval(timer);
       return;
     }
@@ -344,4 +346,25 @@ export function mapMultipartError(err: unknown): CapsFailure | null {
   const status = errorStatus(err);
   if (status === null) return null;
   return failure(status, errorMessage(err));
+}
+
+/**
+ * WR-05 — a stream aborted mid-body is a CLIENT-shaped failure, never an
+ * unhandled 500: the streaming-413 watcher (or a dead socket) tears the
+ * multipart iteration down with a premature-close/abort rejection. Used by
+ * the route catch so such rejections are answered with the structured 413
+ * naming `MAX_BODY_BYTES` instead of falling into `app.setErrorHandler`'s
+ * 500 branch (false "unhandled error" logs + a second `reply.send`).
+ */
+export function isBodyAbort(err: unknown): boolean {
+  switch (errorCode(err)) {
+    case 'ERR_STREAM_PREMATURE_CLOSE':
+    case 'ABORT_ERR':
+    case 'ECONNRESET':
+      return true;
+    default:
+      break;
+  }
+  const message = errorMessage(err).toLowerCase();
+  return message.includes('aborted') || message.includes('premature close');
 }

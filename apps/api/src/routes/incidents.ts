@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { and, desc, eq } from 'drizzle-orm';
-import { MAX_ENCODED_IMAGE_BYTES } from '@watchbug/contracts/constants';
+import { MAX_BODY_BYTES, MAX_ENCODED_IMAGE_BYTES } from '@watchbug/contracts/constants';
 import { PROJECT_KEY_PATTERN, type AppConfig } from '../config';
 import type { AppDb } from '../db/client';
 import { incidents, projects } from '../db/schema';
@@ -15,6 +15,7 @@ import {
   BodyCapExceeded,
   bodyCaps,
   failure,
+  isBodyAbort,
   mapMultipartError,
   receiveImagePart,
   validateClientFilename,
@@ -177,8 +178,21 @@ export async function registerIncidentsRoutes(app: FastifyInstance, deps: RouteD
         }
       }
     } catch (err) {
+      // WR-05 — the streaming-413 watcher owns the cap answer: if it already
+      // replied (its structured 413, socket destroyed 250 ms after the
+      // flush), the in-flight multipart iteration unwinds with a stream
+      // abort in the reply's wake. Return WITHOUT a second send, and never
+      // let such an abort reach the error handler's 500 branch.
+      if (reply.sent) return;
       const mapped = mapMultipartError(err);
-      if (mapped === null) throw err;
+      if (mapped === null) {
+        if (isBodyAbort(err)) {
+          return reply
+            .code(413)
+            .send(failure(413, `request body aborted at MAX_BODY_BYTES (${MAX_BODY_BYTES} bytes); nothing was stored`));
+        }
+        throw err;
+      }
       if (err instanceof BodyCapExceeded) req.raw.destroy();
       return reply.code(mapped.statusCode).send(mapped);
     }
