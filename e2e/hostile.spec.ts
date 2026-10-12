@@ -104,21 +104,24 @@ function buildMultipart(meta: string, image: ImagePart): { body: Buffer; content
 /**
  * POST the hostile body. `baseUrl` defaults to the panel origin (nginx → api);
  * pass the API origin directly to reach a layer *before* nginx's own
- * `client_max_body_size`.
+ * `client_max_body_size`. `key: null` omits the header entirely; a string
+ * overrides it (ING-04's missing / unknown / malformed trio).
  */
 async function postHostile(
   request: import('@playwright/test').APIRequestContext,
   image: ImagePart,
-  opts: { baseUrl?: string; title?: string } = {},
+  opts: { baseUrl?: string; title?: string; key?: string | null } = {},
 ): Promise<PostResult> {
   const { body, contentType } = buildMultipart(META, image);
   void opts.title; // titles stay uniform: hostile rows never store anything
+  const headers: Record<string, string> = {
+    'content-type': contentType,
+    'Idempotency-Key': `e2e-hostile-${randomUUID()}`,
+  };
+  const key = opts.key === undefined ? KEY : opts.key;
+  if (key !== null) headers['X-Project-Key'] = key;
   const res = await request.post(`${opts.baseUrl ?? ''}/api/incidents`, {
-    headers: {
-      'content-type': contentType,
-      'X-Project-Key': KEY,
-      'Idempotency-Key': `e2e-hostile-${randomUUID()}`,
-    },
+    headers,
     data: body,
   });
   const responseContentType = res.headers()['content-type'] ?? '';
@@ -374,4 +377,78 @@ test('C-4: an unknown incident id is 404 — never 400, and the body shape match
   expect(body.statusCode).toBe(404);
   expect(body.error).toBe('Not Found');
   expect(body.message).toBe('incident not found');
+});
+
+/**
+ * ING-04 (T-01-14) — the project-key capability gate.
+ *
+ * The three rejection shapes (missing header, unknown-but-well-formed key,
+ * malformed key) must answer with **one byte-identical structured 401**: the
+ * response is never allowed to reveal whether a key exists. The gate runs
+ * before any meta/image work and before any `Storage.put`, so a rejected
+ * submission leaves the report list untouched.
+ *
+ * The exact message is part of the contract here — it is the *only* message
+ * any of the three shapes may produce.
+ */
+const UNIFORM_401_BODY = {
+  statusCode: 401,
+  error: 'Unauthorized',
+  message: 'invalid or missing project key',
+};
+
+test('ING-04: missing, unknown and malformed project keys all get the same structured 401 and nothing is stored', async ({ request }) => {
+  const before = (await (await request.get('/api/incidents')).json() as unknown[]).length;
+
+  const missing = await postHostile(request, { filename: 'shot.png', mime: 'image/png', bytes: png }, { key: null });
+  const unknown = await postHostile(
+    request,
+    { filename: 'shot.png', mime: 'image/png', bytes: png },
+    { key: 'wkbt_ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ' }, // well-formed, not seeded
+  );
+  const malformed = await postHostile(
+    request,
+    { filename: 'shot.png', mime: 'image/png', bytes: png },
+    { key: 'not-a-project-key' }, // wrong prefix and length
+  );
+
+  for (const [label, res] of [
+    ['missing', missing],
+    ['unknown', unknown],
+    ['malformed', malformed],
+  ] as const) {
+    expect(res.status, `${label} key must be rejected with 401`).toBe(401);
+    expect(res.json).toEqual(UNIFORM_401_BODY);
+  }
+
+  // Byte-for-byte identical: no existence hint leaks through the body.
+  const encoded = [missing, unknown, malformed].map((r) => JSON.stringify(r.json));
+  expect(encoded[1]).toBe(encoded[0]);
+  expect(encoded[2]).toBe(encoded[0]);
+
+  // Nothing was stored by any of the three.
+  const after = (await (await request.get('/api/incidents')).json() as unknown[]).length;
+  expect(after).toBe(before);
+});
+
+test('ING-04 concurrency: a parallel burst of invalid-key requests each receives its own uniform 401 and stores nothing', async ({ request }) => {
+  const before = (await (await request.get('/api/incidents')).json() as unknown[]).length;
+
+  const image: ImagePart = { filename: 'shot.png', mime: 'image/png', bytes: png };
+  const burst = await Promise.all([
+    postHostile(request, image, { key: null }),
+    postHostile(request, image, { key: 'wkbt_ffffffffffffffffffffffffffffffff' }),
+    postHostile(request, image, { key: null }),
+    postHostile(request, image, { key: 'garbage' }),
+    postHostile(request, image, { key: 'wkbt_ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ' }),
+    postHostile(request, image, { key: 'wkbt_short' }),
+  ]);
+
+  for (const res of burst) {
+    expect(res.status).toBe(401);
+    expect(res.json).toEqual(UNIFORM_401_BODY);
+  }
+
+  const after = (await (await request.get('/api/incidents')).json() as unknown[]).length;
+  expect(after).toBe(before);
 });
