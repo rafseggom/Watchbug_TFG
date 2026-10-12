@@ -4,11 +4,15 @@ import { formatCreatedAt } from './ReportList';
 /**
  * Right column: the selected report with its screenshot (P1-D-04).
  *
- * SEC-05 pass 2: the image is a real `<img>` whose `src` is the server's blob
- * route — the browser fetches it same-origin with the hardened response
- * headers (`nosniff`, attachment disposition, `CORP: same-origin`). Every
- * report field renders as a text node; nothing is ever
- * `dangerouslySetInnerHTML`'d (STACK rejection list).
+ * SEC-05 pass 2 (C-3 render half): the image is a real `<img>` whose `src`
+ * comes **only** from `incidentImageUrl(id)` — the server's blob route, fetched
+ * same-origin with the hardened response headers (`nosniff`, attachment
+ * disposition, `CORP: same-origin`); a report field can never become an image
+ * source. Every report field renders as a React text node (auto-escaped) and
+ * nothing is ever linkified: the panel has no HTML-rendering sink of any kind
+ * (STACK rejection list). The absence of that sink is enforced by the
+ * source-gate row in `e2e/hostile.spec.ts`, its inertness by the DOM rows
+ * there — neither alone is the control (Pattern 7, C-3).
  */
 export interface ReportDetailProps {
   incident: Incident | null;

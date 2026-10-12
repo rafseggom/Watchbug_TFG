@@ -949,6 +949,9 @@ test('ING-07 pass 2: stored hostile payloads render as literal text and inject z
 
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Watchbug' })).toBeVisible();
+  // Wait for the list fetch to land (WebKit renders the shell before the
+  // promise resolves — the body snapshot below must see rows, not "Loading…").
+  await expect(page.locator('aside button').first()).toBeVisible();
 
   // Every payload's surviving text is visible as literal text — innerText is
   // the *rendered* text, so an entity-escaped payload shows its entity form
