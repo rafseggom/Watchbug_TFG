@@ -157,7 +157,15 @@ export async function registerIncidentsRoutes(app: FastifyInstance, deps: RouteD
     try {
       for await (const part of req.parts()) {
         if (part.type === 'field' && part.fieldname === 'meta') {
-          metaRaw = String(part.value);
+          // `@fastify/multipart` JSON-parses any field whose Content-Type
+          // starts with `application/json` — which is exactly what
+          // `curl -F 'meta={...}'` (P1-D-07's onboarding snippet) sends — so
+          // the value can arrive as an object. Re-stringify it here so
+          // `validateMeta` always receives the raw JSON text; the previous
+          // `String(part.value)` turned objects into `"[object Object]"` and
+          // 400'd every JSON-typed meta part (deferred by 01-02, expires with
+          // this plan's onboarding curl).
+          metaRaw = typeof part.value === 'string' ? part.value : JSON.stringify(part.value);
           counter.add(Buffer.byteLength(metaRaw, 'utf8'));
         } else if (part.type === 'file' && part.fieldname === 'image') {
           // Streams to a server-named tmp file while counting the bytes;
