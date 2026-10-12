@@ -34,9 +34,12 @@ export class FsStorageError extends Error {
 
 export class FsStorage implements Storage {
   private readonly root: string;
+  private readonly blobsRoot: string;
 
+  /** `volumeRoot` is the compose attachments volume — it holds `blobs/` and `tmp/`. */
   constructor(volumeRoot: string) {
     this.root = resolve(volumeRoot);
+    this.blobsRoot = resolve(this.root, 'blobs');
   }
 
   /** Validated absolute path — throws unless the key is grammatical and inside the volume. */
@@ -45,8 +48,8 @@ export class FsStorage implements Storage {
       // Never echo the offending value: this is server state, not user input.
       throw new FsStorageError('stored object key is malformed', 404);
     }
-    const abs = resolve(this.root, key);
-    if (!abs.startsWith(this.root + sep)) {
+    const abs = resolve(this.blobsRoot, key);
+    if (!abs.startsWith(this.blobsRoot + sep)) {
       throw new FsStorageError('stored object key escapes the volume root', 404);
     }
     return abs;
