@@ -27,11 +27,13 @@ services:
       retries: 12
       start_period: 10s
     volumes:
-      - watchbug-db-data:/var/lib/postgresql/data
+      # Postgres 18+ expects the single parent mount at /var/lib/postgresql
+      # (the old /var/lib/postgresql/data layout is rejected on restart).
+      - watchbug-db-data:/var/lib/postgresql
     # Loopback only: host-side tooling (`drizzle-kit migrate`, `npm run dev`)
     # reaches it, nothing else does.
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:5433:5432"
     restart: unless-stopped
 
   api:
