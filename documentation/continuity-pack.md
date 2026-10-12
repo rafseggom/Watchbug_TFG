@@ -224,3 +224,20 @@ Plan 01-01 Task 2 Step 0 ran the Q-08 smoke test under the pinned `typescript@7.
 **Disposition:** Q-08 resolves as **PASS** — the toolchain stays on TypeScript 7.0.2 and the documented 6.x fallback is **not** taken. Re-verified in-session before this record was written.
 
 **Open item (type-only deps):** `npm run lint` runs `tsc` across the workspaces and cannot typecheck `apps/api` (`node:fs` / `process`) or `apps/panel` (JSX / `react-dom/client`) without type-only devDeps (`@types/node`, `@types/react`, `@types/react-dom`, plus `@types/pg` and `@types/sanitize-html` for untyped runtime deps). Those are **outside the 17 approved pins**, so nothing has been installed — a human decision is required (approve type-only devDeps vs. scope `lint` down). This does not affect `npm run build`, `check:size`, `check:compose` or the e2e suite.
+
+*(Resolved 2026-10-12: the owner approved the five type-only `@types/*` devDependencies — A-13, `documentation/resolution-record.md`.)*
+
+### 8.3 [P1-D-10] Re-encode backend DECIDED — `sharp@0.35.5` (Option A) (2026-10-12)
+
+**Gate:** `checkpoint:human-verify` · `gate="blocking-human"` (plan 01-02 Task 1) · **Result: `sharp`** — the owner adopted **Option A: `sharp@0.35.5`** as the P1-D-10 re-encode backend, after reviewing P1-D-10's locked text, the option comparison (sharp re-encode vs. structural strip/rebuild) and the package-legitimacy evidence. Recorded **before** Task 2 installs or commits the backend (Task 1 acceptance criterion). `sharp` is now explicitly approved — the legitimacy gate for it must not be re-opened.
+
+**Rationale (P1-D-10, locked):** the decision requires a **root re-encode** (`re-codifica de raíz`) — only a true decode → re-encode kills decoder-differential polyglots, which a structural strip/rebuild cannot (it only kills container-level polyglots, metadata and trailing data). The cost is low in this codebase:
+
+1. **No toolchain in the image.** `sharp` installs from `optionalDependencies` prebuilds — including `@img/sharp-libvips-linuxmusl-x64` and `@img/sharp-libvips-linuxmusl-arm64` — so no `node-gyp`/compiler enters `node:24.21.0-alpine3.24`.
+2. **`apps/api` only.** It lives in the server workspace; `packages/sdk` and the RNF-01 size lanes (45/25/80 KB) are untouched — `check:size` proves it.
+3. **License Apache-2.0** — compatible with R-07.
+4. **Legitimacy seam false positive.** The seam's `SUS ("too-new")` verdict is the same release-cadence false positive already dispositioned for the 16 other approved packages: the package is ~12 years old, ~115.9 M downloads/week, official repo `github.com/lovell/sharp`.
+
+**Operational consequences accepted:** a native libvips layer in the `api` image (image size grows; the container count does not — INV-03 still exactly 3), and a processing-time guard (`timeout({ seconds })`) on the decode as the T-01-08 mitigation alongside the pre-decode header guard.
+
+**Scope:** pin exactly `sharp@0.35.5` in `apps/api/package.json` **only**. No other new dependency in this plan. The zero-dep structural strip/rebuild stays as code history (`structure.ts` keeps the chunk validation as a pre-codec guard) but is no longer the hardening backend.
