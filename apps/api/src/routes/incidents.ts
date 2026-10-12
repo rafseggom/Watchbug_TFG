@@ -281,6 +281,10 @@ export async function registerIncidentsRoutes(app: FastifyInstance, deps: RouteD
 
     // DB-lookup-only key resolution: the key in the row was server-generated
     // at insert; the request never contributed a path segment (R-04, C-4).
+    // The path safety itself is delegated to `FsStorage.stream`, which applies
+    // `STORAGE_KEY_REGEX` and then `path.resolve` + a volume-root prefix
+    // assertion before any file access — belt and braces on top of the key
+    // being server-generated.
     const stream = await storage.stream(row.storageKey);
 
     const ext = row.contentType === 'image/webp' ? 'webp' : row.contentType === 'image/png' ? 'png' : null;

@@ -329,3 +329,49 @@ test('C-4: traversal-shaped client filenames are rejected 400 — the name never
     expect(String(res.json?.message)).toMatch(/filename/i);
   }
 });
+
+test('C-3/C-4: the blob route serves the report with the full inert header set and a fixed ASCII name', async ({ request }) => {
+  // A benign-but-client-supplied filename travels with the upload. Whatever
+  // the client called the file, the response must carry the *server's* name:
+  // the stored key is `projectId/<xx>/<uuid>.<ext>` (asserted before any file
+  // access by STORAGE_KEY_REGEX + the resolve-prefix check in fs-storage) and
+  // is never observable from outside — the only reachable facts are this
+  // id-scoped URL and the headers below.
+  const created = await request.post('/api/incidents', {
+    multipart: {
+      meta: META,
+      image: { name: 'report shot (final).png', mimeType: 'image/png', buffer: png },
+    },
+    headers: { 'X-Project-Key': KEY, 'Idempotency-Key': `e2e-blob-${randomUUID()}` },
+  });
+  expect(created.status()).toBe(201);
+  const { id } = (await created.json()) as { id: string };
+
+  const blob = await request.get(`/api/incidents/${id}/image`);
+  expect(blob.status()).toBe(200);
+  const headers = blob.headers();
+  expect(headers['content-type']).toBe('image/png');
+  expect(headers['x-content-type-options']).toBe('nosniff');
+  expect(headers['content-disposition']).toBe('attachment; filename="screenshot.png"');
+  expect(headers['content-disposition']).not.toContain('report shot');
+  expect(headers['content-security-policy']).toContain("default-src 'none'");
+  expect(headers['content-security-policy']).toContain('sandbox');
+  expect(headers['cross-origin-resource-policy']).toBe('same-origin');
+  expect(headers['cache-control']).toContain('private');
+
+  // The stored key never leaves the server in any projection either.
+  const list = (await (await request.get('/api/incidents')).json()) as Array<Record<string, unknown>>;
+  const row = list.find((r) => r.id === id);
+  expect(row).toBeDefined();
+  expect(row).not.toHaveProperty('storageKey');
+  expect(row).not.toHaveProperty('projectId');
+});
+
+test('C-4: an unknown incident id is 404 — never 400, and the body shape matches the other 404s', async ({ request }) => {
+  const res = await request.get(`/api/incidents/${randomUUID()}/image`);
+  expect(res.status()).toBe(404);
+  const body = (await res.json()) as Record<string, unknown>;
+  expect(body.statusCode).toBe(404);
+  expect(body.error).toBe('Not Found');
+  expect(body.message).toBe('incident not found');
+});
