@@ -6,6 +6,7 @@ import type { AppConfig } from './config';
 import type { AppDb } from './db/client';
 import { seedProject } from './boot/seed';
 import { MULTIPART_RECEIVE_OPTIONS } from './ingest/caps';
+import { createOriginGate, registerCors } from './plugins/cors';
 import { createIngestRateLimit, resolveIngestRateLimits } from './plugins/rate-limit';
 import type { Storage } from './ports';
 import { registerIncidentsRoutes } from './routes/incidents';
@@ -53,6 +54,10 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   // `createRateLimit` decorator exists at build time — caps → rate limits →
   // CORS → route handlers).
   await app.register(rateLimit, { global: false });
+  // ING-08 (T-01-13): `@fastify/cors` with the WATCHBUG_CORS_ORIGINS
+  // allowlist from config — registered before the routes (chain position:
+  // caps → rate limits → CORS → route handlers).
+  await registerCors(app, config);
 
   app.get('/api/health', async (_req, reply) => {
     try {
@@ -77,7 +82,13 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     }),
   );
 
-  await registerIncidentsRoutes(app, { config, db, storage, ingestRateLimit });
+  await registerIncidentsRoutes(app, {
+    config,
+    db,
+    storage,
+    ingestRateLimit,
+    originGate: createOriginGate(config),
+  });
 
   /**
    * Structured error mapper: every client-visible failure is

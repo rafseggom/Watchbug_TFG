@@ -63,6 +63,11 @@ export interface RouteDeps {
    * rejected key still consumes quota (limits → key → handler).
    */
   ingestRateLimit: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
+  /**
+   * The ING-08 origin allowlist enforcement (`plugins/cors.ts`) — second
+   * preHandler: abuse limits → CORS → key lookup → handler.
+   */
+  originGate: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
 }
 
 interface ProjectRow {
@@ -131,7 +136,7 @@ export async function registerIncidentsRoutes(app: FastifyInstance, deps: RouteD
 
   app.post(
     '/api/incidents',
-    { onRequest: [bodyCaps], preHandler: [deps.ingestRateLimit, projectKeyGate] },
+    { onRequest: [bodyCaps], preHandler: [deps.ingestRateLimit, deps.originGate, projectKeyGate] },
     async (req, reply) => {
     const idempotencyKey = req.headers['idempotency-key'];
     if (typeof idempotencyKey !== 'string' || idempotencyKey.trim() === '') {
