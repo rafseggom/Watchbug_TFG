@@ -1,7 +1,9 @@
 import { expect, test } from '@playwright/test';
+import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { copyFileSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { reportSchema } from '@watchbug/contracts/schema';
 
 /**
@@ -247,4 +249,151 @@ test('panel renders the row and its screenshot (P1-D-04, SEC-05 pass 2)', async 
   const img = page.getByAltText(new RegExp(`Screenshot for report: ${probe}`));
   await expect(img).toBeVisible();
   await expect.poll(async () => img.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBe(64);
+});
+
+/**
+ * P1-D-07 — the empty state **is** the onboarding: the key endpoint, the
+ * pre-filled curl (shape + real key), and an actual run of the emitted
+ * snippet against the stack. P1-D-05 — language detection and persistence.
+ *
+ * The "empty database" rows intercept `GET /api/incidents` with an empty
+ * array: the suite shares one growing stack, so a genuinely empty list only
+ * exists on a fresh install. Everything else in the row — the panel's
+ * `EmptyState` component, `GET /api/setup`, the emitted command, and the API
+ * it targets — is real.
+ */
+test('P1-D-07 / T-01-16: GET /api/setup serves exactly the seeded write-only project key through nginx', async ({ request }) => {
+  const res = await request.get('/api/setup');
+  expect(res.status()).toBe(200);
+  expect(res.headers()['content-type']).toContain('application/json');
+  const body = (await res.json()) as Record<string, unknown>;
+  // T-01-16: one field and nothing else — no config, no rows.
+  expect(Object.keys(body)).toEqual(['projectKey']);
+  expect(body.projectKey).toBe(KEY);
+  expect(String(body.projectKey)).toMatch(/^wkbt_[0-9A-Za-z]{32}$/); // P1-D-03 format
+});
+
+test('P1-D-07: with an empty list the panel shows the onboarding curl carrying the real key and the CA-01 wire shape', async ({ page }) => {
+  await page.route('**/api/incidents', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }),
+  );
+  await page.goto('/');
+
+  await expect(page.getByRole('heading', { name: 'Send your first report' })).toBeVisible();
+  await expect(page.locator('pre')).toHaveCount(1);
+  const curl = await page.locator('pre').innerText();
+
+  // The instance's real project key (the same value /api/setup serves).
+  expect(curl).toContain(KEY);
+  // CA-01 wire form: endpoint, key header, idempotency header, meta part, image part.
+  expect(curl).toContain('/api/incidents');
+  expect(curl).toContain('-H "X-Project-Key: ');
+  expect(curl).toContain('-H "Idempotency-Key: ');
+  expect(curl).toMatch(/-F 'meta=\{"type":"(bug|feedback)","title":"/);
+  expect(curl).toContain(`-F 'image=@screenshot.png'`);
+  // The one-line instruction to reload after running it.
+  await expect(page.getByText('Then reload this page')).toBeVisible();
+});
+
+test('P1-D-07: the emitted onboarding curl runs verbatim and the new report appears after reload', async ({ page, request }) => {
+  test.setTimeout(60_000);
+  await page.route('**/api/incidents', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }),
+  );
+  await page.goto('/');
+  await expect(page.locator('pre')).toBeVisible();
+  const curl = await page.locator('pre').innerText();
+
+  const before = (await (await request.get('/api/incidents')).json()) as Array<{ title: string }>;
+  const title = 'Hello from Watchbug';
+  const beforeCount = before.filter((row) => row.title === title).length;
+
+  // Parse the snippet the way the shell that would paste it does: join line
+  // continuations, then split honouring the quotes curl was handed.
+  const joined = curl.replace(/\\\r?\n\s*/g, ' ');
+  const unquote = (token: string): string => {
+    if (token.length > 1 && token.startsWith('"') && token.endsWith('"')) return token.slice(1, -1);
+    if (token.length > 1 && token.startsWith("'") && token.endsWith("'")) return token.slice(1, -1);
+    return token;
+  };
+  const tokens = (joined.match(/"[^"]*"|'[^']*'|\S+/g) ?? []).map(unquote);
+  expect(tokens[0]).toBe('curl');
+
+  // A pasted snippet references a local file — give it one, in its own cwd.
+  const workdir = mkdtempSync(join(tmpdir(), 'watchbug-onboarding-'));
+  try {
+    copyFileSync(resolve(repoRoot, 'e2e/fixtures/valid-64x64.png'), join(workdir, 'screenshot.png'));
+    const run = spawnSync(tokens[0], tokens.slice(1), { cwd: workdir, encoding: 'utf8', timeout: 30_000 });
+    expect(run.error, `could not run curl: ${String(run.error)}`).toBeUndefined();
+    expect(run.status, `curl exited ${String(run.status)}: ${run.stderr}`).toBe(0);
+    const created = JSON.parse(run.stdout) as { id?: string };
+    expect(created.id).toMatch(/^[0-9a-f-]{36}$/);
+  } finally {
+    rmSync(workdir, { recursive: true, force: true });
+  }
+
+  // The report landed in storage…
+  const after = (await (await request.get('/api/incidents')).json()) as Array<{ title: string }>;
+  expect(after.filter((row) => row.title === title).length).toBe(beforeCount + 1);
+
+  // …and reloading the panel (now un-intercepted) shows it in the list.
+  await page.unroute('**/api/incidents');
+  await page.reload();
+  await expect(page.getByText(title).first()).toBeVisible();
+});
+
+test('P1-D-07: a meta part sent with Content-Type: application/json ingests (the curl -F shape)', async ({ request }) => {
+  // curl -F 'meta={…}' marks the field application/json; @fastify/multipart
+  // JSON-parses it into an object. The ingest must re-stringify that object
+  // before validation instead of String()ing it into "[object Object]".
+  const boundary = `----watchbugjson${randomUUID().replace(/-/g, '')}`;
+  const meta = JSON.stringify({ type: 'bug', title: 'JSON content-type meta probe', url: '/' });
+  const body = Buffer.concat([
+    Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="meta"\r\n` +
+        `Content-Type: application/json\r\n\r\n${meta}\r\n`,
+    ),
+    Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="image"; filename="shot.png"\r\n` +
+        'Content-Type: image/png\r\n\r\n',
+    ),
+    png,
+    Buffer.from(`\r\n--${boundary}--\r\n`),
+  ]);
+
+  const res = await request.post('/api/incidents', {
+    headers: {
+      'content-type': `multipart/form-data; boundary=${boundary}`,
+      'X-Project-Key': KEY,
+      'Idempotency-Key': `e2e-jsonmeta-${randomUUID()}`,
+    },
+    data: body,
+  });
+  expect(res.status()).toBe(201);
+
+  const { id } = (await res.json()) as { id: string };
+  const list = (await (await request.get('/api/incidents')).json()) as Array<{ id: string; title: string }>;
+  expect(list.find((row) => row.id === id)?.title).toBe('JSON content-type meta probe');
+});
+
+test('P1-D-05: language defaults from navigator.language and a manual switch survives reload', async ({ page, browser }) => {
+  // Detection (no stored choice): an `es*` locale gets Spanish on first visit.
+  const esContext = await browser.newContext({ locale: 'es-ES' });
+  const esPage = await esContext.newPage();
+  await esPage.goto('/');
+  await expect(esPage.getByText('Reportes', { exact: true })).toBeVisible();
+  await esContext.close();
+
+  // The harness default (en-US) gets English.
+  await page.goto('/');
+  await expect(page.getByText('Reports', { exact: true })).toBeVisible();
+
+  // Manual switch → persisted in the panel's own localStorage, and still
+  // Spanish after a full reload (which re-runs detection from scratch).
+  await page.locator('select').selectOption('es');
+  await expect(page.getByText('Reportes', { exact: true })).toBeVisible();
+  await expect(page.getByText('Pendiente').first()).toBeVisible();
+  await page.reload();
+  await expect(page.getByText('Reportes', { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('watchbug.lang'))).toBe('es');
 });

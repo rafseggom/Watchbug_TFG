@@ -1,23 +1,27 @@
 import type { Incident } from '../api';
+import { t, type Lang, type StringKey } from '../i18n';
 
 /**
  * Left column: the incident list (P1-D-04). Selection is lifted to `App` so
- * the detail pane and the list share one source of truth.
+ * the detail pane and the list share one source of truth. An empty list never
+ * renders here — `App` shows `EmptyState` instead (P1-D-07).
  *
  * SEC-05 pass 2: every interpolated value is a React text node — the type,
- * title and date below are escaped by React, never concatenated into HTML.
+ * status, title and date below are escaped by React, never concatenated into
+ * HTML, never linkified.
  */
 export interface ReportListProps {
   incidents: Incident[];
   selectedId: string | null;
   onSelect(id: string): void;
+  lang: Lang;
 }
 
-const TYPE_LABEL: Record<Incident['type'], string> = { bug: 'Bug', feedback: 'Feedback' };
-const STATUS_LABEL: Record<Incident['status'], string> = {
-  pending: 'Pending',
-  in_progress: 'In progress',
-  resolved: 'Resolved',
+const TYPE_KEY: Record<Incident['type'], StringKey> = { bug: 'typeBug', feedback: 'typeFeedback' };
+const STATUS_KEY: Record<Incident['status'], StringKey> = {
+  pending: 'statusPending',
+  in_progress: 'statusInProgress',
+  resolved: 'statusResolved',
 };
 
 export function formatCreatedAt(iso: string): string {
@@ -25,7 +29,7 @@ export function formatCreatedAt(iso: string): string {
   return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
 }
 
-export function ReportList({ incidents, selectedId, onSelect }: ReportListProps) {
+export function ReportList({ incidents, selectedId, onSelect, lang }: ReportListProps) {
   return (
     <ul style={{ listStyle: 'none', margin: 0, padding: 'var(--space-2)' }}>
       {incidents.map((incident) => (
@@ -57,10 +61,10 @@ export function ReportList({ incidents, selectedId, onSelect }: ReportListProps)
                 letterSpacing: '0.04em',
               }}
             >
-              {TYPE_LABEL[incident.type]}
+              {t(lang, TYPE_KEY[incident.type])}
             </span>
             <span style={{ marginLeft: 'var(--space-2)', fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>
-              {STATUS_LABEL[incident.status]}
+              {t(lang, STATUS_KEY[incident.status])}
             </span>
             <div style={{ marginTop: 'var(--space-1)' }}>{incident.title}</div>
             <div style={{ marginTop: 'var(--space-1)', fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>
@@ -69,9 +73,6 @@ export function ReportList({ incidents, selectedId, onSelect }: ReportListProps)
           </button>
         </li>
       ))}
-      {incidents.length === 0 && (
-        <li style={{ padding: 'var(--space-4)', color: 'var(--color-text-muted)' }}>No reports yet.</li>
-      )}
     </ul>
   );
 }

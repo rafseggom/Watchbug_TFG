@@ -1,4 +1,5 @@
 import { incidentImageUrl, type Incident } from '../api';
+import { t, type Lang, type StringKey } from '../i18n';
 import { formatCreatedAt } from './ReportList';
 
 /**
@@ -16,13 +17,15 @@ import { formatCreatedAt } from './ReportList';
  */
 export interface ReportDetailProps {
   incident: Incident | null;
+  lang: Lang;
 }
 
-const STATUS_LABEL: Record<Incident['status'], string> = {
-  pending: 'Pending',
-  in_progress: 'In progress',
-  resolved: 'Resolved',
+const STATUS_KEY: Record<Incident['status'], StringKey> = {
+  pending: 'statusPending',
+  in_progress: 'statusInProgress',
+  resolved: 'statusResolved',
 };
+const TYPE_KEY: Record<Incident['type'], StringKey> = { bug: 'typeBug', feedback: 'typeFeedback' };
 
 function MetaRow({ label, value }: { label: string; value: string | null | undefined }) {
   if (value === null || value === undefined || value === '') return null;
@@ -34,12 +37,10 @@ function MetaRow({ label, value }: { label: string; value: string | null | undef
   );
 }
 
-export function ReportDetail({ incident }: ReportDetailProps) {
+export function ReportDetail({ incident, lang }: ReportDetailProps) {
   if (incident === null) {
     return (
-      <p style={{ padding: 'var(--space-5)', color: 'var(--color-text-muted)' }}>
-        Select a report on the left to see its details.
-      </p>
+      <p style={{ padding: 'var(--space-5)', color: 'var(--color-text-muted)' }}>{t(lang, 'selectPrompt')}</p>
     );
   }
 
@@ -47,12 +48,12 @@ export function ReportDetail({ incident }: ReportDetailProps) {
     <div style={{ padding: 'var(--space-5)' }}>
       <h2 style={{ margin: '0 0 var(--space-2)', fontSize: 'var(--font-size-lg)' }}>{incident.title}</h2>
       <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>
-        {incident.type === 'bug' ? 'Bug' : 'Feedback'} · {STATUS_LABEL[incident.status]} · {formatCreatedAt(incident.createdAt)}
+        {t(lang, TYPE_KEY[incident.type])} · {t(lang, STATUS_KEY[incident.status])} · {formatCreatedAt(incident.createdAt)}
       </div>
 
       <img
         src={incidentImageUrl(incident.id)}
-        alt={`Screenshot for report: ${incident.title}`}
+        alt={`${t(lang, 'screenshotAlt')}: ${incident.title}`}
         style={{
           display: 'block',
           margin: 'var(--space-4) 0',
@@ -65,12 +66,12 @@ export function ReportDetail({ incident }: ReportDetailProps) {
       />
 
       <dl style={{ margin: 0 }}>
-        <MetaRow label="Note" value={incident.note} />
-        <MetaRow label="Page" value={incident.url} />
-        <MetaRow label="Reporter" value={incident.user?.name ?? null} />
-        <MetaRow label="Email" value={incident.user?.email ?? null} />
-        <MetaRow label="User id" value={incident.user?.id ?? null} />
-        <MetaRow label="Report id" value={incident.id} />
+        <MetaRow label={t(lang, 'labelNote')} value={incident.note} />
+        <MetaRow label={t(lang, 'labelPage')} value={incident.url} />
+        <MetaRow label={t(lang, 'labelReporter')} value={incident.user?.name ?? null} />
+        <MetaRow label={t(lang, 'labelEmail')} value={incident.user?.email ?? null} />
+        <MetaRow label={t(lang, 'labelUserId')} value={incident.user?.id ?? null} />
+        <MetaRow label={t(lang, 'labelReportId')} value={incident.id} />
       </dl>
     </div>
   );

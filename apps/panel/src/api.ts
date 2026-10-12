@@ -39,6 +39,19 @@ export function fetchIncidents(): Promise<Incident[]> {
   return getJson<Incident[]>('/api/incidents');
 }
 
+/**
+ * `GET /api/setup` — the instance's public **write-only** project key
+ * (H-7/DEP-03 semantics: it gates ingest and never reads). Used by the
+ * empty state to pre-fill the onboarding curl (P1-D-07).
+ */
+export interface SetupInfo {
+  projectKey: string;
+}
+
+export function fetchSetup(): Promise<SetupInfo> {
+  return getJson<SetupInfo>('/api/setup');
+}
+
 /** The blob route — served by the API with the hardened header set. */
 export function incidentImageUrl(id: string): string {
   return `/api/incidents/${encodeURIComponent(id)}/image`;

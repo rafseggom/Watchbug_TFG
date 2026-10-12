@@ -10,6 +10,7 @@ import { createOriginGate, registerCors } from './plugins/cors';
 import { createIngestRateLimit, resolveIngestRateLimits } from './plugins/rate-limit';
 import type { Storage } from './ports';
 import { registerIncidentsRoutes } from './routes/incidents';
+import { registerSetupRoutes } from './routes/setup';
 
 /**
  * Composition root (R-02: one per process).
@@ -67,6 +68,11 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     }
     return { status: 'ok' };
   });
+
+  // P1-D-07 onboarding: the panel's empty state pre-fills its copy-paste curl
+  // with this instance's public write-only project key (T-01-16: one field,
+  // derived from config, nothing else).
+  registerSetupRoutes(app, config);
 
   // Idempotent boot-time project seed (P1-D-01) — safe to run on every boot.
   await seedProject(db, config.projectKey);
