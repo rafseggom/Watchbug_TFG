@@ -1,0 +1,72 @@
+# Watchbug stack — exactly three services (INV-03): db + api + panel.
+#
+# Start:  cp .env.example .env   (edit WATCHBUG_PROJECT_KEY: npm run key:gen)
+#         docker compose up -d --build
+# Panel:  http://127.0.0.1:8080   API: http://127.0.0.1:3000
+#
+# Every published port is bound to loopback (Open Q5) — the stack is reachable
+# from this machine only, which is also the mitigation for the phase's
+# deliberately-unauthenticated read surface (RESEARCH A9 / T-01-01 seam).
+# `${VAR:?...}` below fails the compose run loudly when a required setting is
+# missing or empty (DEP-02 fail-fast, applied at the compose layer as well).
+
+name: watchbug
+
+services:
+  db:
+    image: postgres:18.6-alpine3.24
+    environment:
+      POSTGRES_USER: ${WATCHBUG_DB_USER:-watchbug}
+      POSTGRES_PASSWORD: ${WATCHBUG_DB_PASSWORD:?WATCHBUG_DB_PASSWORD is missing or empty - copy .env.example to .env}
+      POSTGRES_DB: ${WATCHBUG_DB_NAME:-watchbug}
+    healthcheck:
+      # `api` starts only after this passes (must-have: pg_isready before api).
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    volumes:
+      - watchbug-db-data:/var/lib/postgresql/data
+    # Loopback only: host-side tooling (`drizzle-kit migrate`, `npm run dev`)
+    # reaches it, nothing else does.
+    ports:
+      - "127.0.0.1:5432:5432"
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    ports:
+      - "127.0.0.1:3000:3000"
+    env_file:
+      - .env
+    environment:
+      # In-network override: inside the compose network the `db` host is the
+      # service name, not 127.0.0.1. Credentials come from the same .env
+      # settings that DATABASE_URL documents (see .env.example).
+      DATABASE_URL: postgres://${WATCHBUG_DB_USER:-watchbug}:${WATCHBUG_DB_PASSWORD:-watchbug}@db:5432/${WATCHBUG_DB_NAME:-watchbug}
+      WATCHBUG_DATA_DIR: ${WATCHBUG_DATA_DIR:-/data}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      # The attachments volume — mounted in `api` ONLY (C-4 / INV-03), asserted
+      # by `npm run check:compose`.
+      - watchbug-attachments:${WATCHBUG_DATA_DIR:-/data}
+    restart: unless-stopped
+
+  panel:
+    build:
+      context: .
+      dockerfile: apps/panel/Dockerfile
+    ports:
+      - "127.0.0.1:8080:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  watchbug-db-data:
+  watchbug-attachments:
