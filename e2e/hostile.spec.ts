@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { once } from 'node:events';
 import { connect } from 'node:net';
 import { resolve } from 'node:path';
@@ -920,4 +920,78 @@ test('ING-07: control characters are stripped from every user string on write', 
   expect(row.title).not.toContain(NUL);
   expect(row.title).not.toContain(VT);
   expect(row.title).not.toContain(US);
+});
+
+/**
+ * ING-07 pass 2 (C-3 render half) — inertness in the panel DOM.
+ *
+ * Pass 1 guarantees the database never holds markup; pass 2 guarantees the
+ * browser never gets a chance to parse any, whatever slips through: every
+ * report field is a React text node inside a JSX expression (auto-escaped),
+ * there is no HTML-rendering sink anywhere in the panel, and the detail image
+ * only ever receives the blob-route URL. These rows prove it at the DOM level
+ * (queries against the live page, never regex over serialized HTML) and at the
+ * source level (the sink gate) — the double control's render half.
+ */
+test('ING-07 pass 2: stored hostile payloads render as literal text and inject zero elements into the panel DOM', async ({ page, request }) => {
+  // Store the pass-1 artefacts first: raw img-onerror with surrounding text,
+  // entity-encoded markup, the plain-text round-trip and the styled fragments.
+  const titles = [
+    '&lt;img src=x onerror=alert(1)&gt;',
+    '2 < 3 & 4 > 1',
+    '<b>a</b><i>b</i>',
+    'Hello <img src=x onerror=alert(1)> world', // posted last → first in the list (createdAt desc)
+  ];
+  for (const title of titles) {
+    const res = await postMeta(request, { ...BASE_META, title });
+    expect(res.status, `payload ${JSON.stringify(title)} must store`).toBe(201);
+  }
+
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Watchbug' })).toBeVisible();
+
+  // Every payload's surviving text is visible as literal text — innerText is
+  // the *rendered* text, so an entity-escaped payload shows its entity form
+  // and a stripped payload shows only what passed through pass 1.
+  const bodyText = (await page.locator('body').innerText()).replace(/\s+/g, ' ');
+  const normalise = (s: string): string => s.replace(/\s+/g, ' ');
+  expect(bodyText).toContain(normalise('Hello  world'));
+  expect(bodyText).toContain('2 < 3 & 4 > 1');
+  expect(bodyText).toContain('ab');
+  expect(bodyText).toContain('&lt;img src=x onerror=alert(1)&gt;');
+
+  // The newest row is auto-selected, so the detail pane shows it too: text
+  // node, not markup.
+  const detailHeading = page.locator('main h2');
+  await expect(detailHeading).toHaveCount(1);
+  expect((await detailHeading.innerText()).replace(/\s+/g, ' ')).toContain('Hello world');
+
+  // Zero elements attributable to the payloads — DOM queries, not HTML regex.
+  await expect(page.locator('img[src="x"]')).toHaveCount(0);
+  await expect(page.locator('[onerror]')).toHaveCount(0);
+  await expect(page.locator('script:not([src])')).toHaveCount(0);
+  await expect(page.locator('iframe')).toHaveCount(0);
+  await expect(page.locator('a[href^="javascript:"]')).toHaveCount(0);
+
+  // The one image on the page is the report screenshot, served from the
+  // blob route — never a payload-supplied src.
+  const shot = page.locator('main img');
+  await expect(shot).toHaveCount(1);
+  expect((await shot.getAttribute('src')) ?? '').toMatch(/^\/api\/incidents\/[0-9a-f-]{36}\/image$/);
+});
+
+test('ING-07 pass 2: apps/panel/src contains no HTML-rendering sink (dangerouslySetInnerHTML / innerHTML)', async () => {
+  // Source-level sink gate: the DOM rows above prove today's rendering is
+  // inert; this gate stops a future `dangerouslySetInnerHTML` / `innerHTML`
+  // assignment from quietly becoming tomorrow's bypass (C-3 warning sign).
+  const files = readdirSync(resolve(repoRoot, 'apps/panel/src'), { recursive: true })
+    .map((entry) => String(entry))
+    .filter((entry) => /\.(ts|tsx|css)$/.test(entry));
+  expect(files.length).toBeGreaterThan(3); // the walk actually found the panel sources
+
+  for (const file of files) {
+    const source = readFileSync(resolve(repoRoot, 'apps/panel/src', file), 'utf8');
+    expect(source.includes('dangerouslySetInnerHTML'), `${file} must not contain a dangerouslySetInnerHTML sink`).toBe(false);
+    expect(source.includes('innerHTML'), `${file} must not contain an innerHTML sink`).toBe(false);
+  }
 });
