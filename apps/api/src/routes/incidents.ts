@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { MAX_ENCODED_IMAGE_BYTES } from '@watchbug/contracts/constants';
 import { PROJECT_KEY_PATTERN, type AppConfig } from '../config';
 import type { AppDb } from '../db/client';
@@ -288,10 +288,15 @@ export async function registerIncidentsRoutes(app: FastifyInstance, deps: RouteD
       // Replay: the uniqueness index won the race. The blob written for this
       // attempt is unreferenced — delete it, then serve the original id.
       await storage.delete(key);
+      // WR-01: the conflict is detected on `(project_id, idempotency_key)`,
+      // so the replay lookup MUST be scoped to the same pair — an unscoped
+      // lookup could return a DIFFERENT project's incident with the same
+      // client-chosen key once project CRUD lands (Phase 5): a wrong replay
+      // id and a cross-tenant disclosure.
       const existing = await db
         .select({ id: incidents.id })
         .from(incidents)
-        .where(eq(incidents.idempotencyKey, idempotencyKey))
+        .where(and(eq(incidents.projectId, projectId), eq(incidents.idempotencyKey, idempotencyKey)))
         .limit(1);
       const id = existing[0]?.id;
       if (id === undefined) {
