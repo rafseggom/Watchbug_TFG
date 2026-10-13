@@ -124,12 +124,78 @@ const POST_FAILURE_DESTROY_MS = 250;
  * chain when the hook returns a thenable — a synchronous hook that returns
  * `undefined` stalls every request at the gate instead of failing it.
  */
+/**
+ * Reject-then-linger for the Content-Length pre-read.
+ *
+ * Rejecting before the body is read is correct, but *closing* before the client
+ * has received that rejection is not: `close()` on a socket with unread
+ * inbound data makes the kernel answer RST instead of FIN, and on loopback the
+ * RST routinely outruns the 413 already sitting in the client's receive buffer
+ * — the client sees `ECONNRESET`/`ECONNABORTED` and never learns why it was
+ * rejected. Measured against the live stack: a full over-cap body in flight
+ * lost the answer on **every** attempt across both transports (Playwright's
+ * request API and a raw socket), so this is a product defect for any real
+ * client, not merely an e2e artefact.
+ *
+ * The fix is to linger: consume and discard what the client is still sending
+ * so the socket has nothing unread when we finally close, and only close once
+ * the response has flushed AND (the upload has drained, or the linger window
+ * expired). Cost is bounded twice — by time (`POST_FAILURE_DESTROY_MS`) and by
+ * bytes (four times the cap) — so a hostile 10 GB declaration cannot make this
+ * path read 10 GB; past either bound it stops reading and closes exactly as it
+ * did before.
+ *
+ * The *decision* is still made purely from the declared header, before a single
+ * byte is parsed — the pre-read's message and its guarantee are unchanged.
+ */
+function lingerBeforeClose(req: FastifyRequest, reply: FastifyReply, declared: number): void {
+  const socket = req.raw.socket;
+  const stream = req.raw;
+  if (socket === null || socket === undefined) return;
+
+  const byteLimit = MAX_BODY_BYTES * 4;
+  let drained = 0;
+  let flushed = false;
+  let closed = false;
+  let reading = true;
+
+  const close = (): void => {
+    if (closed || !flushed) return; // never close before the answer left the building
+    closed = true;
+    clearTimeout(timer);
+    if (reading) stream.pause();
+    if (!socket.destroyed) socket.destroy();
+  };
+
+  const timer = setTimeout(close, POST_FAILURE_DESTROY_MS);
+  if (typeof timer.unref === 'function') timer.unref();
+
+  reply.raw.on('finish', () => {
+    flushed = true;
+    close();
+  });
+
+  stream.on('data', (chunk: Buffer) => {
+    if (!reading) return;
+    drained += chunk.length;
+    if (drained >= Math.min(declared, byteLimit)) {
+      reading = false;
+      stream.pause(); // bound reached — stop consuming, let the window close us
+    }
+  });
+  stream.on('end', () => close()); // upload fully drained — safe to close
+  stream.on('error', () => close());
+  stream.on('close', () => close());
+  stream.resume(); // discard, discard, discard — this is what makes close() a FIN
+}
+
 export async function bodyCaps(req: FastifyRequest, reply: FastifyReply): Promise<void> {
   const declared = req.raw.headers['content-length'];
   if (declared !== undefined) {
     const bytes = Number(declared);
     if (!Number.isFinite(bytes) || bytes > MAX_BODY_BYTES) {
       reply.header('connection', 'close');
+      lingerBeforeClose(req, reply, bytes);
       sendFailure(
         reply,
         failure(
