@@ -5,35 +5,35 @@ titles: json
 findings:
   - id: CR-01
     severity: critical
-    disposition: open
+    disposition: fixed
     title: "Per-key and per-day rate-limit buckets are keyed on the raw header while the gate trims it — quota bypass by header padding"
   - id: CR-02
     severity: critical
-    disposition: open
+    disposition: fixed
     title: "`trustProxy=true` (the documented/verified deployment setting) makes the per-IP limiter spoofable — `req.ip` is the client-controlled leftmost X-Forwarded-For entry"
   - id: WR-01
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "Idempotent-replay lookup is not scoped to the project — wrong (cross-tenant) id on conflict"
   - id: WR-02
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "A-06's 2 MB semantic cap is checked only on the input — the stored re-encode is never re-capped"
   - id: WR-03
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "Blob written before insert with no cleanup — orphaned files accumulate on any DB failure"
   - id: WR-04
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "`.env.example`'s shipped rate-limit values make the documented quickstart fail `npm run verify`"
   - id: WR-05
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "The streaming-413 watcher races the route handler — double `reply.send` and false 500 logs"
   - id: WR-06
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "The API container runs as root"
   - id: IN-01
     severity: info
@@ -55,23 +55,23 @@ findings:
     severity: info
     disposition: open
     title: "The `BodyCapExceeded` branch is unreachable *and* destroys the socket before the reply is sent"
-open: 13
+open: 5
 total: 13
-recorded: 2026-10-12T22:09:03.471Z
+recorded: 2026-10-13T00:00:33.508Z
 ---
 
 # Phase 01: Code Review Disposition
 
 | Finding | Severity | Disposition | Source |
 |---------|----------|-------------|--------|
-| CR-01 | critical | open | - |
-| CR-02 | critical | open | - |
-| WR-01 | warning | open | - |
-| WR-02 | warning | open | - |
-| WR-03 | warning | open | - |
-| WR-04 | warning | open | - |
-| WR-05 | warning | open | - |
-| WR-06 | warning | open | - |
+| CR-01 | critical | fixed | REVIEW-FIX.md |
+| CR-02 | critical | fixed | REVIEW-FIX.md |
+| WR-01 | warning | fixed | REVIEW-FIX.md |
+| WR-02 | warning | fixed | REVIEW-FIX.md |
+| WR-03 | warning | fixed | REVIEW-FIX.md |
+| WR-04 | warning | fixed | REVIEW-FIX.md |
+| WR-05 | warning | fixed | REVIEW-FIX.md |
+| WR-06 | warning | fixed | REVIEW-FIX.md |
 | IN-01 | info | open | - |
 | IN-02 | info | open | - |
 | IN-03 | info | open | - |
