@@ -86,7 +86,7 @@ jobs:
         shell: bash
         run: |
           {
-            echo '### `npm run check:size` — RNF-01 tiers (45 / 25 / 80 KB gzipped)'
+            echo '### `npm run check:size` - RNF-01 tiers (45 / 25 / 80 KB gzipped)'
             echo ''
             echo '```'
             cat size-report.txt 2>/dev/null || echo '(no size report produced)'
@@ -149,3 +149,79 @@ jobs:
         uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # R-12's other half: `check:size` above plus `npm run verify` IS the entire
+  # verification policy. A CI without this job would be green while the suite
+  # it claims to protect is red.
+  #
+  # Runs on the bare runner, not in a Playwright container: the suite targets
+  # the REAL three-container deployment (INV-03) - global-setup.ts fails loud
+  # unless http://127.0.0.1:8080/api/health answers through the nginx proxy -
+  # and a `container:` job has no Docker CLI/daemon to run `docker compose`.
+  # This mirrors the documented SKELETON.md quickstart verbatim.
+  e2e:
+    name: E2E suite (CA-01...CA-05)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # deploy.spec.ts spawns apps/api/dist/index.mjs directly to assert the
+      # DEP-02 fail-fast contracts, so the API must be built on the HOST too,
+      # not only inside the container image.
+      - name: Build all workspaces
+        run: npm run build
+
+      # .env.example ships an EMPTY project key and a rejected placeholder, and
+      # ingest/hostile read the value straight from .env, so it must be a real
+      # one before the stack boots. The trailing grep fails the job if the
+      # substitution ever silently stops matching.
+      - name: Provision .env with a real project key
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .env.example .env
+          sed -i "s|^WATCHBUG_PROJECT_KEY=$|WATCHBUG_PROJECT_KEY=$(node scripts/gen-key.mjs)|" .env
+          grep -E '^WATCHBUG_PROJECT_KEY=wkbt_[0-9A-Za-z]{32}$' .env > /dev/null
+          echo "project key provisioned"
+
+      # One run, three projects - not a redundant matrix. webkit exercises the
+      # silent WebP->PNG fallback (R-11), firefox the no-ImageCapture path (Q-9).
+      - name: Install browsers (chromium, firefox, webkit)
+        run: npx playwright install --with-deps chromium firefox webkit
+
+      - name: Start the compose stack (INV-03)
+        run: docker compose up -d --build
+
+      - name: Wait for the same-origin health endpoint (A-10)
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8080/api/health; then exit 0; fi
+            sleep 2
+          done
+          echo "::error::compose stack never became healthy"
+          docker compose ps
+          docker compose logs --tail=200
+          exit 1
+
+      - name: npm run verify
+        run: npm run verify -- --project=chromium --project=firefox --project=webkit
+
+      - name: Compose logs on failure
+        if: failure()
+        run: docker compose logs --tail=300
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
