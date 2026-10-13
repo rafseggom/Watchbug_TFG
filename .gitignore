@@ -25,3 +25,7 @@ blob-report/
 .pr-lens/
 
 .planning/milestone.lock
+
+# Machine-generated codebase-memory index: per-developer state, a ~1.2 MB
+# binary that is rewritten on every reindex. Never commit it.
+.codebase-memory/
