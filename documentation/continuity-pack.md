@@ -64,6 +64,15 @@ Failed or rejected paths. **Do not re-explore.** Full rationale in `resolution-r
 | D-06 | Gaussian blur as the masking primitive (partially invertible) |
 | D-07 | Python 3.10 as a target (EOL October 2026) |
 | D-08 | SVG `foreignObject` DOM serialization as *primary* capture path |
+| D-09 | Server-side "grace" alone for the ING-06 layer-2 pre-read 413 (delay the socket close 250 ms) |
+| D-10 | Fixing the ING-06 layer-2 flake on the test side alone (raw-socket transport) |
+
+> **Residual aceptado por el propietario (2026-10-13):** el flake de la fila ING-06 layer 2 quedó
+> resuelto (15/15 dirigidas, 132/132 suite), pero un cliente que suba el cuerpo **a velocidad
+> completa** todavía puede perder el 413 (`ECONNABORTED`). No investigar más sin petición explícita.
+> Mecanismo y arreglo: `apps/api/src/ingest/caps.ts` → `lingerBeforeClose()` (ed20ec3) +
+> `e2e/hostile.spec.ts` (c0a3d89). Justificación completa de por qué se descartaron otras dos vías:
+> `resolution-record.md` §3, D-09 y D-10.
 
 ---
 
