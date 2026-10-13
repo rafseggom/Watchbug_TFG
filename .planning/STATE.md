@@ -1,43 +1,43 @@
 ---
 gsd_state_version: "1.0"
-current_phase: 01
-current_phase_name: Contracts & Ingest Slice
-status: verifying
-stopped_at: Completed 01-04-PLAN.md
-last_updated: "2026-10-12T21:26:30.321Z"
-last_activity: 2026-10-12
-last_activity_desc: Phase 01 execution started
-state_head: ba499f382768e1c618ac47eeda48f92f2f096f86
+current_phase: 2
+current_phase_name: "SDK Tracer Bullet: Widget, Capture & Auto-Redaction"
+status: planning
+stopped_at: Phase 01 complete, ready to plan Phase 2
+last_updated: "2026-10-13T15:50:19.989Z"
+last_activity: 2026-10-13
+last_activity_desc: Phase 01 complete, transitioned to Phase 2
+state_head: a7f93696f980b98cf218c982402cb51d334e8ac8
 progress:
   total_phases: 7
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
   completed_plans: 4
-  percent: 0
+  percent: 14
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-10-05)
+See: .planning/PROJECT.md (updated 2026-10-13)
 
 **Core value:** When a bug report lands, the developer can reproduce the bug from it — and neither the report nor its screenshot ever leaves the developer's own infrastructure.
-**Current focus:** Phase 01 — Contracts & Ingest Slice
+**Current focus:** Phase 02 — SDK Tracer Bullet: Widget, Capture & Auto-Redaction
 
 ## Current Position
 
-Phase: 01 (Contracts & Ingest Slice) — EXECUTING
-Plan: 4 of 4
-Status: Phase complete — ready for verification
-Last activity: 2026-10-12 — Phase 01 execution started
+Phase: 2 — SDK Tracer Bullet: Widget, Capture & Auto-Redaction
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-10-13 — Phase 01 complete, transitioned to Phase 2
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█░░░░░░░░░] 14%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0
+- Total plans completed: 4
 - Average duration: —
 - Total execution time: 0 hours
 
@@ -45,7 +45,7 @@ Progress: [░░░░░░░░░░] 0%
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 01 | 4 | - | - |
 
 **Recent Trend:**
 - Last 5 plans: none yet
@@ -102,10 +102,12 @@ None yet.
 
 - ⚠ **Q-07 (Phase 5 planning must resolve — NOT execution):** key rotation semantics for PRJ-04 — grace period vs instant cut-off for a `public_key` embedded in already-shipped host script initialisations. Security-sensitive; decide at `/gsd-plan-phase 5`.
 - **Q-05 (release gate):** degree-awarding institution's IP policy must be confirmed before the repo is public (R-07 Apache-2.0 + NOTICE).
-- **UNVERIFIED at first build:** `@fastify/multipart` ↔ Fastify 5 mapping (smoke-test Phase 1); TS 7.x tooling ecosystem (6.x fallback ready); `preferCurrentTab` Firefox/Safari (treat Chromium-only); `@node-rs/argon2` option names.
+- **UNVERIFIED at first build:** ~~`@fastify/multipart` ↔ Fastify 5 mapping~~ ✓ Phase 1 (e2e 132/132 green); ~~TS 7.x tooling ecosystem~~ ✓ Phase 1 (Q-08 gate PASS under typescript 7.0.2, no 6.x fallback); `preferCurrentTab` Firefox/Safari — still treat Chromium-only, resolves in Phase 2 capture work; `@node-rs/argon2` option names — resolves in Phase 5 (auth).
 - **A-12/M-2 size arithmetic:** worst case 45+25+14 = 84 KB > 80 KB — multi-artifact `check:size` scenario lives in Phase 1; resolve against real numbers in Phase 7 (v1 ships core+editor = ≤70 KB; DOM-serialize adapter is v2).
 - **Node 24 → 26 re-pin** scheduled after 2026-10-28 (one re-pin).
 - **GDPR claims (M-1)** need legal/supervisor review before any public compliance statement.
+- ⚠ **[Phase 1 deferred]** `npm audit`: 4 **moderate**, dev-only advisories in `drizzle-kit`'s `esbuild` chain (GHSA-67mh-4wv8-2f99). Runtime packages and shipped images unaffected. Only fix offered is `npm audit fix --force`, which downgrades `drizzle-kit` to 0.18.1 — needs an owner decision; schedule a dependency-upgrade run that re-verifies `drizzle-kit` against STACK.md first.
+- **[Phase 1 context note]** `@fastify/busboy` basenames filenames by default — `preservePath: true` in `apps/api/.../caps.ts` is what makes the C-4 traversal-name rejection observable. Whoever touches multipart registration later must keep that option or the rule silently becomes a no-op.
 
 ### Quick Tasks Completed
 
@@ -125,6 +127,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-12T21:26:30.266Z
-Stopped at: Completed 01-04-PLAN.md
+Last session: 2026-10-13T15:55:00Z
+Stopped at: Phase 01 complete (verified 40/40, UAT 4/4, e2e 132/132) — ready to plan Phase 2, paused by developer request
 Resume file: None
