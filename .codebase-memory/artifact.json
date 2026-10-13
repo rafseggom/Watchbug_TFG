@@ -1,11 +1,11 @@
 {
     "schema_version": 2,
-    "commit": "97058e24448762751087f4e30899b4a266abb0d4",
-    "indexed_at": "2026-10-13T16:27:25Z",
+    "commit": "ea4ad630d58f10ea4c299c867f7b57f88d9d3dce",
+    "indexed_at": "2026-10-13T16:28:17Z",
     "project": "E-Proyectos-Github-Watchbug_TFG",
     "nodes": 1558,
     "edges": 2175,
     "original_size": 6225920,
-    "compressed_size": 1158786,
+    "compressed_size": 1159017,
     "compression_level": 3
 }
