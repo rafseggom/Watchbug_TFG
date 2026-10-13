@@ -15,6 +15,7 @@
     "build": "npm run build -w @watchbug/contracts && npm run build -w @watchbug/sdk && npm run build -w @watchbug/api && npm run build -w @watchbug/panel",
     "check:size": "node scripts/check-size.mjs",
     "check:compose": "node scripts/check-compose.mjs",
+    "gate": "node scripts/gate.mjs",
     "verify": "playwright test",
     "lint": "npm run typecheck --workspaces --if-present",
     "dev": "tsx watch apps/api/src/index.ts",
