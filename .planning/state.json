@@ -6,7 +6,7 @@
     {
       "number": "1",
       "name": "Contracts & Ingest Slice",
-      "status": "in_progress"
+      "status": "complete"
     },
     {
       "number": "2",
@@ -41,8 +41,8 @@
   ],
   "next": {
     "command": "/gsd:progress --next",
-    "label": "Advance to the next step (verify)",
-    "reason": "Phase 01 of 7 · 0% · ready to verify"
+    "label": "Advance to the next step (plan phase 2)",
+    "reason": "Phase 2 of 7 — needs a plan"
   },
-  "updated_at": "2026-10-12T21:26:11.833Z"
+  "updated_at": "2026-10-13T15:50:20.109Z"
 }
