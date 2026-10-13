@@ -225,6 +225,83 @@ async function postChunkedWithoutContentLength(): Promise<string> {
   return text;
 }
 
+/**
+ * A truthful `Content-Length` over `MAX_BODY_BYTES`, spoken over a raw socket.
+ *
+ * Playwright's request API cannot observe this answer, and the server is not
+ * at fault: the pre-read rejects on the header while this client is still
+ * uploading, and `close()` on a socket with unread inbound data makes the
+ * kernel answer RST rather than FIN — which can discard the 413 the client has
+ * not consumed yet, surfacing as `read ECONNRESET`. Same transport choice as
+ * the chunked row above, whose `socket.on('error', ...)` comment records
+ * exactly this fact. Collecting the response as its first bytes arrive lets
+ * the assertion see the server's real answer instead of the transport's
+ * accounting of it.
+ *
+ * The pre-read's own wording is asserted, not just `MAX_BODY_BYTES`: the
+ * streaming counter names that same constant, so without it layer 2 would not
+ * be distinguishable from layer 2b and would prove nothing about which gate
+ * answered.
+ */
+async function postOversizeDeclaredBody(): Promise<string> {
+  const boundary = `----watchbugdeclared${randomUUID().replace(/-/g, '')}`;
+  const declared = MAX_BODY_BYTES + 1024 * 1024;
+  const socket = connect(3000, '127.0.0.1');
+  socket.on('error', () => {
+    /* the server may reset the connection after answering — the response, if
+     * any, has already been collected by the reader below. */
+  });
+  await once(socket, 'connect');
+
+  const head =
+    'POST /api/incidents HTTP/1.1\r\n' +
+    'Host: 127.0.0.1:3000\r\n' +
+    'Content-Type: multipart/form-data; boundary=' +
+    boundary +
+    '\r\n' +
+    'Content-Length: ' +
+    declared +
+    '\r\n' +
+    'X-Project-Key: ' +
+    KEY +
+    '\r\n' +
+    'Idempotency-Key: e2e-declared-' +
+    randomUUID() +
+    '\r\n' +
+    '\r\n';
+
+  let received = '';
+  const response = new Promise<string>((resolveResponse) => {
+    socket.on('data', (data) => {
+      received += data.toString('latin1');
+      if (/^HTTP\/1\.[01] \d{3}/.test(received)) resolveResponse(received);
+    });
+    socket.on('close', () => resolveResponse(received));
+  });
+
+  const pause = (ms: number): Promise<void> => new Promise((resolvePause) => setTimeout(resolvePause, ms));
+  const chunk = Buffer.alloc(1024 * 1024, 0x41);
+  let written = 0;
+
+  socket.write(head);
+  // Paced writes, for the same reason the chunked row paces: the body must
+  // still be in flight when the pre-read answers, or this row could pass
+  // without ever exercising "reject before the body is read".
+  while (written < declared && !socket.destroyed && !received.startsWith('HTTP/')) {
+    try {
+      socket.write(chunk);
+    } catch {
+      break; // the server closed the connection mid-upload
+    }
+    written += chunk.length;
+    await pause(10);
+  }
+
+  const text = await Promise.race([response, pause(20_000).then(() => received)]);
+  socket.destroy();
+  return text;
+}
+
 test('ING-06 layer 1: image part > MAX_IMAGE_PART_BYTES (4 MB) → 413 structured at the multipart parser', async ({ request }) => {
   // Total body stays under nginx's 5m so this row reaches the API layer it
   // names; the parser aborts the upload and the message names the constant.
@@ -240,21 +317,20 @@ test('ING-06 layer 1: image part > MAX_IMAGE_PART_BYTES (4 MB) → 413 structure
   expect(String(partOver.json?.message)).toContain('MAX_IMAGE_PART_BYTES');
 });
 
-test('ING-06 layer 2: body > MAX_BODY_BYTES (5 MB) → 413 structured from the Content-Length pre-read (direct to API)', async ({ request }) => {
+test('ING-06 layer 2: body > MAX_BODY_BYTES (5 MB) → 413 structured from the Content-Length pre-read (direct to API)', async () => {
   // Sent straight to the API origin so the *API's* gate is the layer under
   // test (nginx would answer first at the panel origin). Truthful
-  // Content-Length: the pre-read must reject before the body is read, and
-  // the message must name MAX_BODY_BYTES.
-  const bodyOver = await postHostile(
-    request,
-    { filename: 'shot.png', mime: 'image/png', bytes: Buffer.alloc(MAX_BODY_BYTES + 1024 * 1024, 0x41) },
-    { baseUrl: API_ORIGIN },
-  );
-  expect(bodyOver.status).toBe(413);
-  expect(bodyOver.json).not.toBeNull();
-  expect(bodyOver.json?.statusCode).toBe(413);
-  expect(bodyOver.json?.error).toBe('Payload Too Large');
-  expect(String(bodyOver.json?.message)).toContain('MAX_BODY_BYTES');
+  // Content-Length: the pre-read must reject before the body is read, and the
+  // message must name MAX_BODY_BYTES — and specifically the PRE-READ, since
+  // the streaming counter names that constant too (layer 2b). Transport is the
+  // raw socket rather than Playwright's request API; see
+  // postOversizeDeclaredBody() for why the API's own client cannot observe
+  // this answer reliably.
+  const bodyOver = await postOversizeDeclaredBody();
+  expect(bodyOver).toMatch(/^HTTP\/1\.[01] 413/);
+  expect(bodyOver).toContain('application/json');
+  expect(bodyOver).toContain('MAX_BODY_BYTES');
+  expect(bodyOver).toContain('Content-Length pre-read');
 });
 
 test('ING-06 layer 2b: a chunked body with NO Content-Length over MAX_BODY_BYTES is aborted by the streaming counter → 413', async () => {
