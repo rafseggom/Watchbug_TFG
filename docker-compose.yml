@@ -50,6 +50,8 @@ services:
       # settings that DATABASE_URL documents (see .env.example).
       DATABASE_URL: postgres://${WATCHBUG_DB_USER:-watchbug}:${WATCHBUG_DB_PASSWORD:-watchbug}@db:5432/${WATCHBUG_DB_NAME:-watchbug}
       WATCHBUG_DATA_DIR: ${WATCHBUG_DATA_DIR:-/data}
+      # The TTL purge runs in-process in the api service — INV-03 forbids a fourth container.
+      WATCHBUG_PURGE_INTERVAL_MINUTES: ${WATCHBUG_PURGE_INTERVAL_MINUTES:-60}
       # nginx proxies to `api:3000` over the container network, so the api must
       # listen on the container address — the host port stays loopback-bound.
       WATCHBUG_HOST: 0.0.0.0
