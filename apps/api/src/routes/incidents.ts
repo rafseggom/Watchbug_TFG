@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, lt, or } from 'drizzle-orm';
 import { MAX_BODY_BYTES, MAX_ENCODED_IMAGE_BYTES } from '@watchbug/contracts/constants';
 import { PROJECT_KEY_PATTERN, type AppConfig } from '../config';
 import type { AppDb } from '../db/client';
@@ -54,19 +54,23 @@ const CONTENT_TYPE_BY_EXT: Record<string, string> = { png: 'image/png', webp: 'i
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
+const MAX_LIST_LIMIT = 200;
+const DEFAULT_LIST_LIMIT = 100;
+
 export interface RouteDeps {
   config: AppConfig;
   db: AppDb;
   storage: Storage;
   /**
    * The composed ING-05 preHandler (`plugins/rate-limit.ts`). It runs as the
-   * route's **first** preHandler — before the project-key gate, so a
-   * rejected key still consumes quota (limits → key → handler).
+   * route's **first** preHandler �?" before the project-key gate, so a
+   * rejected key still consumes quota (limits ��' key ��' handler).
    */
   ingestRateLimit: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
+  readRateLimit?: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
   /**
-   * The ING-08 origin allowlist enforcement (`plugins/cors.ts`) — second
-   * preHandler: abuse limits → CORS → key lookup → handler.
+   * The ING-08 origin allowlist enforcement (`plugins/cors.ts`) �?" second
+   * preHandler: abuse limits ��' CORS ��' key lookup ��' handler.
    */
   originGate: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
 }
@@ -355,19 +359,81 @@ export async function registerIncidentsRoutes(app: FastifyInstance, deps: RouteD
     return reply.code(201).send({ id: inserted[0].id });
   });
 
-  app.get('/api/incidents', async (_req, reply) => {
-    // H-7 / DEP-03: the project key is WRITE-ONLY — it authenticates ingest
-    // and is never consulted by a read endpoint (Phase 5's AuthProvider gates
-    // reads; until then the read surface is deliberately ungated and the
-    // deployment is loopback-bound — recorded DEP-03 seam).
-    const rows = await db.select().from(incidents).orderBy(desc(incidents.createdAt));
-    return reply.send(rows.map(toListRow));
-  });
+  const decodeCursor = (value: unknown): { id: string; createdAt: number } | null => {
+    if (typeof value !== 'string' || value.length === 0) return null;
+    try {
+      const decoded = Buffer.from(value, 'base64url').toString('utf8');
+      const parsed = JSON.parse(decoded) as { id?: unknown; createdAt?: unknown };
+      if (typeof parsed.id !== 'string' || parsed.id.length === 0) return null;
+      if (typeof parsed.createdAt !== 'number' || !Number.isInteger(parsed.createdAt) || parsed.createdAt <= 0) return null;
+      return { id: parsed.id, createdAt: parsed.createdAt };
+    } catch {
+      return null;
+    }
+  };
+
+  const encodeCursor = (id: string, createdAt: Date): string =>
+    Buffer.from(JSON.stringify({ id, createdAt: createdAt.getTime() }), 'utf8').toString('base64url');
+
+  app.get(
+    '/api/incidents',
+    { preHandler: deps.readRateLimit ? [deps.readRateLimit] : undefined },
+    async (req, reply) => {
+      // H-7 / DEP-03: the project key is WRITE-ONLY — it authenticates ingest
+      // and is never consulted by a read endpoint (Phase 5's AuthProvider gates
+      // reads; until then the read surface is deliberately ungated and the
+      // deployment is loopback-bound — recorded DEP-03 seam).
+
+      const query = req.query as { limit?: string; cursor?: string };
+      let limit = DEFAULT_LIST_LIMIT;
+      if (typeof query.limit === 'string') {
+        const parsed = Number.parseInt(query.limit, 10);
+        if (Number.isNaN(parsed) || parsed < 1) {
+          return badRequest(reply, 'limit must be a positive integer');
+        }
+        if (parsed > MAX_LIST_LIMIT) {
+          return badRequest(reply, `limit must be <= ${MAX_LIST_LIMIT}`);
+        }
+        limit = parsed;
+      }
+
+      const cursor = decodeCursor(query.cursor);
+      if (typeof query.cursor === 'string' && cursor === null) {
+        return badRequest(reply, 'cursor is malformed');
+      }
+
+      const candidateRows = cursor
+        ? await db
+            .select()
+            .from(incidents)
+            .where(
+              or(
+                lt(incidents.createdAt, new Date(cursor.createdAt)),
+                and(
+                  eq(incidents.createdAt, new Date(cursor.createdAt)),
+                  lt(incidents.id, cursor.id),
+                ),
+              ),
+            )
+            .orderBy(desc(incidents.createdAt), desc(incidents.id))
+            .limit(limit + 1)
+        : await db
+            .select()
+            .from(incidents)
+            .orderBy(desc(incidents.createdAt), desc(incidents.id))
+            .limit(limit + 1);
+
+      const data = candidateRows.slice(0, limit).map(toListRow);
+      const next = candidateRows.length > limit ? encodeCursor(candidateRows[limit].id, candidateRows[limit].createdAt) : null;
+      if (next !== null) {
+        reply.header('x-next-cursor', next);
+      }
+      return reply.send(data);
+    },
+  );
 
   app.get('/api/incidents/:id/image', {
-    // This route declares its own hardened header set (plan Step 4); helmet's
-    // global pass would *duplicate* X-Content-Type-Options ("nosniff, nosniff").
-    config: { helmet: false },
+    preHandler: deps.readRateLimit ? [deps.readRateLimit] : undefined,
   }, async (req, reply) => {
     const { id } = req.params as { id: string };
     if (!UUID_RE.test(id)) return reply.code(404).send({

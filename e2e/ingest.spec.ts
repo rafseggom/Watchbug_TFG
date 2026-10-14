@@ -333,8 +333,8 @@ test('P1-D-07: the emitted onboarding curl runs verbatim and the new report appe
   }
 
   // The report landed in storage…
-  const after = (await (await request.get('/api/incidents')).json()) as Array<{ title: string }>;
-  expect(after.filter((row) => row.title === title).length).toBe(beforeCount + 1);
+  const after = (await (await request.get('/api/incidents?limit=200')).json()) as Array<{ id: string; title: string }>;
+  expect(after.some((row) => row.id === created.id)).toBe(true);
 
   // …and reloading the panel (now un-intercepted) shows it in the list.
   await page.unroute('**/api/incidents');

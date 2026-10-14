@@ -69,6 +69,35 @@ export function retryAfterSeconds(ttlInSeconds: number): number {
 }
 
 /**
+ * Per-IP rate limiter for unauthenticated read endpoints (GET routes).
+ * Uses the same in-memory store per factory call; shared bucket across
+ * routes that use the same limiter instance.
+ */
+export function createReadRateLimit(
+  app: FastifyInstance,
+  maxPerMinute: number,
+): (req: FastifyRequest, reply: FastifyReply) => Promise<void> {
+  const byIp = app.createRateLimit({
+    max: maxPerMinute,
+    timeWindow: '1 minute',
+    keyGenerator: (req) => req.ip,
+  });
+
+  return async function readRateLimit(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+    const ipStatus = await byIp(req);
+    if (ipStatus.isAllowed) return;
+    reply.header('retry-after', String(retryAfterSeconds(ipStatus.ttlInSeconds)));
+    reply
+      .code(429)
+      .send({
+        statusCode: 429,
+        error: 'Too Many Requests',
+        message: `rate limit exceeded: RATE_LIMIT_PER_IP_PER_MIN (${maxPerMinute} per IP per minute)`,
+      });
+  };
+}
+
+/**
  * Builds the composed `preHandler`. Every request increments **all three**
  * counters before the handler can run (the concurrency guarantee: at most
  * `max` requests pass a window even under a parallel burst); if one or more

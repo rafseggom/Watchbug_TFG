@@ -7,7 +7,7 @@ import type { AppDb } from './db/client';
 import { seedProject } from './boot/seed';
 import { MULTIPART_RECEIVE_OPTIONS } from './ingest/caps';
 import { createOriginGate, registerCors } from './plugins/cors';
-import { createIngestRateLimit, resolveIngestRateLimits } from './plugins/rate-limit';
+import { createIngestRateLimit, createReadRateLimit, resolveIngestRateLimits } from './plugins/rate-limit';
 import type { Storage } from './ports';
 import { startPurge } from './purge';
 import { registerIncidentsRoutes } from './routes/incidents';
@@ -92,11 +92,17 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     }),
   );
 
+  const readRateLimit = createReadRateLimit(
+    app,
+    config.rateLimitPerIpPerMin,
+  );
+
   await registerIncidentsRoutes(app, {
     config,
     db,
     storage,
     ingestRateLimit,
+    readRateLimit,
     originGate: createOriginGate(config),
   });
 
