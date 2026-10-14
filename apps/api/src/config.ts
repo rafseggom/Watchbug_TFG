@@ -35,6 +35,8 @@ export interface AppConfig {
   corsOrigins: string[];
   ttlIdentityDays: number;
   ttlArtifactDays: number;
+  /** S-2: minutes between TTL purge sweeps (the job runs in-process — INV-03). */
+  purgeIntervalMinutes: number;
   rateLimitPerKeyPerMin: number;
   rateLimitPerIpPerMin: number;
   rateLimitPerProjectPerDay: number;
@@ -165,6 +167,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     corsOrigins,
     ttlIdentityDays: readInt(env, 'WATCHBUG_TTL_IDENTITY_DAYS', TTL_IDENTITY_DAYS),
     ttlArtifactDays: readInt(env, 'WATCHBUG_TTL_ARTIFACT_DAYS', TTL_ARTIFACT_DAYS),
+    purgeIntervalMinutes: readInt(env, 'WATCHBUG_PURGE_INTERVAL_MINUTES', 60),
     rateLimitPerKeyPerMin: readInt(env, 'WATCHBUG_RATE_LIMIT_PER_KEY_PER_MIN', RATE_LIMIT_PER_KEY_PER_MIN),
     rateLimitPerIpPerMin: readInt(env, 'WATCHBUG_RATE_LIMIT_PER_IP_PER_MIN', RATE_LIMIT_PER_IP_PER_MIN),
     rateLimitPerProjectPerDay: readInt(

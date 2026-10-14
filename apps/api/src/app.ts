@@ -9,6 +9,7 @@ import { MULTIPART_RECEIVE_OPTIONS } from './ingest/caps';
 import { createOriginGate, registerCors } from './plugins/cors';
 import { createIngestRateLimit, resolveIngestRateLimits } from './plugins/rate-limit';
 import type { Storage } from './ports';
+import { startPurge } from './purge';
 import { registerIncidentsRoutes } from './routes/incidents';
 import { registerSetupRoutes } from './routes/setup';
 
@@ -97,6 +98,18 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     storage,
     ingestRateLimit,
     originGate: createOriginGate(config),
+  });
+
+  // S-2: TTL purge job (RET-01, RET-02) — in-process, no cron sidecar
+  // (INV-03). Boot sweep is fire-and-forget; the timer is `unref()`-ed and
+  // cleared on close so it never keeps the process (or a test) alive.
+  const purge = startPurge({
+    db,
+    storage,
+    intervalMinutes: config.purgeIntervalMinutes,
+  });
+  app.addHook('onClose', async () => {
+    purge.stop();
   });
 
   /**
