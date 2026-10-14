@@ -85,7 +85,13 @@ export function createReadRateLimit(
 
   return async function readRateLimit(req: FastifyRequest, reply: FastifyReply): Promise<void> {
     const ipStatus = await byIp(req);
-    if (ipStatus.isAllowed) return;
+    // `isExceeded` is the pass/fail test, NOT `isAllowed`. In @fastify/rate-limit
+    // v11 `applyRateLimit()` returns `isAllowed: true` ONLY for allow-listed
+    // keys; every counted request comes back `isAllowed: false` with
+    // `isExceeded: current > max`. Gating on `isAllowed` therefore rejects the
+    // very first read of a fresh window (measured: 429 on request #1 after a
+    // container restart) — which is what the ingest limiter already got right.
+    if (!ipStatus.isExceeded) return;
     reply.header('retry-after', String(retryAfterSeconds(ipStatus.ttlInSeconds)));
     reply
       .code(429)

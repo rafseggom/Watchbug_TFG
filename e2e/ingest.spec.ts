@@ -321,6 +321,7 @@ test('P1-D-07: the emitted onboarding curl runs verbatim and the new report appe
 
   // A pasted snippet references a local file — give it one, in its own cwd.
   const workdir = mkdtempSync(join(tmpdir(), 'watchbug-onboarding-'));
+  let createdId: string | undefined;
   try {
     copyFileSync(resolve(repoRoot, 'e2e/fixtures/valid-64x64.png'), join(workdir, 'screenshot.png'));
     const run = spawnSync(tokens[0], tokens.slice(1), { cwd: workdir, encoding: 'utf8', timeout: 30_000 });
@@ -328,13 +329,14 @@ test('P1-D-07: the emitted onboarding curl runs verbatim and the new report appe
     expect(run.status, `curl exited ${String(run.status)}: ${run.stderr}`).toBe(0);
     const created = JSON.parse(run.stdout) as { id?: string };
     expect(created.id).toMatch(/^[0-9a-f-]{36}$/);
+    createdId = created.id;
   } finally {
     rmSync(workdir, { recursive: true, force: true });
   }
 
   // The report landed in storage…
   const after = (await (await request.get('/api/incidents?limit=200')).json()) as Array<{ id: string; title: string }>;
-  expect(after.some((row) => row.id === created.id)).toBe(true);
+  expect(after.some((row) => row.id === createdId)).toBe(true);
 
   // …and reloading the panel (now un-intercepted) shows it in the list.
   await page.unroute('**/api/incidents');

@@ -8,19 +8,46 @@ const META = {
   user: { id: null, name: null, email: null },
 };
 
+/**
+ * The suite normally talks to the compose stack through the nginx edge
+ * (same-origin, A-10), but nginx OVERWRITES `X-Forwarded-For` with
+ * `$remote_addr`, so every test would share the single `127.0.0.1` bucket and
+ * a boundary test that exhausts it would 429 every other test for the rest of
+ * the window (observed: 46 cascading failures). The boundary row therefore
+ * talks to the api process directly — the connection still arrives from the
+ * trusted loopback hop (`WATCHBUG_TRUST_PROXY`), which is exactly the
+ * precondition under which Fastify honours the forwarded header, so a
+ * per-test public address selects that test's own bucket (CR-02 covers the
+ * spoof-resistance of the same mechanism).
+ */
+const API = 'http://127.0.0.1:3000';
+
 test('read surface: GET routes are rate-limited per IP with integer Retry-After', async ({ request }) => {
+  const bucket = `203.0.113.${1 + (Date.now() % 250)}`;
+  let saw429 = false;
+
   for (let i = 0; i < 610; i++) {
-    const res = await request.get('/api/incidents');
+    const res = await request.get(`${API}/api/incidents`, {
+      headers: { 'x-forwarded-for': bucket },
+    });
     if (res.status() === 429) {
+      saw429 = true;
       expect(res.headers()['retry-after']).toBeDefined();
       const retry = Number(res.headers()['retry-after']);
       expect(Number.isInteger(retry)).toBe(true);
       expect(retry).toBeGreaterThanOrEqual(1);
-      return;
+      break;
     }
     expect(res.status()).toBe(200);
   }
-  throw new Error('expected 429 after exceeding read rate limit');
+  expect(saw429, 'expected 429 after exceeding read rate limit').toBe(true);
+
+  // The bucket is per IP, not global: a fresh address still reads 200 while
+  // the exhausted one is still inside its window.
+  const fresh = await request.get(`${API}/api/incidents`, {
+    headers: { 'x-forwarded-for': '198.51.100.9' },
+  });
+  expect(fresh.status()).toBe(200);
 });
 
 test('read surface: list is bounded and returns x-next-cursor for large sets', async ({ request, baseURL }) => {
