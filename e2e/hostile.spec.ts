@@ -1137,6 +1137,48 @@ test('ING-07: control characters are stripped from every user string on write', 
 });
 
 /**
+ * R-08 / S-5 — the single contract stores `meta.url` as a **path only**.
+ *
+ * The rule is enforced INSIDE `reportSchema` (a string transform), so both
+ * ingest stages re-parse through it and every runtime consumer inherits it.
+ * Three cases pin the property: a query+fragment payload is stripped, a full
+ * href keeps scheme-origin + path and loses only query+fragment, and an
+ * already-clean path round-trips untouched (idempotent).
+ */
+const R08_SENTINEL = 'r08-sentinel-7f3a1c';
+
+test('R-08/S-5: meta.url is stored path-only — query string and fragment stripped on ingest', async ({ request }) => {
+  // Case A: query + fragment carrying a distinct sentinel → stored as the
+  // bare path, and no trace of the sentinel survives in the served list.
+  const caseA = await postMeta(request, {
+    ...BASE_META,
+    title: 'R-08 strip probe',
+    url: `/checkout?token=${R08_SENTINEL}#frag`,
+  });
+  expect(caseA.status).toBe(201);
+  const rowA = await storedRow(request, caseA.body.id as string);
+  expect(rowA.url).toBe('/checkout');
+  const listText = await (await request.get('/api/incidents')).text();
+  expect(listText).not.toContain(R08_SENTINEL);
+  expect(listText).not.toContain('#frag');
+
+  // Case B: a full href keeps scheme-origin + path; only query + fragment go.
+  const caseB = await postMeta(request, {
+    ...BASE_META,
+    title: 'R-08 full href probe',
+    url: `https://x.dev/callback?code=${R08_SENTINEL}#frag`,
+  });
+  expect(caseB.status).toBe(201);
+  expect((await storedRow(request, caseB.body.id as string)).url).toBe('https://x.dev/callback');
+
+  // Case C: an already-clean path is untouched (the transform is idempotent
+  // and leaves every existing fixture alone).
+  const caseC = await postMeta(request, { ...BASE_META, title: 'R-08 clean path probe', url: '/plain-path' });
+  expect(caseC.status).toBe(201);
+  expect((await storedRow(request, caseC.body.id as string)).url).toBe('/plain-path');
+});
+
+/**
  * ING-07 pass 2 (C-3 render half) — inertness in the panel DOM.
  *
  * Pass 1 guarantees the database never holds markup; pass 2 guarantees the
