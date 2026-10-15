@@ -1,6 +1,8 @@
 .gsd-profile
 .gsd-install-state.json
 
+.claude
+
 node_modules/
 
 .opencode
