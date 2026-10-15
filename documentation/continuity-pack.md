@@ -2,7 +2,33 @@
 
 State preserved across session resets. Read this at the start of every session (ASE §4D, *Anti-Amnesia*).
 
-**Last updated:** 2026-10-10 — GitHub project management set up (labels, milestones, 47 issues, epics, Project kanban #3), see §6 · plan-vs-real variance tracking deferred until Phase 1 closes, see §7.
+**Last updated:** 2026-10-15 — INFORME-ANALISIS remediation batch `261014-m3u` landed on `gsd/phase-1-contracts-ingest` (§9).
+
+---
+
+## 9. INFORME-ANALISIS remediation — batch `261014-m3u` (2026-10-14 → 10-15)
+
+Remediated the security/slop findings from `documentation/INFORME-ANALISIS.md` via `/gsd-quick-batch` on `gsd/phase-1-contracts-ingest`. **Not merged to `develop`** — the owner merges the open PR by hand (explicit instruction).
+
+| Item | Content | Merge commit |
+|------|---------|--------------|
+| `261014-m3v` | S-2: TTL purge job (retention actually enforced) | `9f5ae66` |
+| `261014-m3w` | S-3 + S-6: per-IP read rate-limit + keyset pagination | `35fc1bc` |
+| `261014-m3x` | L-1 + S-6: hardened panel fetch, bounded list | `338d84f` |
+| `261014-m3y` | S-4 (CSP) + S-5 (R-08 path-only URLs) | `abe0e9c` |
+| `261014-m3z` | L-1: server-side slop (abortable fetch, lazy `sharp`) | `a4b7396` |
+| `261014-m40` | L-2: connect stopthatslop gate in CI | ❌ **descoped** — see below |
+
+`261014-m40` was **descoped by the owner**: no vendored `stopthatslop` engine, no CI job. The informe is kept as a **findings source only**; the 5 findings are fixed directly in code by `m3z` (api `index.ts` 2× fetch, `ingest/harden.ts` lazy `sharp`) and `m3x` (panel `api.ts` fetch + guarded `res.json()`). Reason recorded in `BATCH.json` `failure_reason`.
+
+**Verification:** `npm run verify` **147/147** (chromium + firefox + webkit); `npm run lint`, `scripts/gate.mjs`, `check:compose` all pass. Pushed to `origin/gsd/phase-1-contracts-ingest` at `a4b7396` (0 ahead / 0 behind).
+
+**Two orchestrator-side corrections worth keeping:**
+
+1. **`m3y`'s test asserted the behaviour it wanted, not the behaviour the edge produced.** The S-4 test expected a bare `Referrer-Policy: same-origin` on proxied API responses, but `helmet`'s default is `no-referrer` and nginx *appends* its own `add_header` (nginx concatenates, never replaces upstream values) → the browser saw `no-referrer,same-origin`. Fixed at the **root**, not the test: `app.ts` sets `helmet`'s `referrerPolicy` to `same-origin` explicitly, and `nginx.conf /api/` adds `proxy_hide_header Referrer-Policy` — the same duplication the conf already handled for `X-Content-Type-Options`. The edge is now the single source for the header pair on proxied responses. Commit `6f0b55f`.
+2. **Two firefox failures mid-run were resource contention, not regressions.** Both were `Tearing down "context" exceeded the test timeout` (teardown hang, not an assertion/CSP failure) with ~20 orphaned `chrome` processes left from earlier runs. After killing the orphans, the suite went clean 147/147. When a "failure" names teardown rather than an assertion, check for browser-process buildup before blaming the change.
+
+**Dead-end (do not re-run):** the executor worktree for `m3x` was killed by an orchestrator `shell` timeout (`180000` ms) while running `item-dispatch.cjs` in the **foreground**. Dispatch executor worktrees in **background** shells (`background: true`) so a foreground timeout cannot kill a running worker; reconcile the stale `running` record first (`needsReconciliation: true`) by setting `.claude/worktrees/*.worker.json` `state` to a terminal value — the `already_running` guard only blocks on `state === 'running'`.
 
 ---
 
