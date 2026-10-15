@@ -21,6 +21,17 @@ import { reportSchema } from '@watchbug/contracts/schema';
 
 const repoRoot = resolve(__dirname, '..');
 
+/**
+ * The list route, tolerating the `?limit=`/`?cursor=` query string the panel now
+ * always appends (261014-m3w's read contract). Playwright anchors regexes to the
+ * full URL, so a bare `'**/api/incidents'` glob no longer matches a request that
+ * carries a query string. One shared reference is required — `page.unroute`
+ * removes a regex route by source+flags equality, so an inline duplicate would
+ * not unregister and the second mock row would leak into the next test. The
+ * pattern deliberately does not match `/api/incidents/:id/image`.
+ */
+const INCIDENTS_LIST_RE = /\/api\/incidents(\?.*)?$/;
+
 const png = readFileSync(resolve(repoRoot, 'e2e/fixtures/valid-64x64.png'));
 const webp = readFileSync(resolve(repoRoot, 'e2e/fixtures/valid-64x64.webp'));
 
@@ -274,7 +285,7 @@ test('P1-D-07 / T-01-16: GET /api/setup serves exactly the seeded write-only pro
 });
 
 test('P1-D-07: with an empty list the panel shows the onboarding curl carrying the real key and the CA-01 wire shape', async ({ page }) => {
-  await page.route('**/api/incidents', (route) =>
+  await page.route(INCIDENTS_LIST_RE, (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }),
   );
   await page.goto('/');
@@ -297,7 +308,7 @@ test('P1-D-07: with an empty list the panel shows the onboarding curl carrying t
 
 test('P1-D-07: the emitted onboarding curl runs verbatim and the new report appears after reload', async ({ page, request }) => {
   test.setTimeout(60_000);
-  await page.route('**/api/incidents', (route) =>
+  await page.route(INCIDENTS_LIST_RE, (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }),
   );
   await page.goto('/');
@@ -339,7 +350,7 @@ test('P1-D-07: the emitted onboarding curl runs verbatim and the new report appe
   expect(after.some((row) => row.id === createdId)).toBe(true);
 
   // …and reloading the panel (now un-intercepted) shows it in the list.
-  await page.unroute('**/api/incidents');
+  await page.unroute(INCIDENTS_LIST_RE);
   await page.reload();
   await expect(page.getByText(title).first()).toBeVisible();
 });

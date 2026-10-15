@@ -15,6 +15,10 @@ export interface ReportListProps {
   selectedId: string | null;
   onSelect(id: string): void;
   lang: Lang;
+  /** S-6: whether a further page exists behind the Load-more control. */
+  hasMore: boolean;
+  loadingMore: boolean;
+  onLoadMore(): void;
 }
 
 const TYPE_KEY: Record<Incident['type'], StringKey> = { bug: 'typeBug', feedback: 'typeFeedback' };
@@ -29,7 +33,7 @@ export function formatCreatedAt(iso: string): string {
   return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
 }
 
-export function ReportList({ incidents, selectedId, onSelect, lang }: ReportListProps) {
+export function ReportList({ incidents, selectedId, onSelect, lang, hasMore, loadingMore, onLoadMore }: ReportListProps) {
   return (
     <ul style={{ listStyle: 'none', margin: 0, padding: 'var(--space-2)' }}>
       {incidents.map((incident) => (
@@ -73,6 +77,29 @@ export function ReportList({ incidents, selectedId, onSelect, lang }: ReportList
           </button>
         </li>
       ))}
+      {hasMore && (
+        <li>
+          <button
+            type="button"
+            onClick={onLoadMore}
+            disabled={loadingMore}
+            style={{
+              display: 'block',
+              width: '100%',
+              textAlign: 'center',
+              background: 'transparent',
+              border: '1px dashed var(--color-border)',
+              borderRadius: 'var(--radius-md)',
+              padding: 'var(--space-3)',
+              color: 'var(--color-text-muted)',
+              cursor: loadingMore ? 'default' : 'pointer',
+              font: 'inherit',
+            }}
+          >
+            {loadingMore ? t(lang, 'loading') : t(lang, 'loadMore')}
+          </button>
+        </li>
+      )}
     </ul>
   );
 }
