@@ -51,7 +51,12 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     trustProxy: config.trustProxy,
   });
 
-  await app.register(helmet);
+  // A-10 / S-4: helmet's default `referrerPolicy` is `no-referrer`, which
+  // the nginx edge then concatenates into `no-referrer,same-origin` on every
+  // proxied API response (nginx appends `add_header` values, it does not
+  // replace upstream ones). Unify on `same-origin` so the API and the SPA
+  // document serve the identical policy.
+  await app.register(helmet, { referrerPolicy: { policy: 'same-origin' } });
   await app.register(multipart, MULTIPART_RECEIVE_OPTIONS);
   // ING-05 (T-01-12): manual limiters only — `global: false` means no route
   // is rate-limited implicitly; the ingest route wires its own composed
