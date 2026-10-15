@@ -45,6 +45,29 @@ main().catch((err: unknown) => {
   process.exit(1);
 });
 
+/** One local smoke request must never hang forever — hard deadline per fetch. */
+const SMOKE_FETCH_TIMEOUT_MS = 5_000;
+
+/**
+ * `fetch()` for the smoke path, always carrying an `AbortSignal.timeout`.
+ * A deadline hit is reported as an intelligible operational failure (which
+ * request, which deadline) and exits non-zero — a hung local listener would
+ * otherwise stall the process indefinitely with no output at all.
+ */
+async function smokeFetch(url: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, { ...init, signal: AbortSignal.timeout(SMOKE_FETCH_TIMEOUT_MS) });
+  } catch (err) {
+    const timedOut = err instanceof Error && err.name === 'TimeoutError';
+    console.error(
+      timedOut
+        ? `SMOKE FAIL: no response from ${url} within ${SMOKE_FETCH_TIMEOUT_MS} ms (listen is unresponsive)`
+        : `SMOKE FAIL: request to ${url} failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    process.exit(1);
+  }
+}
+
 /**
  * P1-D-09 multipart smoke (the phase's first risk commit, kept runnable): parse
  * a real `FormData` — a `meta` JSON field plus one image file part — through
@@ -102,7 +125,7 @@ async function runMultipartSmoke(): Promise<void> {
 
   let failures = 0;
 
-  const ok = await fetch(`${base}/api/_smoke/multipart`, { method: 'POST', body: form });
+  const ok = await smokeFetch(`${base}/api/_smoke/multipart`, { method: 'POST', body: form });
   const okBody = (await ok.json()) as { meta?: string; imageBytes?: number; imageMime?: string };
   if (ok.status === 200 && okBody.imageBytes === png.length && okBody.imageMime === 'image/png') {
     console.log(`SMOKE 1/2 PASS  multipart parse: 200, meta + ${okBody.imageBytes} image bytes (${okBody.imageMime})`);
@@ -115,7 +138,7 @@ async function runMultipartSmoke(): Promise<void> {
   const big = new FormData();
   big.set('meta', JSON.stringify({ type: 'bug', title: 'too big' }));
   big.set('image', new Blob([new Uint8Array(4 * 1024 * 1024 + 1024)], { type: 'image/png' }), 'big.png');
-  const over = await fetch(`${base}/api/_smoke/multipart`, { method: 'POST', body: big });
+  const over = await smokeFetch(`${base}/api/_smoke/multipart`, { method: 'POST', body: big });
   if (over.status === 413) {
     console.log(`SMOKE 2/2 PASS  oversized part rejected with 413 (fileSize limit + throwFileSizeLimit)`);
   } else {
