@@ -27,10 +27,10 @@ export function App() {
   useEffect(() => {
     let cancelled = false;
     fetchIncidents()
-      .then((rows) => {
+      .then((page) => {
         if (cancelled) return;
-        setIncidents(rows);
-        setSelectedId((current) => current ?? rows[0]?.id ?? null);
+        setIncidents(page.rows);
+        setSelectedId((current) => current ?? page.rows[0]?.id ?? null);
       })
       .catch((err: unknown) => {
         if (cancelled) return;

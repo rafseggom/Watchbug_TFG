@@ -26,6 +26,10 @@ export const LANG_STORAGE_KEY = 'watchbug.lang';
 const en = {
   reports: 'Reports',
   loadError: 'Failed to load reports',
+  errServer: 'the server returned an error',
+  errTimeout: 'the request timed out',
+  errInvalidJson: 'the server returned an unexpected response',
+  errNetwork: 'could not reach the server',
   loading: 'Loading…',
   typeBug: 'Bug',
   typeFeedback: 'Feedback',
@@ -53,6 +57,10 @@ export type StringKey = keyof typeof en;
 const es: Record<StringKey, string> = {
   reports: 'Reportes',
   loadError: 'Error al cargar los reportes',
+  errServer: 'el servidor devolvió un error',
+  errTimeout: 'la petición superó el tiempo de espera',
+  errInvalidJson: 'el servidor devolvió una respuesta inesperada',
+  errNetwork: 'no se pudo conectar con el servidor',
   loading: 'Cargando…',
   typeBug: 'Error',
   typeFeedback: 'Sugerencia',
