@@ -1,4 +1,3 @@
-import sharp from 'sharp';
 import { MAX_IMAGE_PIXELS } from '@watchbug/contracts/constants';
 import type { ImageExt } from '@watchbug/contracts/types';
 import { sniffImage } from './sniff';
@@ -30,7 +29,34 @@ import { sniffImage } from './sniff';
  * - **Processing-time guard** — `timeout({ seconds })` plus
  *   `limitInputPixels` bound the decode, so a crafted file that passes the
  *   header-dimension check (T-01-08) still cannot pin a worker.
+ *
+ * sharp (the heaviest native binary in the repo) is loaded **lazily on the
+ * first ingest** via `loadSharp()` below — never at module-eval time — so the
+ * API boot path never resolves it. The backend decision itself (P1-D-10) is
+ * unchanged; only the import eagerness moved off the critical path.
  */
+
+async function loadSharpModule() {
+  const mod = await import('sharp');
+  return mod.default;
+}
+
+let sharpLoad: ReturnType<typeof loadSharpModule> | null = null;
+
+/**
+ * Memoized singleton: concurrent first ingests share one in-flight import (no
+ * import storm), and a rejected load clears the slot so the next ingest can
+ * retry instead of inheriting a permanently poisoned promise.
+ */
+function loadSharp(): ReturnType<typeof loadSharpModule> {
+  if (sharpLoad === null) {
+    sharpLoad = loadSharpModule().catch((err: unknown) => {
+      sharpLoad = null;
+      throw err;
+    });
+  }
+  return sharpLoad;
+}
 
 export type HardenResult =
   | { ok: true; bytes: Uint8Array; ext: ImageExt; w: number; h: number }
@@ -57,6 +83,12 @@ export async function hardenImage(input: Uint8Array): Promise<HardenResult> {
   }
 
   const buf = Buffer.isBuffer(input) ? input : Buffer.from(input);
+
+  // Deliberately outside the codec try: a broken sharp install is an
+  // OPERATIONAL failure, so it propagates to app.ts `setErrorHandler` as a
+  // logged generic 500 — never a 400 that blames the client, and never an
+  // absolute install path in a client-visible body.
+  const sharp = await loadSharp();
 
   try {
     const pipeline = sharp(buf, {
