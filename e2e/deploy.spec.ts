@@ -20,6 +20,43 @@ test('panel root returns the SPA shell (DEP-01)', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Watchbug' })).toBeVisible();
 });
 
+test('panel document ships the full CSP plus the header pair (S-4)', async ({ page }) => {
+  const consoleMessages: string[] = [];
+  page.on('console', (message) => consoleMessages.push(message.text()));
+
+  const response = await page.goto('/');
+  expect(response?.status()).toBe(200);
+
+  // Five directive-level assertions on the document response — not two loose
+  // substrings — so a partial or reordered policy cannot satisfy the row.
+  const csp = response?.headers()['content-security-policy'] ?? '';
+  expect(csp).toContain("default-src 'self'");
+  expect(csp).toContain("img-src 'self'");
+  expect(csp).toContain("object-src 'none'");
+  expect(csp).toContain("base-uri 'none'");
+  expect(csp).toContain("frame-ancestors 'none'");
+
+  // nginx add_header inheritance guard: the pair declared at server level is
+  // NOT carried into location / once the CSP declares its own add_header —
+  // the location block must repeat both, or this assertion fails.
+  expect(response?.headers()['x-content-type-options']).toBe('nosniff');
+  expect(response?.headers()['referrer-policy']).toBe('same-origin');
+
+  // The bundle rendered under the policy.
+  await expect(page.getByRole('heading', { name: 'Watchbug' })).toBeVisible();
+
+  // Self-DoS guard: the policy must not refuse any of the panel's own loads.
+  const violations = consoleMessages.filter((text) => /Content Security Policy|Refused to/.test(text));
+  expect(violations, `CSP refusals: ${violations.join(' | ')}`).toEqual([]);
+
+  // The server-level pair still reaches proxied API responses while the
+  // document policy belongs to SPA responses only.
+  const health = await page.request.get('/api/health');
+  expect(health.status()).toBe(200);
+  expect(health.headers()['x-content-type-options']).toBe('nosniff');
+  expect(health.headers()['referrer-policy']).toBe('same-origin');
+});
+
 test('/api/health returns 200 through the nginx proxy (DEP-01, A-10)', async ({ request }) => {
   const response = await request.get('/api/health');
   expect(response.status()).toBe(200);

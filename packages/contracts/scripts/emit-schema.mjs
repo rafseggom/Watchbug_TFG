@@ -18,7 +18,11 @@ import { reportSchema } from '../src/schema.ts';
 const here = dirname(fileURLToPath(import.meta.url));
 const outFile = join(here, '..', '..', '..', 'schema', 'report.schema.json');
 
-const json = z.toJSONSchema(reportSchema, { target: 'draft-2020-12' });
+// `io: 'input'` — with the R-08 transform on `url`, Zod's default output mode
+// refuses to serialise the schema ("Transforms cannot be represented in JSON
+// Schema"), while input mode emits the wire shape, which is exactly what a
+// published *request* contract describes.
+const json = z.toJSONSchema(reportSchema, { target: 'draft-2020-12', io: 'input' });
 
 mkdirSync(dirname(outFile), { recursive: true });
 writeFileSync(outFile, `${JSON.stringify(json, null, 2)}\n`);

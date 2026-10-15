@@ -26,6 +26,7 @@
       ]
     },
     "url": {
+      "description": "Path of the page the report was filed on (R-08): query string and fragment are stripped during validation and never reach storage.",
       "anyOf": [
         {
           "type": "string",
