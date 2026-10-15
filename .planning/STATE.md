@@ -115,6 +115,11 @@ None yet.
 |---|-------------|------|--------|-----------|
 | 261007-pm7 | Add reuse-first coding rule (R-18) and 4 Gemini review entries: CSP risk, IndexedDB fallback, orphan blob reconciliation, TS 6-vs-7 gate | 2026-10-07 | 8eafa1b | [261007-pm7-add-reuse-first-coding-rule-r-18-and-4-g](./quick/261007-pm7-add-reuse-first-coding-rule-r-18-and-4-g/) |
 | 2 | Record phase 1 real start date (2026-10-11, delta +1 day) in Gantt variance tracker continuity-pack 7.1 | 2026-10-11 | 0e0af4d | — |
+| 261014-m3v | S-2 â€” Add a scheduled TTL purge job so retention stops being decorative: at boot and on an interval, null out the user_* identity columns where identity_purge_at is due, and delete the row plus its Storage blob where artifact_purge_at is due, logging what was purged. Enforces R-09/R-10/RET-01-02. Files: new module apps/api/src/purge.ts, apps/api/src/app.ts, apps/api/src/db/schema.ts, docker-compose.yml, .env.example. | 2026-10-14 | 9f5ae66ed0da7169d264217132d53c87b6f024db | .planning/quick-batches/261014-m3u/items/261014-m3v-s-2-add-a-scheduled-ttl-purge-job-so-retention-stops-being-d |
+| 261014-m3w | S-3 + S-6 server: per-IP read rate limit and keyset pagination for the read surface | 2026-10-14 | 35fc1bc | — |
+| 261014-m3x | L-1 client + S-6 client: fix panel-side stopthatslop findings and harden the list read surface | 2026-10-15 | 338d84f | — |
+| 261014-m3y | S-4 + S-5: CSP on the panel and R-08 path-only URLs in the contract | 2026-10-15 | abe0e9c | — |
+| 261014-m3z | L-1 server: fix the server-side stopthatslop findings (abortable fetches, lazy sharp) | 2026-10-15 | a4b7396 | — |
 
 ## Deferred Items
 
