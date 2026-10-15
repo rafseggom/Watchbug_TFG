@@ -24,11 +24,11 @@ const repoRoot = resolve(__dirname, '..');
 /**
  * The list route, tolerating the `?limit=`/`?cursor=` query string the panel now
  * always appends (261014-m3w's read contract). Playwright anchors regexes to the
- * full URL, so a bare `'**/api/incidents'` glob no longer matches a request that
- * carries a query string. One shared reference is required — `page.unroute`
- * removes a regex route by source+flags equality, so an inline duplicate would
- * not unregister and the second mock row would leak into the next test. The
- * pattern deliberately does not match `/api/incidents/:id/image`.
+ * full URL, so a bare glob matching only `/api/incidents` no longer matches a
+ * request that carries a query string. One shared reference is required —
+ * `page.unroute` removes a regex route by source+flags equality, so an inline
+ * duplicate would not unregister and the second mock row would leak into the
+ * next test. The pattern deliberately does not match `/api/incidents/:id/image`.
  */
 const INCIDENTS_LIST_RE = /\/api\/incidents(\?.*)?$/;
 
