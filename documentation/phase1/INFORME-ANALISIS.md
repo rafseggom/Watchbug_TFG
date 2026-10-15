@@ -1,5 +1,5 @@
-<p align="center">
-  <img src="img/banner-etsii.png" alt="Universidad de Sevilla — Escuela Técnica Superior de Ingeniería Informática" width="460" />
+﻿<p align="center">
+  <img src="../img/banner-etsii.png" alt="Universidad de Sevilla — Escuela Técnica Superior de Ingeniería Informática" width="460" />
 </p>
 
 <p align="center">
@@ -13,12 +13,16 @@
 
 | | |
 |---|---|
-| **Fecha** | 2026-10-13 |
-| **HEAD** | `c0142a4` — *ci(01): add the e2e job so CI runs the complete R-12 suite* |
+| **Fecha (análisis original)** | 2026-10-13 |
+| **HEAD (análisis original)** | `c0142a4` — *ci(01): add the e2e job so CI runs the complete R-12 suite* |
+| **Fecha (remediación)** | 2026-10-15 |
+| **HEAD (tras remediación)** | `79f85dd` — 5 de los hallazgos corregidos en la rama; ver **§8** |
 | **Árbol de trabajo** | limpio al empezar y al terminar |
 | **Alcance** | 41 ficheros `.ts`/`.tsx` trackeados + `docker-compose.yml`, `.env.example`, `apps/panel/nginx.conf`, `.github/workflows/`, `scripts/`, `e2e/` |
-| **Modo** | **Análisis / guidance** — *no se ha modificado ni un solo fichero de código*. Este `.md` es el único artefacto nuevo. |
-| **Ejecución del objetivo** | ninguna (sin `npm test`, sin `playwright`, sin red, sin instalar dependencias en Watchbug) |
+| **Modo (análisis original)** | **Análisis / guidance** — sin modificar código en esa pasada. |
+| **Modo (remediación)** | Batch `/gsd-quick-batch` `261014-m3u` — correcciones aplicadas y verificadas; ver **§8** |
+| **Ejecución del objetivo (análisis)** | ninguna (sin `npm test`, sin `playwright`, sin red) |
+| **Ejecución (tras remediación)** | `npm run verify` 147/147 · `stopthatslop check --pack ts` 0 findings · `lint` · `gate.mjs` · `check:compose` — todo en verde |
 
 ---
 
@@ -26,7 +30,7 @@
 
 | Lente | Herramienta | Resultado | Veredicto |
 |---|---|---|---|
-| **Slop** | `stopthatslop check --pack ts` (pack `stopthatslop-ts-node-v1`) | **5 findings gate**, 0 teach-only → `exit 1` | 🟡 3 hallazgos de fiabilidad, 1 de rendimiento; nada crítico |
+| **Slop** | `stopthatslop check --pack ts` (pack `stopthatslop-ts-node-v1`) | Análisis original: **5 findings gate** → **re-ejecución 2026-10-15: `gate_finding_count: 0`, `exit 0`** | ✅ **Cero slop hoy** — los 5 hallazgos originales están corregidos (§8.2) |
 | **Complejidad** | TS compiler API (script propio, no hay eslint/radon/lizard en el repo) | 255 funciones · media **2,38** · **3** con CC ≥ 16 y **1** con CC = 15 | 🟠 Muy sano en conjunto, con **4 focos concentrados en `apps/api`** |
 | **Seguridad** | `security-audit` (modo guidance, source-first) | **6 confirmados**: 1 high · 1 medium · 2 low · 2 informational · **8 `needs_validation`** | 🔴 Un hallazgo high condicionado al despliegue |
 
@@ -34,8 +38,10 @@
 
 1. **P0 — Superficie de lectura sin autenticar** (`GET /api/incidents` devuelve todos los reportes con `user.email`). Confirmado en fuente; la única barrera actual es el bind a `127.0.0.1` del compose → **verificar alcance antes de exponer nada**.
 2. **P0 — Las retentiones TTL no se aplican nunca**: las columnas se escriben y `.env.example` las promete, pero no existe ningún job de purga.
-3. **P1 — Slop + gate en CI**: los 5 findings y la ausencia de `stopthatslop check` en los workflows.
+3. **P1 — Slop + gate en CI**: los 5 findings (**resueltos** — §8.2) y la ausencia de `stopthatslop check` en los workflows (**L-2, descartado a propósito** — §8.4).
 4. **P2 — Complejidad**: partir el handler de ingesta (CC 30 / 216 LOC) y `stripPng`/`stripWebp`.
+
+> **Estado (2026-10-15):** este resumen describe el análisis original sobre `c0142a4`. Tras la remediación (HEAD `79f85dd`), **S-2, S-3, S-4, S-5, S-6 y los 5 findings de slop (L-1) están resueltos** — y `stopthatslop check --pack ts` **re-ejecutado devuelve 0 findings / `exit 0`** (sin slop; §8.2); **S-1 queda mitigado** (rate limit + paginación, pero sin autenticación real hasta Phase 5) y **L-2 se descartó a propósito**. Los hotspots de complejidad C-1/C-2/C-3 siguen pendientes. Detalle y verificación en **§8**.
 
 ---
 
@@ -55,6 +61,8 @@
 
 ### 1.3 Qué NO cubre este informe
 
+> *Este apartado describe el análisis original sobre `c0142a4`. La remediación posterior (§8) sí ejecutó la suite e2e y los gates — ver §8.6.*
+
 - **No es un full audit.** No hay ledger de cobertura, ni oleadas de caza, ni validadores `findings.json`, ni verificación independiente de registros. **No existe ninguna auditoría previa de esta rama**, así que no hay registros que arrastrar ni cobertura acumulada: **una sola pasada, no exhaustiva.**
 - **No se ejecutó el código del objetivo** (regla del skill: sin sandbox no se ejecuta código ajeno). Ninguna aseveración de seguridad se apoya en una prueba en vivo.
 - **No se ejecutaron los e2e** (`npm run verify`, R-12) ni `npm run gate`; su estado no está evaluado aquí.
@@ -65,7 +73,9 @@
 ## 2. Slop de código — `stopthatslop`
 
 **Pack:** `stopthatslop-ts-node-v1` (13 reglas: 9 *checker* gatean, 4 *teach-only* solo enseñan).
-**Resultado:** `passed: false`, `gate_finding_count: 5`, `teach_only_finding_count: 0`, `exit 1`.
+**Resultado (análisis original sobre `c0142a4`):** `passed: false`, `gate_finding_count: 5`, `teach_only_finding_count: 0`, `exit 1`.
+
+> **Estado actual (2026-10-15, HEAD `79f85dd`):** re-ejecutado el mismo comando → **`gate_finding_count: 0`, `teach_only_finding_count: 0`, `exit 0`** — **sin slop**. Los 5 hallazgos de la tabla están corregidos en código (§8.2). El resto de §2 es el registro histórico de aquella primera pasada.
 
 | # | Regla | Fichero | Mensaje del detector |
 |---|---|---|---|
@@ -289,9 +299,11 @@ Conviene tenerlos escritos para que nadie los reabra más tarde:
 
 ---
 
-## 5. Plan de remediación posterior *(ordenado para más tarde; NO aplicado)*
+## 5. Plan de remediación posterior *(estado al 2026-10-13: pendiente)*
 
-> **No se ha corregido nada.** Esta sección es el backlog de trabajo futuro, con el fix mínimo ya definido por hallazgo.
+> **Estado a 2026-10-13 (análisis original):** no se había corregido nada. Esta sección era el backlog con el fix mínimo ya definido por hallazgo.
+>
+> **Estado a 2026-10-15:** el plan **ya se ejecutó** — ver **§8** para qué quedó resuelto, qué se mitigó y qué sigue pendiente.
 
 | Prioridad | ID | Hallazgo | Fix mínimo | Ficheros | Esfuerzo |
 |---|---|---|---|---|---|
@@ -312,20 +324,23 @@ Conviene tenerlos escritos para que nadie los reabra más tarde:
 
 ---
 
+
 ## 6. Limitaciones del informe
+
+> *Limitaciones del análisis original sobre `c0142a4`. La remediación posterior re-ejecutó `stopthatslop`, la suite e2e y los gates — resultados en §8.2 y §8.6.*
 
 1. **Una sola pasada, sin ledger de cobertura.** No existe auditoría previa de esta rama; no hay registros que arrastrar. **Esta pasada no agota el objetivo** — superficies no exploradas en profundidad: `scripts/*.mjs` más allá de `gen-key`/`gate`, internals de `drizzle/`, lógica de `boot/seed.ts`, y todo lo que Phase 2-6 añada.
 2. **Modo guidance, no full audit.** Sin fases 1-6, sin `findings.json` ni validadores, sin verificación independiente de registros. Los hallazgos fueron citados y **verificados manualmente contra el árbol en `c0142a4`** por el agente coordinador, pero no pasaron por un verificador independiente fresco.
 3. **Source-first absoluto.** Nada se ejecutó: ningún hallazgo se apoya en reproducción en vivo, y todo lo que depende del despliegue real está en §4.2.
 4. **Los lentes no se solapan pero no son exhaustivos entre sí.** `stopthatslop` cubre 9 reglas TS gateables; la complejidad cubre las 255 funciones de los 41 ficheros `.ts`/`.tsx`; la seguridad cubrió `apps/api` y `packages/* + apps/panel`.
-5. **El gate de `stopthatslop` depende de `checkers/tsast` operativo** (`npm install` hecho en el clon, gitignored). Si se replica en CI, instalarlo ahí también — sin él, los detectores TS devuelven 0 findings **en silencio** (falso verde, comprobado).
+5. **El gate de `stopthatslop` no está conectado a CI.** El detector sí se ejecuta (motor en `E:\Proyectos Github\stopthatslop\checkers\tsast`, fuera de este repo) y **devuelve 0 findings sobre el código actual** (§8.2, con control positivo que demuestra que detecta); lo que falta es que nada en `.github/workflows/` ni en `scripts/gate.mjs` lo ejecute, así que un paso de slop introducido en una rama futura no lo vería nadie. **§8.4** documenta que **L-2 se descartó a propósito** por alcance (sin vendorizar motor, sin job de CI).
 
 ---
 
 ## 7. Anexo — comandos reproducibles
 
 ```bash
-# 1. Slop
+# 1. Slop — salida esperada hoy: Gate findings: 0  Teach-only findings: 0 (exit 0)
 python -m stopthatslop_cli check --repo-root "E:\Proyectos Github\Watchbug_TFG" --pack ts
 python -m stopthatslop_cli check --repo-root ... --pack ts --format json
 
@@ -336,4 +351,90 @@ node <temp>/cc.mjs $(git ls-files '*.ts' '*.tsx')
 #    sin red, sin instalar dependencias; ver §1.3 para el alcance.
 ```
 
-*Generado el 2026-10-13 sobre `c0142a4`. Único fichero creado por este análisis: `documentation/INFORME-ANALISIS.md`.*
+---
+
+## 8. Estado de remediación (2026-10-15, HEAD `79f85dd`)
+
+> §8 es el **estado actual tras corregir**; §2–§5 describen el estado del análisis original sobre `c0142a4` y **no se reescriben** (son el registro histórico). Todo lo que sigue se **re-verificó contra el código en `79f85dd`**, no se heredó de la pasada original.
+
+### 8.1 Resumen
+
+| ID | Hallazgo | Estado | Cómo se arregló (breve) |
+|---|---|---|---|
+| **S-1** | Lecturas sin autenticación (HIGH) | 🟡 **mitigado, NO resuelto** | Ver §8.3 |
+| **S-2** | TTL decorativas (MEDIUM) | ✅ **resuelto** | `apps/api/src/purge.ts` nuevo: `startPurge()` barre al arranque y en `setInterval`, pone a `null` las columnas `user_*` cuando `identity_purge_at <= now()` y borra la fila + `storage.delete(storageKey)` cuando `artifact_purge_at <= now()`. Arrancado desde `app.ts:117`. Sin cron sidecar (INV-03 intacto). |
+| **V-0** | Verificar exposición antes de abrir | ✅ **cumplido en compose** | Los tres servicios siguen ligados a `127.0.0.1` (`docker-compose.yml:36,44,72`). El resto de comprobaciones §4.2 son del despliegue real y siguen abiertas (son externas al repo). |
+| **S-3** | Rate limit ausente en lecturas (LOW) | ✅ **resuelto** | `createReadRateLimit()` (`plugins/rate-limit.ts:76`) enganchado como `preHandler` de `GET /api/incidents` (`routes/incidents.ts:380`) y de la ruta de imagen (`:436`). Nota: gatea por `isExceeded`, no por `isAllowed` (el `isAllowed` de `@fastify/rate-limit` v11 solo es `true` para allow-list; usarlo daba 429 en la 1ª petición — corregido en `62195bb`). |
+| **L-1** | Los 5 findings de slop | ✅ **resuelto** | Detector re-ejecutado → **0 findings, `exit 0`** (sin slop). Ver §8.2 |
+| **L-2** | Gate `stopthatslop` en CI | ❌ **descartado a propósito** | Ver §8.4 |
+| **C-1** | `incidents.ts` handler POST CC 30 / 216 LOC | ⏸ **pendiente** | Fuera del alcance de esta remediación (refactor de riesgo). Sigue en CC 30. |
+| **C-2** | `stripPng` CC 20 / `stripWebp` CC 16 | ⏸ **pendiente** | Fuera del alcance. Siguen en 20 y 16. |
+| **C-3** | `app.ts:131` `setErrorHandler` CC 15 | ⏸ **pendiente** | Fuera del alcance. Sigue en 15. |
+| **S-4** | CSP ausente en el panel (INFO) | ✅ **resuelto** | `apps/panel/nginx.conf:51`: `add_header Content-Security-Policy "default-src 'self'; img-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'" always;` |
+| **S-5** | `url` sin R-08 (INFO) | ✅ **resuelto** | `packages/contracts/src/schema.ts:53`: `url` lleva `.transform(stripQueryFragment)` — query y fragmento se recortan dentro del contrato oficial, así SDK e ingesta heredan la regla. |
+| **S-6** | Lista sin límite en cliente (LOW) | ✅ **resuelto** | Servidor: paginación keyset con `limit` + cursor opaco (`routes/incidents.ts:405-424`), `limit` acotado y cursor malformado → 400. Cliente: `fetchIncidents({limit, cursor})` + `nextCursor` (`panel/src/api.ts:92-112`) y control "cargar más" en `ReportList.tsx`. |
+
+### 8.2 Los 5 findings de slop (L-1) — el detector no encuentra slop
+
+**El detector se ejecutó el 2026-10-15 sobre `79f85dd` y no encontró slop:**
+
+```
+python -m stopthatslop_cli check --repo-root "E:\Proyectos Github\Watchbug_TFG" --pack ts
+→ passed: true, gate_finding_count: 0, teach_only_finding_count: 0, exit 0
+```
+
+Cero hallazgos *gate* y cero *teach-only* con las 9 reglas *checker* activas (`node`, `react`, `express`): **los 5 findings de §2 están cerrados.**
+
+**El verde es real, no un silencio del checker.** El motor vive fuera de este repo (`E:\Proyectos Github\stopthatslop\checkers\tsast` — `facts.mjs` + `node_modules/typescript`) y el CLI lo resuelve desde ahí. Para demostrar que el detector distingue "no hay slop" de "no está mirando", se le pasó un fichero temporal `apps/api/src/slop-probe.ts` con un `fetch()` sin `AbortSignal` y un `res.json()` sin `try` → lo marcó (`passed: false`, 2 gate findings, `exit 1`). Borrado el probe, el check volvió a `0 / exit 0`.
+
+De cada hallazgo original queda, además, la evidencia de inspección directa del código:
+
+| # | Regla | Arreglado | Evidencia en `79f85dd` |
+|---|---|---|---|
+| 1 | `no-fetch-without-abort-timeout` (`index.ts:105`) | ✅ | `index.ts:59` — el smoke path pasa por `smokeFetch()`, que envuelve todo `fetch` con `AbortSignal.timeout(SMOKE_FETCH_TIMEOUT_MS)` |
+| 2 | `no-fetch-without-abort-timeout` (`index.ts:118`) | ✅ | ídem — ambas llamadas (`:128`, `:141`) usan `smokeFetch()` |
+| 3 | `no-eager-heavy-dependency-import` (`harden.ts:1`) | ✅ | `harden.ts:40` — `sharp` cargado con `await import('sharp')` dentro de `loadSharp()`, memoizado; nunca en evaluación de módulo. El arranque de la API no resuelve el binario nativo. |
+| 4 | `no-fetch-without-abort-timeout` (`panel/api.ts:31`) | ✅ | `panel/api.ts:59` — `fetch(path, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) })` |
+| 5 | `no-unguarded-json-parse-on-external-input` (`panel/api.ts`) | ✅ | `panel/api.ts:70-72` — `res.json()` dentro de `try/catch` que lanza `ApiError('invalid-json', …)` en vez de excepción no controlada |
+
+### 8.3 S-1 — mitigado, **no resuelto** (y por qué)
+
+**Estado:** la superficie de lectura sigue **sin autenticación**. `GET /api/incidents` solo lleva `readRateLimit` como `preHandler` (`routes/incidents.ts:380`); no hay ninguna comprobación de credenciales. `AuthProvider` sigue sin existir en el código (las únicas referencias son comentarios que apuntan a Phase 5).
+
+**Qué sí se mejoró:** el hallazgo original tenía dos componentes — autenticación *y* abuso/disponibilidad. La parte de **abuso** está cerrada: rate limit por IP en las lecturas (S-3) y paginación keyset con `limit` acotado (S-6). Un cliente anónimo ya no puede volcar la tabla completa ni saturar el pool con una sola petición.
+
+**Por qué no se cerró la parte de autenticación:** es una decisión de arquitectura, no un descuido. Gatear las lecturas con la `project_key` habría sido **teatro de seguridad**: esa clave es **write-only pública por diseño** — viaja en el `init()` de cada página host, así que está en el HTML/JS de todos los clientes. Exigirla en los GET no autentifica a nadie: cualquier visitante la obtiene leyendo la propia página. La autenticación real de lecturas necesita un `AuthProvider` con credenciales de administrador separadas, y eso es **Phase 5** (R-05/SEC-06), fuera del alcance de este lote.
+
+**Mientras tanto,** el compose sigue ligando los tres servicios a `127.0.0.1` (V-0), que es la mitigación de despliegue que ya describía §4.1-1. Al desplegar fuera de loopback, **S-1 vuelve a ser HIGH y Phase 5 debe cerrarlo antes de exponer nada.**
+
+### 8.4 L-2 — descartado a propósito
+
+El gate de `stopthatslop` en CI **no se conectó**, y se descartó de forma consciente como decisión de alcance: **no se vendoriza el motor ni se añade un job de CI** (ítem `m40` del batch `261014-m3u`, cancelado y registrado en `BATCH.json` bajo `failure_reason`).
+
+No hay nada que arreglar en el detector: **se ejecuta y funciona** (`0 findings` sobre el código actual + control positivo — §8.2). Lo descartado es únicamente la **automatización en CI**, por dos razones de alcance:
+
+1. **Vendorización pendiente.** El motor vive fuera del repo (`E:\Proyectos Github\stopthatslop`); un gate de CI fiable exigiría fijarlo a un SHA vendorizado, y esa decisión (URL de vendor) quedó sin resolver en su día.
+2. **Alcance del lote.** La remediación pedida era arreglar los hallazgos de seguridad y slop en código, no infraestructurar un gate nuevo. `m40` se canceló en ese término.
+
+**Sustituto:** el informe queda como **fuente de hallazgos**, y la validación del fix es la **re-ejecución puntual** de §8.2 (`0 findings` + control positivo), que es evidencia directa de que los 5 hallazgos están cerrados. Si más adelante se quiere un gate de slop en CI, la decisión abierta es *dónde* vive el motor (vendor SHA fijo vs. `scripts/` propio del repo) — no si el detector funciona, que sí.
+
+### 8.5 C-1 / C-2 / C-3 — pendientes, fuera de alcance
+
+Los tres hotspots de complejidad ciclomática **no se tocaron** (re-medidos sobre `79f85dd`: `stripPng`=20, `stripWebp`=16, handler POST`=30`, `setErrorHandler`=15). Son refactors de riesgo sobre la ruta de ingesta y el endurecido de imagen (SEC-02), que exigen e2e verde antes/después y fixtures byte a byte. Quedan como backlog; no son regresiones, siguen igual que en el análisis original.
+
+### 8.6 Verificación de la remediación
+
+Todo en verde sobre `79f85dd` (re-ejecutado el 2026-10-15, evidencia fresca):
+
+- `npm run verify` → **147/147** (chromium + firefox + webkit; creció de 132 por los tests nuevos de `read-surface`, `deploy` CSP y R-08)
+- `python -m stopthatslop_cli check --pack ts` → **0 gate findings, `exit 0`** (checker operativo, probado con control positivo — §8.2)
+- `npm run lint` → ✓
+- `node scripts/gate.mjs` → ✓ (2 passed, 0 failed, 1 skipped)
+- `npm run check:compose` → ✓ (exactamente tres servicios)
+
+Los 5 cambios se aterrizaron en la rama `gsd/phase-1-contracts-ingest` (`33e12a5..79f85dd`), **sin merge a `develop`** — la PR se revisa y mergea a mano. Detalle de trazabilidad en `documentation/continuity-pack.md` §9.
+
+---
+
+*Análisis generado el 2026-10-13 sobre `c0142a4`. Único fichero creado por ese análisis: `documentation/phase1/INFORME-ANALISIS.md`.*
+*Remediación aplicada el 2026-10-15 (batch `261014-m3u`, HEAD `79f85dd`) — estado actual en **§8**.*
