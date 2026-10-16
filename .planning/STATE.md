@@ -4,10 +4,10 @@ current_phase: 2
 current_phase_name: "SDK Tracer Bullet: Widget, Capture & Auto-Redaction"
 status: planning
 stopped_at: Phase 01 complete, ready to plan Phase 2
-last_updated: "2026-10-13T15:50:19.989Z"
+last_updated: "2026-10-16T15:10:02.293Z"
 last_activity: 2026-10-13
 last_activity_desc: Phase 01 complete, transitioned to Phase 2
-state_head: a7f93696f980b98cf218c982402cb51d334e8ac8
+state_head: f12e36d789c80f9691d0435a0cdf589252198961
 progress:
   total_phases: 7
   completed_phases: 1
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-10-13)
 Phase: 2 — SDK Tracer Bullet: Widget, Capture & Auto-Redaction
 Plan: Not started
 Status: Ready to plan
-Last activity: 2026-10-13 — Phase 01 complete, transitioned to Phase 2
+Last activity: 2026-10-16 - Completed quick task 261016-nnx: Fix api read rate-limit typecheck error: gate on isExceeded via discriminant narrowing
 
 Progress: [█░░░░░░░░░] 14%
 
@@ -120,6 +120,7 @@ None yet.
 | 261014-m3x | L-1 client + S-6 client: fix panel-side stopthatslop findings and harden the list read surface | 2026-10-15 | 338d84f | — |
 | 261014-m3y | S-4 + S-5: CSP on the panel and R-08 path-only URLs in the contract | 2026-10-15 | abe0e9c | — |
 | 261014-m3z | L-1 server: fix the server-side stopthatslop findings (abortable fetches, lazy sharp) | 2026-10-15 | a4b7396 | — |
+| 261016-nnx | Fix api read rate-limit typecheck error: gate on isExceeded via discriminant narrowing | 2026-10-16 | f12e36d | [261016-nnx-fix-api-read-rate-limit-typecheck-error-](./quick/261016-nnx-fix-api-read-rate-limit-typecheck-error-/) |
 
 ## Deferred Items
 
