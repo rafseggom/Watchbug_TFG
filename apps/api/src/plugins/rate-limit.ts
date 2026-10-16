@@ -91,7 +91,10 @@ export function createReadRateLimit(
     // `isExceeded: current > max`. Gating on `isAllowed` therefore rejects the
     // very first read of a fresh window (measured: 429 on request #1 after a
     // container restart) — which is what the ingest limiter already got right.
-    if (!ipStatus.isExceeded) return;
+    // Here the `isAllowed` term is the allow-list short-circuit (it also narrows
+    // the return union, whose `isAllowed: true` arm carries no `isExceeded`),
+    // while `!isExceeded` remains the counted-request pass/fail test.
+    if (ipStatus.isAllowed || !ipStatus.isExceeded) return;
     reply.header('retry-after', String(retryAfterSeconds(ipStatus.ttlInSeconds)));
     reply
       .code(429)
