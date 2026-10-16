@@ -1,3 +1,14 @@
+<p align="center">
+  <img src="img/banner-etsii.png" alt="Universidad de Sevilla — Escuela Técnica Superior de Ingeniería Informática" width="460" />
+</p>
+
+<p align="center">
+  <sub><b>Trabajo Fin de Grado · Ingeniería del Software</b></sub><br />
+  <sub>Watchbug SDK &nbsp;·&nbsp; Nerea Jiménez Adorna &nbsp;·&nbsp; Rafael Segura Gómez</sub>
+</p>
+
+---
+
 # RESOLUTION RECORD — Watchbug SDK
 
 **Status:** Living record of approved decisions and architectural trade-offs.
@@ -227,6 +238,8 @@ Approaches evaluated and rejected. Do not re-explore.
 | D-06 | Gaussian blur as the masking primitive | Partially invertible by deconvolution — fails SEC-02's "irreversible" (R-13). |
 | D-07 | Python 3.10 as backend target | End-of-life October 2026. Moot under R-15, recorded so the number does not reappear. |
 | D-08 | `html-to-image` / SVG `foreignObject` DOM serialization as the primary capture path | ~8–14 KB and silently fails on cross-origin images, `<video>`, WebGL, fonts and host closed shadow roots. Retained only as an optional `CaptureSource` adapter. |
+| D-09 | Server-side "grace" alone for the ING-06 layer-2 pre-read 413 — adding `finish → setTimeout(250 ms) → destroy` | Measured inert, not merely unproven: 3/15 targeted runs still failed after it landed. The grace only *schedules* a later destroy; the teardown that loses the response happens first, so the delay never gets to help. The 413 dies because `close()` runs with the client's upload still unread, and a socket closed with unread inbound data makes the kernel answer RST — which discards the answer already in the client's receive buffer. Resolved by consuming that upload before closing (`lingerBeforeClose()`, ed20ec3) rather than by postponing the close. |
+| D-10 | Fixing the ING-06 layer-2 flake purely in the test — swapping Playwright's request API for the raw-socket transport the layer-2b row already uses | It reduced but did not remove the failure (13/15 with 2/15 still red), and the untouched layer-2b row failed once under 15× repetition — something it had never done in five full-suite runs. That falsified the "Playwright's client can't observe the answer" framing: the defect was server-side, and a real client (the SDK posting an oversized report) hit the same race. Kept only as a complement: the raw socket plus the stricter `Content-Length pre-read` assertion (c0a3d89) makes layer 2 distinguishable from layer 2b, which `MAX_BODY_BYTES` alone did not. **Residual accepted by the owner:** a full-speed upload can still lose the 413. |
 
 ---
 
@@ -361,6 +374,24 @@ The v1 scoping block closed Q-02…Q-04 definitively and fixed the v1/v2 boundar
 ### A-12 · Size-gate worst case (new)
 
 45 + 25 + 14 = **84 KB > 80 KB** runtime ceiling in the worst case. `check:size` needs an explicit multi-artifact scenario in the first phase, and the lazy chunk budget may need revisiting against real measurements.
+
+### A-13 · Type-only devDependencies approved (2026-10-12, plan 01-01)
+
+The owner approved five **type-only** `@types/*` devDependencies outside the A-09/Task-1 install set, explicitly to make `npm run lint` (per-workspace `tsc`) pass:
+
+| Package | Pin | Why it is required |
+|---|---|---|
+| `@types/node` | `24.19.2` (matches the Node 24 runtime) | `apps/api` uses `process`, `node:fs`, `node:crypto`, `node:zlib` |
+| `@types/react` | `19.3.0` | JSX intrinsics + hook types in `apps/panel` |
+| `@types/react-dom` | `19.3.0` | `createRoot` |
+| `@types/pg` | `8.23.1` | `pg` ships no bundled types |
+| `@types/sanitize-html` | `2.16.2` | `sanitize-html` ships no bundled types |
+
+No runtime impact (type declarations only — erased at compile time, zero bytes in any
+bundle; R-01 and the SDK's zero-runtime-dependency rule are untouched). Taken as a
+`question` gate during 01-01 Task 2 close-out; recorded here per the decision-log
+policy. Decision trace: owner answer "Selecciona la opción 1 … deja constancia de esta
+adición de dependencias de desarrollo en el documento correspondiente".
 
 ### Still open
 

@@ -1,3 +1,14 @@
+<p align="center">
+  <img src="img/banner-etsii.png" alt="Universidad de Sevilla — Escuela Técnica Superior de Ingeniería Informática" width="460" />
+</p>
+
+<p align="center">
+  <sub><b>Trabajo Fin de Grado · Ingeniería del Software</b></sub><br />
+  <sub>Watchbug SDK &nbsp;·&nbsp; Nerea Jiménez Adorna &nbsp;·&nbsp; Rafael Segura Gómez</sub>
+</p>
+
+---
+
 # MENTORSHIP PACK: Watchbug SDK
 
 ## 1. Architectural Invariants (Invariantes Arquitectónicas)

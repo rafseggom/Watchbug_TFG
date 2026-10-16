@@ -1,0 +1,80 @@
+/*
+ * Design tokens (P1-D-06): every colour, space, radius and font in the panel
+ * comes from a custom property declared here — no component hardcodes a colour.
+ * Light and dark follow `prefers-color-scheme`; the semantic names stay stable
+ * so components never branch on a theme.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  --color-bg: #f6f7f9;
+  --color-surface: #ffffff;
+  --color-surface-alt: #eef0f4;
+  --color-border: #d6dae1;
+  --color-text: #1b1f26;
+  --color-text-muted: #5b6472;
+  --color-accent: #2f6feb;
+  --color-accent-contrast: #ffffff;
+  --color-bug: #b3261e;
+  --color-feedback: #8a5a00;
+  --color-status-pending: #5b6472;
+  --color-status-in-progress: #2f6feb;
+  --color-status-resolved: #1e7a46;
+  --color-danger-surface: #fdecea;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', monospace;
+  --font-size-sm: 13px;
+  --font-size-md: 15px;
+  --font-size-lg: 19px;
+
+  --layout-list-width: 360px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #14171c;
+    --color-surface: #1c2027;
+    --color-surface-alt: #242a33;
+    --color-border: #333b47;
+    --color-text: #e8ebf0;
+    --color-text-muted: #9aa4b2;
+    --color-accent: #6d9bff;
+    --color-accent-contrast: #10131a;
+    --color-bug: #ff8a80;
+    --color-feedback: #ffcf70;
+    --color-status-pending: #9aa4b2;
+    --color-status-in-progress: #6d9bff;
+    --color-status-resolved: #6fdc9a;
+    --color-danger-surface: #3a1f1c;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-md);
+  line-height: 1.45;
+}

@@ -1,0 +1,48 @@
+{
+  "contract": "1.0.0",
+  "flavor": "core",
+  "milestone": null,
+  "phases": [
+    {
+      "number": "1",
+      "name": "Contracts & Ingest Slice",
+      "status": "complete"
+    },
+    {
+      "number": "2",
+      "name": "SDK Tracer Bullet: Widget, Capture & Auto-Redaction",
+      "status": "pending"
+    },
+    {
+      "number": "3",
+      "name": "Report Composer & Annotation Editor (lazy)",
+      "status": "pending"
+    },
+    {
+      "number": "4",
+      "name": "Report Payload & Enrichment",
+      "status": "pending"
+    },
+    {
+      "number": "5",
+      "name": "Secure Admin Access & Projects",
+      "status": "pending"
+    },
+    {
+      "number": "6",
+      "name": "Triage & Data Lifecycle",
+      "status": "pending"
+    },
+    {
+      "number": "7",
+      "name": "Resilience & Release Closeout",
+      "status": "pending"
+    }
+  ],
+  "next": {
+    "command": "/gsd:progress --next",
+    "label": "Advance to the next step (plan phase 2)",
+    "reason": "Phase 2 of 7 — needs a plan"
+  },
+  "updated_at": "2026-10-13T15:50:20.109Z"
+}

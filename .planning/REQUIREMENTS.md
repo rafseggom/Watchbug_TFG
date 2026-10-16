@@ -92,18 +92,18 @@ A requirement is **Complete** when:
 - [ ] **ENR-03**: Reports carry URL path, user agent, viewport, screen resolution, devicePixelRatio, language, timezone and timestamp
 - [ ] **ENR-04**: Reports carry the host-supplied application version
 - [ ] **ENR-05**: Console capture is bounded and cannot recurse on the SDK's own logging
-- [ ] **ENR-06**: Every report validates against the single published JSON schema (CA-01)
+- [x] **ENR-06**: Every report validates against the single published JSON schema (CA-01)
 
 ### Transport & Ingestion
 
-- [ ] **ING-01**: A report (image + metadata) reaches the configured backend over HTTP (RF-05)
+- [x] **ING-01**: A report (image + metadata) reaches the configured backend over HTTP (RF-05)
 - [ ] **ING-02**: A report survives page unload and transient network failure via a durable retry queue
-- [ ] **ING-03**: A retried submission does not create a duplicate report
-- [ ] **ING-04**: The API rejects ingestion without a valid project key
-- [ ] **ING-05**: The API rate-limits per IP and per project key (SEC-05)
-- [ ] **ING-06**: The API rejects oversized bodies and images
-- [ ] **ING-07**: The API sanitises all user-supplied text before storage and before panel rendering (SEC-05)
-- [ ] **ING-08**: The API accepts ingestion only from allowlisted origins
+- [x] **ING-03**: A retried submission does not create a duplicate report
+- [x] **ING-04**: The API rejects ingestion without a valid project key
+- [x] **ING-05**: The API rate-limits per IP and per project key (SEC-05)
+- [x] **ING-06**: The API rejects oversized bodies and images
+- [x] **ING-07**: The API sanitises all user-supplied text before storage and before panel rendering (SEC-05)
+- [x] **ING-08**: The API accepts ingestion only from allowlisted origins
 
 ### Panel & Triage
 
@@ -134,8 +134,8 @@ A requirement is **Complete** when:
 
 ### Deployment & Operations
 
-- [ ] **DEP-01**: A developer can start API + panel + database with one `docker-compose up` (INV-03)
-- [ ] **DEP-02**: A developer can configure every server setting from `.env` using the committed `.env.example` (SEC-04)
+- [x] **DEP-01**: A developer can start API + panel + database with one `docker-compose up` (INV-03)
+- [x] **DEP-02**: A developer can configure every server setting from `.env` using the committed `.env.example` (SEC-04)
 - [ ] **DEP-03**: Screenshot blobs live on a filesystem volume and are served only through the authenticated API (R-04)
 - [ ] **DEP-04**: A developer can back up and restore by copying the data volume and dumping the database
 
@@ -246,15 +246,15 @@ Which phases cover which requirements. **Updated during roadmap creation** — e
 | ENR-03 | Phase 4 | Pending |
 | ENR-04 | Phase 4 | Pending |
 | ENR-05 | Phase 4 | Pending |
-| ENR-06 | Phase 1 | Pending |
-| ING-01 | Phase 1 | Pending |
+| ENR-06 | Phase 1 | Complete |
+| ING-01 | Phase 1 | Complete |
 | ING-02 | Phase 7 | Pending |
-| ING-03 | Phase 1 | Pending |
-| ING-04 | Phase 1 | Pending |
-| ING-05 | Phase 1 | Pending |
-| ING-06 | Phase 1 | Pending |
-| ING-07 | Phase 1 | Pending |
-| ING-08 | Phase 1 | Pending |
+| ING-03 | Phase 1 | Complete |
+| ING-04 | Phase 1 | Complete |
+| ING-05 | Phase 1 | Complete |
+| ING-06 | Phase 1 | Complete |
+| ING-07 | Phase 1 | Complete |
+| ING-08 | Phase 1 | Complete |
 | TRI-01 | Phase 5 | Pending |
 | TRI-02 | Phase 5 | Pending |
 | TRI-03 | Phase 5 | Pending |
@@ -273,8 +273,8 @@ Which phases cover which requirements. **Updated during roadmap creation** — e
 | RET-01 | Phase 6 | Pending |
 | RET-02 | Phase 6 | Pending |
 | RET-03 | Phase 6 | Pending |
-| DEP-01 | Phase 1 | Pending |
-| DEP-02 | Phase 1 | Pending |
+| DEP-01 | Phase 1 | Complete |
+| DEP-02 | Phase 1 | Complete |
 | DEP-03 | Phase 5 | Pending |
 | DEP-04 | Phase 7 | Pending |
 | PRF-01 | Phase 2 | Pending |

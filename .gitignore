@@ -1,6 +1,8 @@
 .gsd-profile
 .gsd-install-state.json
 
+.claude
+
 node_modules/
 
 .opencode
@@ -12,5 +14,20 @@ node_modules/
 .planning/research/.cache/
 .planning/research/.research-plan-input.json
 
+# Watchbug runtime / build output (R-04 attachments volume, SEC-04 secrets)
+.env
+dist/
+data/
+test-results/
+playwright-report/
+blob-report/
+
+
 # PR Lens writes its previews here. They are rebuilt on demand.
 .pr-lens/
+
+.planning/milestone.lock
+
+# Machine-generated codebase-memory index: per-developer state, a ~1.2 MB
+# binary that is rewritten on every reindex. Never commit it.
+.codebase-memory/

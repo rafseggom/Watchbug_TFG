@@ -16,7 +16,8 @@ Every prioritisation trade-off resolves against this sentence. Capture fidelity 
 
 ### Validated
 
-(None yet — ship to validate)
+- ✓ A developer can self-host the entire stack with a single `docker compose up` (RF-08, INV-03) — Phase 1
+  (cold `docker compose up -d --build` observed db → healthy → api ordering; exactly three services; `npm run verify` 132/132 green)
 
 ### Active
 
@@ -26,7 +27,6 @@ Every prioritisation trade-off resolves against this sentence. Capture fidelity 
 - [ ] Sensitive data is masked **automatically and irreversibly** before anything leaves the browser (RF-04, SEC-01, SEC-02, R-13)
 - [ ] An end user can annotate a capture with drawing, arrows, text and a masking tool before sending (RF-03)
 - [ ] The report (image + JSON metadata) is transmitted over HTTP and persisted by the backend (RF-05, CA-01)
-- [ ] A developer can self-host the entire stack with a single `docker-compose up` (RF-08, INV-03)
 - [ ] A developer can authenticate to the panel and triage reports: list, filter by bug/feedback, change state (Pending / In Progress / Resolved), inspect collected metadata (RF-06, RF-07, SEC-06)
 - [ ] The widget is immune to hostile host CSS and never contaminates the host page's styles or globals (RNF-02, INV-01, INV-02, CA-04)
 - [ ] Widget and panel are available in English and Spanish (RNF-03)
@@ -57,6 +57,7 @@ Every prioritisation trade-off resolves against this sentence. Capture fidelity 
 - **Two known traps, already rejected:** `html2canvas` (≈50 KB gzipped) and `fabric.js`/`konva` (≈85 / ≈45 KB gzipped) each exceed the budget alone. Capture and annotation must be hand-rolled or near-dependency-free (D-04, D-05).
 - **Gaussian blur is not a masking primitive** (D-06) — it is linear and partially invertible by deconvolution. Only solid fill or block pixelation ≥8 px satisfy SEC-02's "irreversible".
 - **Open items to resolve during requirements/roadmap:** Q-02 console-log payload caps (DoS surface past per-IP rate limiting); Q-03 retention *N* and panel configurability; Q-04 key-rotation scope; Q-05 university IP policy before the repo is public; Q-06 default `CaptureSource` adapter.
+- **Phase 1 shipped (2026-10-13).** Contracts + ingest slice is complete and verified: `packages/contracts` (Zod 4, JSON Schema emit), `apps/api` (Fastify 5 ingest with layered hostile-submission hardening), Postgres via Drizzle, and a minimal panel behind nginx — all three compose services, cold-start verified. Ingest requires a `WATCHBUG_PROJECT_KEY`; the admin surface and auth arrive in Phase 5. Deferred: dev-only `npm audit` advisories in `drizzle-kit`'s esbuild chain (see `.planning/phases/01-contracts-ingest-slice/deferred-items.md`).
 
 ## Constraints
 
@@ -82,7 +83,7 @@ Every prioritisation trade-off resolves against this sentence. Capture fidelity 
 | R-01 Tiered client size budget (45 / 25 / 80 KB gz) | Keeps the hard 45 KB line on what is actually injected; the editor is fetched on gesture and never on the critical path | — Pending |
 | R-02 Pragmatic hexagonal, 8 ports | Turns irreversible architecture into "which adapter ships by default" | — Pending |
 | R-03 This repo owns code only | Keeps roadmap phases shippable-software-shaped | — Pending |
-| R-04 Filesystem volume behind `Storage` | Preserves INV-03's three-service promise literally | — Pending |
+| R-04 Filesystem volume behind `Storage` | Preserves INV-03's three-service promise literally | ✓ Phase 1 |
 | R-05 Single admin from `.env` | Satisfies SEC-06 in full; keeps AUTH small | — Pending |
 | R-06 Multiple projects, minimal | §2's SaaS exclusion is about hosting model, not project count | — Pending |
 | R-07 Apache-2.0 | Permissive + patent grant; viral licenses make an embedded SDK unusable | — Pending |
@@ -90,10 +91,10 @@ Every prioritisation trade-off resolves against this sentence. Capture fidelity 
 | R-09 Identity on by default, opt-out | Owner direction; bound to host-supplied `user` since SEC-03 forbids deriving it | — Pending |
 | R-10 Purge identity after N days + manual delete | RGPD Art. 5(1)(e) | — Pending |
 | R-11 WebP q≈0.8 + PNG fallback | ~5× storage/bandwidth saving over PNG | — Pending |
-| R-12 E2E / property verification only | Owner directive, stated twice | — Pending |
+| R-12 E2E / property verification only | Owner directive, stated twice | ✓ Phase 1 |
 | R-13 Masking = solid fill or block pixelation ≥8 px | Gaussian blur is partially invertible by deconvolution | — Pending |
 | R-14 Shadow DOM `closed` + build-time test flag | Full CA-04 assertability at zero runtime cost | — Pending |
-| R-15 TypeScript end-to-end | One source of truth for CA-01's official schema | — Pending |
+| R-15 TypeScript end-to-end | One source of truth for CA-01's official schema | ✓ Phase 1 |
 | R-16 `AGENTS.md` non-authoritative | Stale scaffolding from a previous setup | ✓ Good |
 | R-17 No calendar-driven descoping | Owner direction: done when complete and well made | ✓ Good |
 
@@ -117,4 +118,4 @@ This document evolves at phase transitions and milestone boundaries.
 **Cross-cutting:** dead-ends discovered during execution go to `documentation/continuity-pack.md` §4 (ASE *Anti-Amnesia*), and any decision that touches a `mission-brief.md` §3 restricted item requires a Consultation Request Pack first.
 
 ---
-*Last updated: 2026-10-05 after initialization*
+*Last updated: 2026-10-13 after Phase 1 (Contracts & Ingest Slice)*

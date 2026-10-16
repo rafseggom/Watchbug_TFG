@@ -1,0 +1,227 @@
+# CI — the verification architecture of this repository, in executable form.
+#
+# R-12 (owner policy, stated twice) abolishes unit tests and coverage
+# thresholds. PRD RSK-19 names the compensation: artifact-level assertions +
+# static grep gates + `check:size`. Those three only mean anything if a machine
+# runs them on every change, so this workflow is not "quality tooling" — it is
+# the only test suite R-12 permits, and PITFALLS M-2 requires `check:size` on
+# *every PR*, not at milestone end ("a budget enforced late is a budget
+# missed").
+#
+# Deliberately absent, per R-12: unit tests, coverage upload, Codecov, Sonar
+# quality gates, a Node version matrix. Do not add them.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [develop, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build + typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # The root `lint` script IS the typecheck: `npm run typecheck
+      # --workspaces --if-present`, i.e. `tsc -p tsconfig.json` per workspace.
+      # It is how the CA-01 single-schema contract is enforced structurally —
+      # `packages/contracts` is consumed by sdk, api and panel as `import type`.
+      - name: Typecheck (tsc --noEmit, per workspace)
+        run: npm run lint
+
+      - name: Build all workspaces
+        run: npm run build
+
+  size:
+    name: Size budget (RNF-01 / CA-03)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # Only the client lanes feed the budget: contracts is `import type` into
+      # the SDK and never ships to the browser.
+      - name: Emit SDK size lanes
+        run: npm run build -w @watchbug/contracts && npm run build -w @watchbug/sdk
+
+      # Tiers (R-01): watchbug.js <= 45 KB gz (hard) / lazy chunk <= 25 KB /
+      # runtime total <= 80 KB. `shell: bash` implies `-eo pipefail`, so `tee`
+      # cannot mask a failing gate.
+      - name: check:size
+        shell: bash
+        run: npm run check:size 2>&1 | tee size-report.txt
+
+      - name: Publish the per-entrypoint gz delta to the job summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '### `npm run check:size` - RNF-01 tiers (45 / 25 / 80 KB gzipped)'
+            echo ''
+            echo '```'
+            cat size-report.txt 2>/dev/null || echo '(no size report produced)'
+            echo '```'
+            echo ''
+            echo '_Any PR that grows `watchbug.js` must state its gz delta in the commit body (PITFALLS M-2)._'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  gates:
+    name: Static gates (R-12 / RSK-19)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      # scripts/gate.mjs and scripts/check-compose.mjs are both zero-dependency
+      # Node scripts — no `npm ci` needed, so this job stays seconds-fast.
+      - name: SDK policy assertions
+        run: node scripts/gate.mjs
+
+      - name: Compose assertions (C-4 / INV-03)
+        run: npm run check:compose
+
+  sdk-deps:
+    name: SDK runtime dependencies (RNF-01 zero-deps)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      # R-15 / STACK: the client SDK has zero runtime dependencies. Only
+      # devDependencies and the internal `@watchbug/contracts` type import are
+      # permitted; anything else is a budget breach and a host-page liability.
+      - name: Fail on any external runtime dependency in packages/sdk
+        run: node scripts/gate.mjs sdk-runtime-deps
+
+  secrets:
+    name: Secret scan (SEC-04)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # Release criterion: "Ningún secreto presente en el repositorio".
+      # No GITLEAKS_LICENSE is required — `rafseggom` is a personal account;
+      # the license is only needed for organization-owned repositories.
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # R-12's other half: `check:size` above plus `npm run verify` IS the entire
+  # verification policy. A CI without this job would be green while the suite
+  # it claims to protect is red.
+  #
+  # Runs on the bare runner, not in a Playwright container: the suite targets
+  # the REAL three-container deployment (INV-03) - global-setup.ts fails loud
+  # unless http://127.0.0.1:8080/api/health answers through the nginx proxy -
+  # and a `container:` job has no Docker CLI/daemon to run `docker compose`.
+  # This mirrors the documented SKELETON.md quickstart verbatim.
+  e2e:
+    name: E2E suite (CA-01...CA-05)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # deploy.spec.ts spawns apps/api/dist/index.mjs directly to assert the
+      # DEP-02 fail-fast contracts, so the API must be built on the HOST too,
+      # not only inside the container image.
+      - name: Build all workspaces
+        run: npm run build
+
+      # .env.example ships an EMPTY project key and a rejected placeholder, and
+      # ingest/hostile read the value straight from .env, so it must be a real
+      # one before the stack boots. The trailing grep fails the job if the
+      # substitution ever silently stops matching.
+      - name: Provision .env with a real project key
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .env.example .env
+          sed -i "s|^WATCHBUG_PROJECT_KEY=$|WATCHBUG_PROJECT_KEY=$(node scripts/gen-key.mjs)|" .env
+          grep -E '^WATCHBUG_PROJECT_KEY=wkbt_[0-9A-Za-z]{32}$' .env > /dev/null
+          echo "project key provisioned"
+
+      # One run, three projects - not a redundant matrix. webkit exercises the
+      # silent WebP->PNG fallback (R-11), firefox the no-ImageCapture path (Q-9).
+      - name: Install browsers (chromium, firefox, webkit)
+        run: npx playwright install --with-deps chromium firefox webkit
+
+      - name: Start the compose stack (INV-03)
+        run: docker compose up -d --build
+
+      - name: Wait for the same-origin health endpoint (A-10)
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8080/api/health; then exit 0; fi
+            sleep 2
+          done
+          echo "::error::compose stack never became healthy"
+          docker compose ps
+          docker compose logs --tail=200
+          exit 1
+
+      - name: npm run verify
+        run: npm run verify -- --project=chromium --project=firefox --project=webkit
+
+      - name: Compose logs on failure
+        if: failure()
+        run: docker compose logs --tail=300
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

@@ -1,0 +1,145 @@
+{
+  "schema_version": 1,
+  "batch_id": "261014-m3u",
+  "created_at": "2026-10-14T13:55:01.734Z",
+  "options": {},
+  "base_revision": "33e12a56a789b3ec9834789077901d77c4876cc4",
+  "items": [
+    {
+      "quick_id": "261014-m3v",
+      "client_id": null,
+      "description": "S-2 — Add a scheduled TTL purge job so retention stops being decorative: at boot and on an interval, null out the user_* identity columns where identity_purge_at is due, and delete the row plus its Storage blob where artifact_purge_at is due, logging what was purged. Enforces R-09/R-10/RET-01-02. Files: new module apps/api/src/purge.ts, apps/api/src/app.ts, apps/api/src/db/schema.ts, docker-compose.yml, .env.example.",
+      "status": "complete",
+      "depends_on": [],
+      "planned_files": [
+        "apps/api/src/purge.ts",
+        "apps/api/src/config.ts",
+        "apps/api/src/app.ts",
+        "docker-compose.yml",
+        ".env.example"
+      ],
+      "directory": null,
+      "worktree": null,
+      "dispatched_worktree": null,
+      "dispatched_branch": null,
+      "dispatched_base": null,
+      "wave": 0,
+      "commit": "9f5ae66ed0da7169d264217132d53c87b6f024db",
+      "failure_reason": null
+    },
+    {
+      "quick_id": "261014-m3w",
+      "client_id": null,
+      "description": "S-3 + S-6-server — Protect the read surface in apps/api/src/routes/incidents.ts: attach the existing IP rate limiter as a preHandler on GET /api/incidents and GET /api/incidents/:id/image, and paginate the list query with a bounded LIMIT plus a keyset cursor so one request can never dump the whole table. Leave reads unauthenticated per the recorded DEP-03/H-7 decision deferred to Phase 5 AuthProvider; this task only adds abuse protection.",
+      "status": "complete",
+      "depends_on": [
+        "261014-m3v"
+      ],
+      "planned_files": [
+        "apps/api/src/plugins/rate-limit.ts",
+        "apps/api/src/app.ts",
+        "apps/api/src/routes/incidents.ts",
+        "e2e/read-surface.spec.ts",
+        "e2e/ingest.spec.ts"
+      ],
+      "directory": null,
+      "worktree": null,
+      "dispatched_worktree": null,
+      "dispatched_branch": null,
+      "dispatched_base": null,
+      "wave": 1,
+      "commit": "35fc1bc",
+      "failure_reason": null
+    },
+    {
+      "quick_id": "261014-m3x",
+      "client_id": null,
+      "description": "L-1 + S-6-client — Fix the panel-side stopthatslop findings and bound the list: in apps/panel/src/api.ts wrap res.json() in try/catch, add AbortSignal.timeout to fetch, and pass a limit query param to fetchIncidents; in apps/panel/src/App.tsx and apps/panel/src/components/ReportList.tsx add a load-more control so the panel never renders the entire table at once.",
+      "status": "complete",
+      "depends_on": [
+        "261014-m3w"
+      ],
+      "planned_files": [
+        "apps/panel/src/api.ts",
+        "apps/panel/src/i18n.ts",
+        "apps/panel/src/App.tsx",
+        "apps/panel/src/components/ReportList.tsx",
+        "e2e/ingest.spec.ts"
+      ],
+      "directory": null,
+      "worktree": null,
+      "dispatched_worktree": null,
+      "dispatched_branch": null,
+      "dispatched_base": null,
+      "wave": 2,
+      "commit": "338d84f",
+      "failure_reason": null
+    },
+    {
+      "quick_id": "261014-m3y",
+      "client_id": null,
+      "description": "S-4 + S-5 — Two contract fixes: add a Content-Security-Policy add_header line to the location / block of apps/panel/nginx.conf, and enforce R-08 path-only URLs inside packages/contracts/src/schema.ts so query strings and fragments are rejected or stripped at the single official schema, then regenerate the committed schema/report.schema.json artifact.",
+      "status": "complete",
+      "depends_on": [],
+      "planned_files": [
+        "apps/panel/nginx.conf",
+        "e2e/deploy.spec.ts",
+        "packages/contracts/src/schema.ts",
+        "packages/contracts/scripts/emit-schema.mjs",
+        "schema/report.schema.json",
+        "e2e/hostile.spec.ts"
+      ],
+      "directory": null,
+      "worktree": null,
+      "dispatched_worktree": null,
+      "dispatched_branch": null,
+      "dispatched_base": null,
+      "wave": 0,
+      "commit": "abe0e9c",
+      "failure_reason": null
+    },
+    {
+      "quick_id": "261014-m3z",
+      "client_id": null,
+      "description": "L-1-server — Fix the server-side stopthatslop findings: add AbortSignal.timeout to both fetch calls in apps/api/src/index.ts (the multipart smoke test) and convert the static sharp import in apps/api/src/ingest/harden.ts to a lazy dynamic import so the native binary is not loaded on the critical boot path.",
+      "status": "complete",
+      "depends_on": [],
+      "planned_files": [
+        "apps/api/src/ingest/harden.ts",
+        "apps/api/src/index.ts"
+      ],
+      "directory": null,
+      "worktree": null,
+      "dispatched_worktree": null,
+      "dispatched_branch": null,
+      "dispatched_base": null,
+      "wave": 0,
+      "commit": "a4b7396",
+      "failure_reason": null
+    },
+    {
+      "quick_id": "261014-m40",
+      "client_id": null,
+      "description": "L-2 — Connect the stopthatslop gate so CI actually runs it: add a stopthatslop check --pack ts step to .github/workflows/ci.yml and a matching npm script, failing the build on gate findings while making a missing checkers dependency fail loud instead of silently reporting zero findings.",
+      "status": "failed",
+      "depends_on": [
+        "261014-m3z",
+        "261014-m3x"
+      ],
+      "planned_files": [
+        "scripts/check-slop.mjs",
+        "package.json",
+        ".github/workflows/ci.yml",
+        ".gitignore"
+      ],
+      "directory": null,
+      "worktree": null,
+      "dispatched_worktree": null,
+      "dispatched_branch": null,
+      "dispatched_base": null,
+      "wave": 3,
+      "commit": null,
+      "failure_reason": "descoped by user (2026-10-14): no stopthatslop engine vendored into CI, no CI job. The 5 slop findings are fixed directly in code by 261014-m3z (api/src/index.ts fetch x2 + lazy sharp in ingest/harden.ts) and 261014-m3x (panel/src/api.ts fetch + res.json try/catch). Informe kept as the findings source."
+    }
+  ]
+}

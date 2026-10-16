@@ -1,0 +1,29 @@
+{
+  "name": "@watchbug/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The single official Watchbug report contract (CA-01): binding constants + Zod 4 schema + JSON Schema artifact.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    "./constants": {
+      "types": "./src/constants.ts",
+      "default": "./src/constants.ts"
+    },
+    "./schema": {
+      "types": "./src/schema.ts",
+      "default": "./src/schema.ts"
+    },
+    "./types": {
+      "types": "./src/types.ts",
+      "default": "./src/types.ts"
+    }
+  },
+  "scripts": {
+    "build": "node scripts/emit-schema.mjs",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "zod": "4.6.5"
+  }
+}

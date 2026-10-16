@@ -2,7 +2,33 @@
 
 State preserved across session resets. Read this at the start of every session (ASE §4D, *Anti-Amnesia*).
 
-**Last updated:** 2026-10-10 — GitHub project management set up (labels, milestones, 47 issues, epics, Project kanban #3), see §6 · plan-vs-real variance tracking deferred until Phase 1 closes, see §7.
+**Last updated:** 2026-10-15 — INFORME-ANALISIS remediation batch `261014-m3u` landed on `gsd/phase-1-contracts-ingest` (§9).
+
+---
+
+## 9. INFORME-ANALISIS remediation — batch `261014-m3u` (2026-10-14 → 10-15)
+
+Remediated the security/slop findings from `documentation/INFORME-ANALISIS.md` via `/gsd-quick-batch` on `gsd/phase-1-contracts-ingest`. **Not merged to `develop`** — the owner merges the open PR by hand (explicit instruction).
+
+| Item | Content | Merge commit |
+|------|---------|--------------|
+| `261014-m3v` | S-2: TTL purge job (retention actually enforced) | `9f5ae66` |
+| `261014-m3w` | S-3 + S-6: per-IP read rate-limit + keyset pagination | `35fc1bc` |
+| `261014-m3x` | L-1 + S-6: hardened panel fetch, bounded list | `338d84f` |
+| `261014-m3y` | S-4 (CSP) + S-5 (R-08 path-only URLs) | `abe0e9c` |
+| `261014-m3z` | L-1: server-side slop (abortable fetch, lazy `sharp`) | `a4b7396` |
+| `261014-m40` | L-2: connect stopthatslop gate in CI | ❌ **descoped** — see below |
+
+`261014-m40` was **descoped by the owner**: no vendored `stopthatslop` engine, no CI job. The informe is kept as a **findings source only**; the 5 findings are fixed directly in code by `m3z` (api `index.ts` 2× fetch, `ingest/harden.ts` lazy `sharp`) and `m3x` (panel `api.ts` fetch + guarded `res.json()`). Reason recorded in `BATCH.json` `failure_reason`.
+
+**Verification:** `npm run verify` **147/147** (chromium + firefox + webkit); `npm run lint`, `scripts/gate.mjs`, `check:compose` all pass. Pushed to `origin/gsd/phase-1-contracts-ingest` at `a4b7396` (0 ahead / 0 behind).
+
+**Two orchestrator-side corrections worth keeping:**
+
+1. **`m3y`'s test asserted the behaviour it wanted, not the behaviour the edge produced.** The S-4 test expected a bare `Referrer-Policy: same-origin` on proxied API responses, but `helmet`'s default is `no-referrer` and nginx *appends* its own `add_header` (nginx concatenates, never replaces upstream values) → the browser saw `no-referrer,same-origin`. Fixed at the **root**, not the test: `app.ts` sets `helmet`'s `referrerPolicy` to `same-origin` explicitly, and `nginx.conf /api/` adds `proxy_hide_header Referrer-Policy` — the same duplication the conf already handled for `X-Content-Type-Options`. The edge is now the single source for the header pair on proxied responses. Commit `6f0b55f`.
+2. **Two firefox failures mid-run were resource contention, not regressions.** Both were `Tearing down "context" exceeded the test timeout` (teardown hang, not an assertion/CSP failure) with ~20 orphaned `chrome` processes left from earlier runs. After killing the orphans, the suite went clean 147/147. When a "failure" names teardown rather than an assertion, check for browser-process buildup before blaming the change.
+
+**Dead-end (do not re-run):** the executor worktree for `m3x` was killed by an orchestrator `shell` timeout (`180000` ms) while running `item-dispatch.cjs` in the **foreground**. Dispatch executor worktrees in **background** shells (`background: true`) so a foreground timeout cannot kill a running worker; reconcile the stale `running` record first (`needsReconciliation: true`) by setting `.claude/worktrees/*.worker.json` `state` to a terminal value — the `already_running` guard only blocks on `state === 'running'`.
 
 ---
 
@@ -64,6 +90,15 @@ Failed or rejected paths. **Do not re-explore.** Full rationale in `resolution-r
 | D-06 | Gaussian blur as the masking primitive (partially invertible) |
 | D-07 | Python 3.10 as a target (EOL October 2026) |
 | D-08 | SVG `foreignObject` DOM serialization as *primary* capture path |
+| D-09 | Server-side "grace" alone for the ING-06 layer-2 pre-read 413 (delay the socket close 250 ms) |
+| D-10 | Fixing the ING-06 layer-2 flake on the test side alone (raw-socket transport) |
+
+> **Residual aceptado por el propietario (2026-10-13):** el flake de la fila ING-06 layer 2 quedó
+> resuelto (15/15 dirigidas, 132/132 suite), pero un cliente que suba el cuerpo **a velocidad
+> completa** todavía puede perder el 413 (`ECONNABORTED`). No investigar más sin petición explícita.
+> Mecanismo y arreglo: `apps/api/src/ingest/caps.ts` → `lingerBeforeClose()` (ed20ec3) +
+> `e2e/hostile.spec.ts` (c0a3d89). Justificación completa de por qué se descartaron otras dos vías:
+> `resolution-record.md` §3, D-09 y D-10.
 
 ---
 
@@ -78,6 +113,8 @@ Failed or rejected paths. **Do not re-explore.** Full rationale in `resolution-r
 ---
 
 ## 6. GitHub project management (created 2026-10-10)
+
+> ⚠ **Esta sección es el registro histórico de la sesión de creación (2026-10-10).** La referencia **viva** es [`documentation/management.md`](management.md), que añade los cambios de 2026-10-12 (PR `#2` fuera del board, issues de la Fase 1 asignadas, épica `#45` a Backlog, issue `#52` creada, campo `Wave` probado y revertido) y las reglas de cierre/sincronización. **Si algo contradice, manda `management.md`.**
 
 Repo `rafseggom/Watchbug_TFG` · Project **#3 "Kanban Watchbug TFG"** (https://github.com/users/rafseggom/projects/3).
 Tooling: **`gh` CLI** authenticated as `rafseggom` (scopes `repo`, `read:org`, `workflow`, `project`). There is no GitHub MCP server in this environment — all GitHub operations go through `gh`.
@@ -166,7 +203,7 @@ Rule of thumb: **implement → verify → close**. Never close ahead of evidence
 
 | Fase | Plan inicio | Plan fin | **Real inicio** | **Real fin** | Δ (días) |
 |------|-------------|----------|-----------------|--------------|----------|
-| 1 | 2026-10-10 | 2026-10-18 | *(se anota al arrancar)* | `closed_at` del milestone 6 | — |
+| 1 | 2026-10-10 | 2026-10-18 | 2026-10-11 | `closed_at` del milestone 6 | +1 (inicio; discuss de fase hecho el 2026-10-11) |
 | 2 | 2026-10-18 | 2026-10-31 | *(idem)* | `closed_at` del milestone 7 | — |
 | 3 | 2026-10-31 | 2026-11-13 | | `closed_at` del milestone 8 | |
 | 4 | 2026-11-13 | 2026-11-22 | | `closed_at` del milestone 9 | |
@@ -192,3 +229,50 @@ Al CERRAR fase N    → durante la sincronía GitHub (§6.5):
                       2. Crear/actualizar documentation/Gantt-Actual.md
                       3. Gantt.md NO se toca
 ```
+
+---
+
+## 8. Phase 1 execution log
+
+### 8.1 [LEGITIMACY GATE] Plan 01-01 Task 1 — pinned dependency set APPROVED (2026-10-12)
+
+**Gate:** `checkpoint:human-verify` · `gate="blocking-human"` (plan 01-01 Task 1) · **Result: `approved`** — recorded before any `npm install` / `docker pull` ran anywhere in the phase (Task 1 acceptance criterion).
+
+Human reviewed `.planning/research/STACK.md` (Version Verification Table) and `.planning/phases/01-contracts-ingest-slice/01-RESEARCH.md` § Package Legitimacy Audit, **including the disclosed discrepancy** that `typescript`, `vite`, `react`/`react-dom`, `@vitejs/plugin-react` and `tsx` have no audit row and rest on STACK.md verification alone.
+
+**Approved — npm (17 pinned packages):** `fastify@5.12.5`, `@fastify/multipart@10.1.2`, `@fastify/rate-limit@11.2.0`, `@fastify/cors@11.3.0`, `@fastify/helmet@13.1.1`, `drizzle-orm@0.45.3`, `drizzle-kit@0.31.11`, `pg@8.23.1`, `zod@4.6.5`, `sanitize-html@2.18.0`, `react@19.3.0`, `react-dom@19.3.0`, `vite@8.3.2`, `@vitejs/plugin-react@6.1.2`, `typescript@7.0.2`, `esbuild@0.28.2`, `@playwright/test@1.63.0`, `tsx@4.23.15`.
+
+**Approved — Docker images (3):** `node:24.21.0-alpine3.24`, `nginx:1.30.5-alpine3.24`, `postgres:18.6-alpine3.24`.
+
+**NOT approved in this batch:** `sharp` — it is not in plan 01-01's set and carries its own `checkpoint:human-verify` in plan **01-02** (P1-D-10 consultation). It must not be installed until that gate is cleared.
+
+**Standing rule from the approval:** no package may be silently swapped for a non-STACK.md alternative; a swap is a consultation, not an edit.
+
+### 8.2 [Q-08] TypeScript 7.0.2 tooling gate — PASS, no 6.x fallback (2026-10-12)
+
+Plan 01-01 Task 2 Step 0 ran the Q-08 smoke test under the pinned `typescript@7.0.2` **before any ingest code**, as 01-RESEARCH.md Pitfall 8 prescribes:
+
+- `drizzle-kit generate` on a scratch schema → emitted `drizzle/0000_*.sql` + `meta/` snapshot under `.planning/research/.cache/q08/`.
+- `tsx apps/api/src/index.ts` → `GET /api/health` → `200 {"status":"ok"}` (Fastify 5.12.5 + tsx 4.23.15).
+- `vite build` of the panel shell → `✓ built` (Vite 8.3.2, 14 modules).
+
+**Disposition:** Q-08 resolves as **PASS** — the toolchain stays on TypeScript 7.0.2 and the documented 6.x fallback is **not** taken. Re-verified in-session before this record was written.
+
+**Open item (type-only deps):** `npm run lint` runs `tsc` across the workspaces and cannot typecheck `apps/api` (`node:fs` / `process`) or `apps/panel` (JSX / `react-dom/client`) without type-only devDeps (`@types/node`, `@types/react`, `@types/react-dom`, plus `@types/pg` and `@types/sanitize-html` for untyped runtime deps). Those are **outside the 17 approved pins**, so nothing has been installed — a human decision is required (approve type-only devDeps vs. scope `lint` down). This does not affect `npm run build`, `check:size`, `check:compose` or the e2e suite.
+
+*(Resolved 2026-10-12: the owner approved the five type-only `@types/*` devDependencies — A-13, `documentation/resolution-record.md`.)*
+
+### 8.3 [P1-D-10] Re-encode backend DECIDED — `sharp@0.35.5` (Option A) (2026-10-12)
+
+**Gate:** `checkpoint:human-verify` · `gate="blocking-human"` (plan 01-02 Task 1) · **Result: `sharp`** — the owner adopted **Option A: `sharp@0.35.5`** as the P1-D-10 re-encode backend, after reviewing P1-D-10's locked text, the option comparison (sharp re-encode vs. structural strip/rebuild) and the package-legitimacy evidence. Recorded **before** Task 2 installs or commits the backend (Task 1 acceptance criterion). `sharp` is now explicitly approved — the legitimacy gate for it must not be re-opened.
+
+**Rationale (P1-D-10, locked):** the decision requires a **root re-encode** (`re-codifica de raíz`) — only a true decode → re-encode kills decoder-differential polyglots, which a structural strip/rebuild cannot (it only kills container-level polyglots, metadata and trailing data). The cost is low in this codebase:
+
+1. **No toolchain in the image.** `sharp` installs from `optionalDependencies` prebuilds — including `@img/sharp-libvips-linuxmusl-x64` and `@img/sharp-libvips-linuxmusl-arm64` — so no `node-gyp`/compiler enters `node:24.21.0-alpine3.24`.
+2. **`apps/api` only.** It lives in the server workspace; `packages/sdk` and the RNF-01 size lanes (45/25/80 KB) are untouched — `check:size` proves it.
+3. **License Apache-2.0** — compatible with R-07.
+4. **Legitimacy seam false positive.** The seam's `SUS ("too-new")` verdict is the same release-cadence false positive already dispositioned for the 16 other approved packages: the package is ~12 years old, ~115.9 M downloads/week, official repo `github.com/lovell/sharp`.
+
+**Operational consequences accepted:** a native libvips layer in the `api` image (image size grows; the container count does not — INV-03 still exactly 3), and a processing-time guard (`timeout({ seconds })`) on the decode as the T-01-08 mitigation alongside the pre-decode header guard.
+
+**Scope:** pin exactly `sharp@0.35.5` in `apps/api/package.json` **only**. No other new dependency in this plan. The zero-dep structural strip/rebuild stays as code history (`structure.ts` keeps the chunk validation as a pre-codec guard) but is no longer the hardening backend.

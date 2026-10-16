@@ -1,0 +1,22 @@
+{
+  "name": "@watchbug/sdk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Watchbug client widget — zero-runtime-dependency IIFE + ESM bundle (R-01 size lanes).",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/watchbug.mjs",
+  "exports": {
+    ".": "./dist/watchbug.mjs"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@watchbug/contracts": "*"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}

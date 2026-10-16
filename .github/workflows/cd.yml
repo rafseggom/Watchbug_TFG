@@ -1,0 +1,77 @@
+# CD — artifact delivery only. There is no deploy step and there must not be
+# one: INV-03 ships Watchbug as a self-hosted `docker-compose up` on the user's
+# own machine, so the only thing to deliver is a prebuilt image they can pull.
+# Publishing to a server would expose the panel's admin auth and the public
+# ingest endpoint for zero requirement — a new attack surface, not quality.
+#
+# Naming: GHCR accepts one path segment per package, so the two build targets
+# are `watchbug-api` and `watchbug-panel` rather than `watchbug:api`.
+#
+# This runs on `main` and on `v*` tags only — never on pull requests.
+
+name: CD
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: watchbug-api
+            dockerfile: apps/api/Dockerfile
+          - image: watchbug-panel
+            dockerfile: apps/panel/Dockerfile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=sha-
+
+      # Context is the monorepo root, not the app directory: both Dockerfiles
+      # run `npm ci` across the npm-workspaces tree, so a per-app context could
+      # not resolve `@watchbug/contracts`.
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
