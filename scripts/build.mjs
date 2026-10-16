@@ -47,9 +47,17 @@ execFileSync('npx', ['docusaurus', 'build', '--out-dir', '../dist'], {
 console.log('[build] copiando landing (site/) ...');
 cpSync(siteDir, distDir, { recursive: true });
 
-// 5. 404 propio de la landing (pisa el de Docusaurus)
+// 5. 404 propio de la landing (pisa los de Docusaurus)
+//    Cloudflare Pages sirve el 404.html del directorio más cercano, y Docusaurus
+//    genera el suyo por localización (/en/404.html). Sin pisarlo, las rutas que
+//    fallan bajo /en/ (incluido /en/docs/…) caerían en la 404 del tema de Docusaurus
+//    en vez de en la de la landing.
 const notFound = path.join(siteDir, '404.html');
-if (existsSync(notFound)) cpSync(notFound, path.join(distDir, '404.html'));
+if (existsSync(notFound)) {
+  for (const dir of [distDir, path.join(distDir, 'en')]) {
+    if (existsSync(dir)) cpSync(notFound, path.join(dir, '404.html'));
+  }
+}
 
 // 6. Completar el sitemap de Docusaurus con las páginas de la landing
 const landingRoutes = [
