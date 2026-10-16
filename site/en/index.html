@@ -17,9 +17,11 @@
   <meta property="og:locale" content="en_US" />
   <meta property="og:locale:alternate" content="es_ES" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="theme-color" content="#000000" />
+  <meta name="theme-color" content="#16181d" />
   <link rel="icon" href="/img/logo.png" />
   <link rel="apple-touch-icon" href="/img/logo.png" />
+  <link rel="preload" href="/assets/fonts/archivo-var-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="/assets/fonts/plexmono-400-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="/assets/landing.css" />
   <script type="application/ld+json">
   {
@@ -45,8 +47,13 @@
 
   <nav class="global-nav" aria-label="Main navigation">
     <div class="nav-inner">
-      <a class="nav-logo" href="/en/">
-        <img src="/img/logo.png" alt="" width="24" height="24" />
+      <a class="nav-logo" href="/en/" aria-label="Watchbug, go to homepage">
+        <svg width="22" height="24" viewBox="0 0 22 24" fill="none" aria-hidden="true" focusable="false">
+          <path d="M11 1.6 20.2 5v7.1c0 5.5-3.8 9.3-9.2 11.2C5.6 21.4 1.8 17.6 1.8 12.1V5L11 1.6Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+          <circle cx="11" cy="11.4" r="4.1" stroke="currentColor" stroke-width="1.8"/>
+          <path d="M11 11.4V8.7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          <circle cx="15.4" cy="15.8" r="2.4" fill="#d22b2e"/>
+        </svg>
         Watchbug
       </a>
       <ul class="nav-links">
@@ -55,7 +62,6 @@
         <li><a href="#integracion">Integration</a></li>
         <li><a href="#roadmap">Roadmap</a></li>
         <li><a href="/en/docs/">Documentation</a></li>
-        <li><a href="/roadmap/">Board</a></li>
       </ul>
       <div class="nav-right">
         <a class="lang-switch" href="/" hreflang="es" lang="es" aria-label="Cambiar a español">Español</a>
@@ -69,9 +75,9 @@
           <a href="#producto">Product</a>
           <a href="#privacidad">Privacy</a>
           <a href="#integracion">Integration</a>
+          <a href="#autohospedaje">Self-hosting</a>
           <a href="#roadmap">Roadmap</a>
           <a href="/en/docs/">Documentation</a>
-          <a href="/roadmap/">Board</a>
           <a href="https://github.com/rafseggom/Watchbug_TFG" rel="noopener">GitHub</a>
           <a href="/" hreflang="es" lang="es">Español</a>
         </div>
@@ -79,41 +85,99 @@
     </div>
   </nav>
 
+  <nav class="rail" aria-label="Section index">
+    <ol>
+      <li><a href="#producto">What it does</a></li>
+      <li><a href="#privacidad">Privacy</a></li>
+      <li><a href="#integracion">Integration</a></li>
+      <li><a href="#autohospedaje">Self-hosting</a></li>
+      <li><a href="#capacidades">Capabilities</a></li>
+      <li><a href="#roadmap">Roadmap</a></li>
+    </ol>
+  </nav>
+
   <main id="main">
 
-    <!-- HERO — light tile -->
-    <header class="tile tile--light hero">
+    <!-- HERO — the case file annotates and redacts itself -->
+    <header class="hero">
       <div class="container">
-        <p class="eyebrow rise rise-1">Open source · Self-hosted · EN / ES</p>
-        <h1 class="rise rise-2">The bug report<br />you can actually reproduce.</h1>
-        <p class="lead rise rise-3">
-          Watchbug captures the tab, the console and the environment of your app in a single
-          report — and destroys sensitive data in the browser, before it ever leaves it.
-        </p>
-        <div class="cta-row rise rise-4">
-          <a class="btn btn--primary btn--lg" href="https://github.com/rafseggom/Watchbug_TFG" rel="noopener">View on GitHub</a>
-          <a class="btn btn--ghost btn--lg" href="/en/docs/">Read the documentation</a>
+        <div class="hero-grid">
+          <div>
+            <p class="hero-label hero-seq s1">Case file 001, production error</p>
+            <h1 class="hero-seq s2">The bug report you can actually reproduce.</h1>
+            <p class="lead hero-seq s3">
+              Watchbug captures the tab, the console and the environment of your app in a single
+              report — and destroys sensitive data in the browser, before it ever leaves it.
+            </p>
+            <div class="cta-row hero-seq s4">
+              <a class="btn btn--primary" href="https://github.com/rafseggom/Watchbug_TFG" rel="noopener">View on GitHub</a>
+              <a class="btn btn--ghost" href="/en/docs/">Read the documentation</a>
+            </div>
+            <ul class="spec-row hero-seq s4">
+              <li>&lt;script async&gt;</li>
+              <li>45 KB gzipped</li>
+              <li>no build step</li>
+            </ul>
+          </div>
+
+          <div class="mock mock--hero hero-seq s5" role="img"
+               aria-label="Mockup of the Watchbug widget over a checkout page: the card number and password are covered by black redaction bars, a red circle marks the payment button, and a note flags it as unresponsive.">
+            <div class="mock-chrome" aria-hidden="true">
+              <div class="mock-dots"><span></span><span></span><span></span></div>
+              <div class="mock-url">my-shop.com/checkout</div>
+            </div>
+            <div class="mock-body" aria-hidden="true">
+              <p class="mock-title">Complete your order</p>
+              <div class="mock-field">
+                <span class="mock-label">email</span>
+                <div class="mock-input">nerea@shop.com</div>
+              </div>
+              <div class="mock-field mock-field--card">
+                <span class="mock-label">card</span>
+                <div class="mock-input">
+                  <span class="sens">4242 4242 4242 4242</span><span class="redact"></span>
+                </div>
+              </div>
+              <div class="mock-field mock-field--pass">
+                <span class="mock-label">password</span>
+                <div class="mock-input">
+                  <span class="sens">••••••••••</span><span class="redact"></span>
+                </div>
+              </div>
+              <div class="mock-pay">
+                <span class="mock-pay-btn">Pay €49.00</span>
+                <svg class="mock-annotate" viewBox="0 0 150 56" aria-hidden="true" focusable="false">
+                  <path pathLength="1" d="M125 11C94 3 39 5 21 18 5 29 16 44 57 49c39 4 81-1 86-15 6-12-3-24-31-28"/>
+                </svg>
+                <span class="mock-note">clicking it does nothing</span>
+              </div>
+            </div>
+            <div class="mock-console" aria-hidden="true">
+              <span class="err">TypeError:</span> Cannot read properties of undefined (reading 'total')
+            </div>
+            <div class="mock-fab" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                <path d="M10 2.5 16.5 5v5c0 4-2.7 6.7-6.5 8-3.8-1.3-6.5-4-6.5-8V5L10 2.5Z" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/>
+                <path d="M7.5 9.5h5M10 7.5v5" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>
+              </svg>
+            </div>
+          </div>
         </div>
-        <p class="hero-note rise rise-4">One &lt;script async&gt; tag. No build step. 45&nbsp;KB gzipped.</p>
-        <figure class="shot shot--hero hero-shot rise rise-5" data-file="img/hero-widget.png" data-desc="Screenshot of the Watchbug widget open over a sample website, with the floating report button visible in the corner.">
-          <img src="/img/hero-widget.png" alt="Watchbug widget open over a sample web app, showing the report composer with a previewed capture." width="1120" height="700" />
-        </figure>
       </div>
     </header>
 
-    <!-- PRODUCT — dark tile -->
-    <section class="tile tile--dark" id="producto" aria-labelledby="producto-h">
+    <!-- WHAT IT DOES -->
+    <section class="section" id="producto" aria-labelledby="producto-h">
       <div class="container">
-        <div class="tile-head reveal">
-          <p class="eyebrow">What it does</p>
+        <div class="section-head">
           <h2 id="producto-h">Reproduce the failure. Don't guess it.</h2>
           <p class="lead">
             When a report lands, you have what you need to reproduce it: the annotated image,
             the console logs and the exact environment it happened in.
           </p>
         </div>
-        <div class="split reveal" style="margin-top:56px">
-          <div class="split-text">
+        <div class="split">
+          <div>
             <ul class="check-list">
               <li><strong>Tab capture</strong> via the browser's native dialog — the widget hides itself so it never appears in its own screenshot.</li>
               <li><strong>Annotation editor</strong>: pen, arrows, rectangles, text and region masking.</li>
@@ -122,29 +186,93 @@
               <li><strong>Feedback without logs</strong>: your users can send suggestions without attaching the console.</li>
             </ul>
           </div>
-          <figure class="shot" data-file="img/editor-annotation.png" data-desc="The Watchbug editor: a screenshot with a red arrow pointing at the broken button and a masked region in black.">
-            <img src="/img/editor-annotation.png" alt="Watchbug annotation editor with an arrow and a rectangle drawn over the capture, and a sensitive region masked out." width="560" height="420" loading="lazy" />
-          </figure>
+          <div class="mock" role="img"
+               aria-label="Mockup of the Watchbug editor: a toolbar with the arrow tool active, a red arrow pointing at the submit button and a sensitive region masked in black.">
+            <div class="mock-toolbar" aria-hidden="true">
+              <span class="mock-tool">
+                <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M3 12.2l.4-2.3 6.3-6.3a1.2 1.2 0 0 0-1.7-1.7L1.7 8.2 3 12.2z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+              </span>
+              <span class="mock-tool is-active">
+                <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M3 12L12 3M12 3H7.2M12 3v4.8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </span>
+              <span class="mock-tool">
+                <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="2.7" y="3.7" width="9.6" height="7.6" rx="1" stroke="currentColor" stroke-width="1.4"/></svg>
+              </span>
+              <span class="mock-tool">
+                <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M3.5 4h8M7.5 4v7.5M5.5 11.5h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+              </span>
+              <span class="mock-tool">
+                <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="2.5" y="6" width="10" height="3.4" rx="1" fill="currentColor"/></svg>
+              </span>
+            </div>
+            <div class="mock-canvas" aria-hidden="true">
+              <div class="mock-ui">
+                <div class="mock-ui-bar w60"></div>
+                <div class="mock-ui-bar w40"></div>
+                <div class="mock-ui-bar w80"></div>
+                <div><span class="mock-ui-mask"></span></div>
+                <span class="mock-ui-btn">Submit</span>
+              </div>
+              <svg class="mock-arrow" viewBox="0 0 130 80" aria-hidden="true" focusable="false">
+                <path d="M118 10C96 22 76 34 54 56"/>
+                <path d="M54 56l15.5-4M54 56l3.5-14.5"/>
+              </svg>
+              <span class="mock-rect"></span>
+            </div>
+          </div>
         </div>
       </div>
     </section>
 
-    <!-- PRIVACY — parchment tile -->
-    <section class="tile tile--parchment" id="privacidad" aria-labelledby="privacidad-h">
+    <!-- PRIVACY — the demo masks live -->
+    <section class="section" id="privacidad" aria-labelledby="privacidad-h">
       <div class="container">
-        <div class="tile-head reveal">
-          <p class="eyebrow">Privacy by design</p>
+        <div class="section-head">
           <h2 id="privacidad-h">Sensitive data dies in your browser.</h2>
           <p class="lead">
             The SDK never reads your app's cookies, tokens or credentials. And what it does
-            capture is irreversibly destroyed before being transmitted.
+            capture is irreversibly destroyed before being transmitted. Try the switch: this is
+            what happens in the canvas, in your browser, before anything is sent.
           </p>
         </div>
-        <div class="split reveal" style="margin-top:56px">
-          <figure class="shot" data-file="img/masking-before-after.png" data-desc="Two captures side by side: before (password and card fields visible) and after (those regions destroyed with opaque fill).">
-            <img src="/img/masking-before-after.png" alt="Before/after comparison: sensitive regions are destroyed with opaque fill in the final image." width="560" height="420" loading="lazy" />
-          </figure>
-          <div class="split-text">
+        <div class="split split--flip">
+          <div class="demo">
+            <input type="checkbox" id="mask-toggle" checked />
+            <label class="demo-switch" for="mask-toggle">
+              <span class="switch-track" aria-hidden="true"></span>
+              Destructive masking
+              <span class="demo-state">
+                <span data-state="on">on</span><span data-state="off">off (demo only)</span>
+              </span>
+            </label>
+            <div class="demo-pane" aria-hidden="true">
+              <div class="mock-body">
+                <div class="mock-field">
+                  <span class="mock-label">email</span>
+                  <div class="mock-input">nerea@shop.com</div>
+                </div>
+                <div class="mock-field">
+                  <span class="mock-label">card</span>
+                  <div class="mock-input">
+                    <span class="sens">4242 4242 4242 4242</span><span class="redact"></span>
+                  </div>
+                </div>
+                <div class="mock-field">
+                  <span class="mock-label">password</span>
+                  <div class="mock-input">
+                    <span class="sens">••••••••••</span><span class="redact"></span>
+                  </div>
+                </div>
+                <div class="mock-field" style="margin-bottom:0">
+                  <span class="mock-label">favourite car brand</span>
+                  <div class="mock-input">
+                    <span class="sens" data-watchbug-sensitive>Alfa Romeo</span><span class="redact"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div>
             <ul class="check-list">
               <li><strong>Destructive masking</strong>: pixels are replaced with opaque fill <em>before</em> encoding. No CSS layers that could be peeled off.</li>
               <li><strong>Automatic from the first frame</strong>: <code>type="password"</code> fields, card and credential patterns, and any element marked <code>data-watchbug-sensitive</code>.</li>
@@ -152,26 +280,28 @@
               <li><strong>Clean URLs</strong>: query strings and fragments are stripped at the origin.</li>
               <li><strong>TTL-bound lifecycle</strong>: identity is purged after 30 days and full reports after 90 (both configurable).</li>
             </ul>
-            <p><a href="/en/docs/">How it protects your app's data →</a></p>
+            <p style="margin-top:24px"><a href="/en/docs/">How it protects your app's data</a></p>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- INTEGRATION — dark tile -->
-    <section class="tile tile--dark" id="integracion" aria-labelledby="integracion-h">
+    <!-- INTEGRATION -->
+    <section class="section" id="integracion" aria-labelledby="integracion-h">
       <div class="container">
-        <div class="tile-head reveal">
-          <p class="eyebrow">Integration</p>
+        <div class="section-head">
           <h2 id="integracion-h">One tag. Zero build.</h2>
           <p class="lead">
             No runtime npm dependencies, no blocking the main thread, no breaking your page's
             CSS. One single global: <code>window.Watchbug</code>.
           </p>
         </div>
-        <div class="split reveal" style="margin-top:56px">
+        <div class="split">
           <div class="code-wrap">
-            <button class="copy-btn" type="button" data-copied="Copied" aria-label="Copy code">Copy</button>
+            <div class="code-head">
+              <span>index.html</span>
+              <button class="copy-btn" type="button" data-copied="Copied" aria-label="Copy code" aria-live="polite">Copy</button>
+            </div>
             <pre class="code"><code><span class="c-com">&lt;!-- Add this before &lt;/body&gt; --&gt;</span>
 <span class="c-tag">&lt;script</span> <span class="c-attr">async</span>
   <span class="c-attr">src</span>=<span class="c-str">"https://cdn.watchbugus.com/w.js"</span><span class="c-tag">&gt;&lt;/script&gt;</span>
@@ -182,7 +312,7 @@
   });
 <span class="c-tag">&lt;/script&gt;</span></code></pre>
           </div>
-          <div class="split-text">
+          <div>
             <ul class="check-list">
               <li><strong>≤ 45 KB gzipped</strong> for the core, with a build that fails if it's exceeded.</li>
               <li><strong>Closed Shadow DOM</strong>: immune to your page's hostile CSS, and no leakage into it.</li>
@@ -190,25 +320,55 @@
               <li><strong>Lighthouse drop ≤ 2 points</strong> once injected.</li>
               <li>Also available as an <strong>ES module</strong> if you prefer to import it.</li>
             </ul>
-            <p><a href="/en/docs/">See the full integration guide →</a></p>
+            <p style="margin-top:24px"><a href="/en/docs/">See the full integration guide</a></p>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- SELF-HOSTING + PANEL — light tile -->
-    <section class="tile tile--light" aria-labelledby="selfhost-h">
+    <!-- SELF-HOSTING + PANEL -->
+    <section class="section" id="autohospedaje" aria-labelledby="selfhost-h">
       <div class="container">
-        <div class="tile-head reveal">
-          <p class="eyebrow">Actually yours</p>
+        <div class="section-head">
           <h2 id="selfhost-h">Everything on your infrastructure. One command.</h2>
           <p class="lead">
             Three containers — API, panel and database — brought up with
             <code>docker-compose up</code>. No report ever leaves your server.
           </p>
         </div>
-        <div class="split reveal" style="margin-top:56px">
-          <div class="split-text">
+        <div class="split split--flip">
+          <div class="mock" role="img"
+               aria-label="Mockup of the Watchbug triage panel: status counters and a table of reports that are pending, in progress and resolved.">
+            <div class="mock-panel-head" aria-hidden="true">
+              <span class="mock-chip">my-shop</span>
+              <span class="mock-chip"><span class="dot dot--red"></span>3 pending</span>
+              <span class="mock-chip"><span class="dot dot--amber"></span>1 in progress</span>
+              <span class="mock-chip"><span class="dot dot--green"></span>12 resolved</span>
+            </div>
+            <div aria-hidden="true">
+              <div class="mock-row">
+                <span class="id">#1042</span>
+                <span class="title">Payment button unresponsive</span>
+                <span class="mock-chip"><span class="dot dot--red"></span>pending</span>
+              </div>
+              <div class="mock-row">
+                <span class="id">#1041</span>
+                <span class="title">Text clipped in Safari 17</span>
+                <span class="mock-chip"><span class="dot dot--amber"></span>in progress</span>
+              </div>
+              <div class="mock-row">
+                <span class="id">#1039</span>
+                <span class="title">500 error uploading avatar</span>
+                <span class="mock-chip"><span class="dot dot--green"></span>resolved</span>
+              </div>
+              <div class="mock-row">
+                <span class="id">#1038</span>
+                <span class="title">Cart loses the quantity</span>
+                <span class="mock-chip"><span class="dot dot--green"></span>resolved</span>
+              </div>
+            </div>
+          </div>
+          <div>
             <ul class="check-list">
               <li><strong>Triage panel</strong>: report list filtered by type, status and project.</li>
               <li><strong>Lifecycle</strong>: Pending → In progress → Resolved, with reopening and internal notes.</li>
@@ -217,117 +377,72 @@
               <li><strong>Configuration in <code>.env</code></strong>: zero secrets in the repository.</li>
             </ul>
           </div>
-          <figure class="shot" data-file="img/panel-triage.png" data-desc="Screenshot of the Watchbug panel: top bar with project selector, status counters and a table of reports with their statuses.">
-            <img src="/img/panel-triage.png" alt="Watchbug triage panel with status counters and the list of received reports." width="560" height="420" loading="lazy" />
-          </figure>
         </div>
       </div>
     </section>
 
-    <!-- CAPABILITIES — parchment tile, utility cards -->
-    <section class="tile tile--parchment" aria-labelledby="features-h">
-      <div class="container container--wide">
-        <div class="tile-head reveal">
-          <p class="eyebrow">Why Watchbug</p>
+    <!-- CAPABILITIES — spec sheet -->
+    <section class="section" id="capacidades" aria-labelledby="features-h">
+      <div class="container">
+        <div class="section-head">
           <h2 id="features-h">Capture fidelity. Complete metadata. Zero leaks.</h2>
         </div>
-        <div class="card-grid reveal" style="margin-top:56px">
-          <article class="card">
-            <div class="card-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg>
-            </div>
-            <h3>Total isolation</h3>
-            <p>Closed Shadow DOM: your page's hostile CSS can't break the widget, and the widget never contaminates your page.</p>
-            <span class="req-tag">INV-01 · RNF-02</span>
-          </article>
-          <article class="card">
-            <div class="card-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 15l4-4 4 4 3-3 5 5"/><circle cx="9" cy="9" r="1.5"/></svg>
-            </div>
-            <h3>Reproducible capture</h3>
-            <p>Annotated image + console logs + environment metadata in every bug report.</p>
-            <span class="req-tag">RF-01 · ENR-01</span>
-          </article>
-          <article class="card">
-            <div class="card-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg>
-            </div>
-            <h3>Destructive masking</h3>
-            <p>Sensitive pixels are destroyed in the canvas before encoding. Irrecoverable by design.</p>
-            <span class="req-tag">SEC-02 · PRV-04</span>
-          </article>
-          <article class="card">
-            <div class="card-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24"><path d="M13 3L5 14h6l-1 7 8-11h-6l1-7z"/></svg>
-            </div>
-            <h3>45 KB, slows nothing</h3>
-            <p>Async loading, zero runtime dependencies and a size budget verified on every build.</p>
-            <span class="req-tag">RNF-01 · PRF-01</span>
-          </article>
-          <article class="card">
-            <div class="card-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 9h18M8 14h5"/></svg>
-            </div>
-            <h3>Triage panel</h3>
-            <p>Filters, statuses, internal notes, deletion and immediate anonymization of identity.</p>
-            <span class="req-tag">RF-06 · TRI-04…10</span>
-          </article>
-          <article class="card">
-            <div class="card-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/><path d="M7 8h.01M7 17h.01"/></svg>
-            </div>
-            <h3>Self-hosted</h3>
-            <p>Three services with one <code>docker-compose up</code>. No third-party dependencies, no reports in anyone else's cloud.</p>
-            <span class="req-tag">INV-03 · DEP-01</span>
-          </article>
-        </div>
+        <dl class="spec">
+          <dt>Total isolation</dt>
+          <dd>Closed Shadow DOM: your page's hostile CSS can't break the widget, and the widget never contaminates your page.<span class="req-tag">INV-01 · RNF-02</span></dd>
+          <dt>Reproducible capture</dt>
+          <dd>Annotated image, console logs and environment metadata in every bug report.<span class="req-tag">RF-01 · ENR-01</span></dd>
+          <dt>Destructive masking</dt>
+          <dd>Sensitive pixels are destroyed in the canvas before encoding. Irrecoverable by design.<span class="req-tag">SEC-02 · PRV-04</span></dd>
+          <dt>45 KB, slows nothing</dt>
+          <dd>Async loading, zero runtime dependencies and a size budget verified on every build.<span class="req-tag">RNF-01 · PRF-01</span></dd>
+          <dt>Triage panel</dt>
+          <dd>Filters, statuses, internal notes, deletion and immediate anonymization of identity.<span class="req-tag">RF-06 · TRI-04…10</span></dd>
+          <dt>Self-hosted</dt>
+          <dd>Three services with one <code>docker-compose up</code>. No third-party dependencies, no reports in anyone else's cloud.<span class="req-tag">INV-03 · DEP-01</span></dd>
+        </dl>
       </div>
     </section>
 
-    <!-- ROADMAP — dark tile -->
-    <section class="tile tile--dark" id="roadmap" aria-labelledby="roadmap-h">
+    <!-- ROADMAP — a real sequence: phases stay numbered -->
+    <section class="section" id="roadmap" aria-labelledby="roadmap-h">
       <div class="container">
-        <div class="tile-head reveal">
-          <p class="eyebrow">Public roadmap</p>
+        <div class="section-head">
           <h2 id="roadmap-h">Built in phases, with evidence.</h2>
           <p class="lead">
             70 requirements traced across 7 vertical slices. Each one ships something working
             end to end — and its acceptance criteria are published.
           </p>
         </div>
-        <ul class="phase-list reveal" style="margin-top:48px">
-          <li><span class="num">01</span> Contracts &amp; Ingest</li>
-          <li><span class="num">02</span> SDK Tracer Bullet</li>
-          <li><span class="num">03</span> Composer &amp; Editor</li>
-          <li><span class="num">04</span> Payload &amp; Enrichment</li>
-          <li><span class="num">05</span> Secure Admin Access</li>
-          <li><span class="num">06</span> Triage &amp; Lifecycle</li>
-          <li><span class="num">07</span> Resilience &amp; Closeout</li>
-        </ul>
-        <div class="cta-row reveal" style="margin-top:44px">
+        <ol class="ledger">
+          <li><strong>Contracts &amp; Ingest</strong></li>
+          <li><strong>SDK Tracer Bullet</strong></li>
+          <li><strong>Composer &amp; Editor</strong></li>
+          <li><strong>Payload &amp; Enrichment</strong></li>
+          <li><strong>Secure Admin Access</strong></li>
+          <li><strong>Triage &amp; Lifecycle</strong></li>
+          <li><strong>Resilience &amp; Closeout</strong></li>
+        </ol>
+        <div class="cta-row">
           <a class="btn btn--primary" href="/roadmap/">Open the interactive board</a>
           <a class="btn btn--ghost" href="/en/docs/">Read the documentation</a>
         </div>
       </div>
     </section>
 
-    <!-- OPEN SOURCE — light tile, final CTA -->
-    <section class="tile tile--light" aria-labelledby="oss-h">
+    <!-- CLOSE — the page's one dark surface -->
+    <section class="band" aria-labelledby="oss-h">
       <div class="container">
-        <div class="tile-head reveal">
-          <img class="final-logo" src="/img/logo.png" alt="" width="84" height="84" loading="lazy" />
-          <p class="eyebrow">Free forever</p>
-          <h2 id="oss-h">Open source. Read it yourself.</h2>
-          <p class="lead">
-            Watchbug is free software: read it, modify it, self-host it. No user accounts,
-            no quotas, no telemetry back to us.
-          </p>
-          <div class="cta-row" style="margin-top:36px">
-            <a class="btn btn--primary btn--lg" href="https://github.com/rafseggom/Watchbug_TFG" rel="noopener">Clone on GitHub</a>
-            <a class="btn btn--ghost btn--lg" href="/en/docs/">Start with the guide</a>
-          </div>
-          <p class="fine" style="margin-top:24px">Apache 2.0 license · Documentation in English and Spanish · No tracking cookies</p>
+        <h2 id="oss-h">Open source. Read it yourself.</h2>
+        <p class="lead">
+          Watchbug is free software: read it, modify it, self-host it. No user accounts,
+          no quotas, no telemetry back to us.
+        </p>
+        <div class="cta-row">
+          <a class="btn btn--primary" href="https://github.com/rafseggom/Watchbug_TFG" rel="noopener">Clone on GitHub</a>
+          <a class="btn btn--ghost" href="/en/docs/">Start with the guide</a>
         </div>
+        <p class="fine">Apache 2.0 license. Documentation in English and Spanish. No tracking cookies.</p>
       </div>
     </section>
   </main>
@@ -336,11 +451,16 @@
     <div class="container container--wide">
       <div class="footer-cols">
         <div class="footer-brand">
-          <img src="/img/logo.png" alt="Watchbug" width="36" height="36" loading="lazy" />
+          <svg width="32" height="35" viewBox="0 0 22 24" fill="none" aria-hidden="true" focusable="false">
+            <path d="M11 1.6 20.2 5v7.1c0 5.5-3.8 9.3-9.2 11.2C5.6 21.4 1.8 17.6 1.8 12.1V5L11 1.6Z" stroke="#16181d" stroke-width="1.8" stroke-linejoin="round"/>
+            <circle cx="11" cy="11.4" r="4.1" stroke="#16181d" stroke-width="1.8"/>
+            <path d="M11 11.4V8.7" stroke="#16181d" stroke-width="1.8" stroke-linecap="round"/>
+            <circle cx="15.4" cy="15.8" r="2.4" fill="#d22b2e"/>
+          </svg>
           <p>Open source bug reporting and visual feedback SDK with reproducible capture and destructive masking. Self-hosted.</p>
         </div>
         <div>
-          <h4>Product</h4>
+          <h3>Product</h3>
           <ul>
             <li><a href="#producto">What it does</a></li>
             <li><a href="#privacidad">Privacy</a></li>
@@ -349,7 +469,7 @@
           </ul>
         </div>
         <div>
-          <h4>Resources</h4>
+          <h3>Resources</h3>
           <ul>
             <li><a href="/en/docs/">Documentation</a></li>
             <li><a href="/roadmap/">Requirements board</a></li>
@@ -358,7 +478,7 @@
           </ul>
         </div>
         <div>
-          <h4>Legal</h4>
+          <h3>Legal</h3>
           <ul>
             <li><a href="/en/legal-notice/">Legal notice</a></li>
             <li><a href="/en/privacy/">Privacy</a></li>
@@ -367,8 +487,13 @@
         </div>
       </div>
       <div class="footer-legal">
-        <p>© 2026 Rafael Segura Gómez and Nerea Jiménez Adorna · Seville, Spain. Watchbug is distributed under the Apache 2.0 license.</p>
-        <p><a href="/" hreflang="es" lang="es">Español</a> · <a href="/en/legal-notice/">Legal notice</a> · <a href="/en/privacy/">Privacy</a> · <a href="/en/cookies/">Cookies</a></p>
+        <p>© 2026 Rafael Segura Gómez and Nerea Jiménez Adorna · Seville, Spain · Apache 2.0</p>
+        <p class="footer-links">
+          <a href="/" hreflang="es" lang="es">Español</a>
+          <a href="/en/legal-notice/">Legal notice</a>
+          <a href="/en/privacy/">Privacy</a>
+          <a href="/en/cookies/">Cookies</a>
+        </p>
       </div>
     </div>
   </footer>

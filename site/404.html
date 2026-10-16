@@ -11,8 +11,13 @@
 <body>
   <nav class="global-nav" aria-label="Navegación principal">
     <div class="nav-inner">
-      <a class="nav-logo" href="/">
-        <img src="/img/logo.png" alt="" width="24" height="24" />
+      <a class="nav-logo" href="/" data-en-href="/en/" aria-label="Watchbug, ir al inicio">
+        <svg width="22" height="24" viewBox="0 0 22 24" fill="none" aria-hidden="true" focusable="false">
+          <path d="M11 1.6 20.2 5v7.1c0 5.5-3.8 9.3-9.2 11.2C5.6 21.4 1.8 17.6 1.8 12.1V5L11 1.6Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+          <circle cx="11" cy="11.4" r="4.1" stroke="currentColor" stroke-width="1.8"/>
+          <path d="M11 11.4V8.7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          <circle cx="15.4" cy="15.8" r="2.4" fill="#d22b2e"/>
+        </svg>
         Watchbug
       </a>
       <div class="nav-right">
@@ -23,13 +28,31 @@
 
   <main class="nf">
     <div>
+      <p class="doc-stamp" data-en="Route not found">Ruta no encontrada</p>
       <h1>404</h1>
-      <p class="lead">Esta página no existe — o nunca existió.</p>
       <div class="cta-row">
-        <a class="btn btn--primary" href="/">Volver al inicio</a>
-        <a class="btn btn--ghost" href="/docs/">Documentación</a>
+        <a class="btn btn--primary" href="/" data-en-href="/en/" data-en="Back to home">Volver al inicio</a>
       </div>
     </div>
   </main>
+
+  <script>
+    (function () {
+      if (!/^\/en(\/|$)/.test(location.pathname)) return;
+
+      document.documentElement.lang = 'en';
+      document.title = 'Page not found — Watchbug';
+
+      var textos = document.querySelectorAll('[data-en]');
+      for (var i = 0; i < textos.length; i++) {
+        textos[i].textContent = textos[i].getAttribute('data-en');
+      }
+
+      var enlaces = document.querySelectorAll('[data-en-href]');
+      for (var j = 0; j < enlaces.length; j++) {
+        enlaces[j].setAttribute('href', enlaces[j].getAttribute('data-en-href'));
+      }
+    })();
+  </script>
 </body>
 </html>
