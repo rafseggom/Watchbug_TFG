@@ -1,20 +1,33 @@
 .gsd-profile
 .gsd-install-state.json
 
+.claude
+
 node_modules/
 
 .opencode
+
+# Local Pi runtime state
 .atl/
 
-# Docusaurus
-docs/.docusaurus/
-docs/build/
+# GSD research scratch (non-hermetic agent output)
+.planning/research/.cache/
+.planning/research/.research-plan-input.json
 
-# Build combinado (landing + docs)
-dist/
-
+# Watchbug runtime / build output (R-04 attachments volume, SEC-04 secrets)
 .env
+dist/
+data/
+test-results/
+playwright-report/
+blob-report/
 
-# Artefactos de herramientas locales (regenerables)
-.planning/research/
+
+# PR Lens writes its previews here. They are rebuilt on demand.
 .pr-lens/
+
+.planning/milestone.lock
+
+# Machine-generated codebase-memory index: per-developer state, a ~1.2 MB
+# binary that is rewritten on every reindex. Never commit it.
+.codebase-memory/
