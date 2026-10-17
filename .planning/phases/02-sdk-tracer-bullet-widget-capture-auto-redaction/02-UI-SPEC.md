@@ -1,7 +1,8 @@
 ---
 phase: "2"
 slug: "sdk-tracer-bullet-widget-capture-auto-redaction"
-status: draft
+status: approved
+reviewed_at: "2026-10-17"
 shadcn_initialized: false
 preset: none
 created: "2026-10-17"
