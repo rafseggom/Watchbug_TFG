@@ -2,16 +2,16 @@
 gsd_state_version: "1.0"
 current_phase: 2
 current_phase_name: "SDK Tracer Bullet: Widget, Capture & Auto-Redaction"
-status: planning
-stopped_at: Phase 2 context gathered
-last_updated: "2026-10-16T16:56:37.694Z"
+status: executing
+stopped_at: Phase 2 UI-SPEC approved
+last_updated: "2026-10-17T22:12:17.985Z"
 last_activity: 2026-10-16
 last_activity_desc: Phase 01 complete, transitioned to Phase 2
-state_head: e5bc241a846af6f06f5662a488535e445c986bd2
+state_head: 5b3c21f9d9ecfb47093f9722aaa035b0c9c46335
 progress:
   total_phases: 7
   completed_phases: 1
-  total_plans: 4
+  total_plans: 9
   completed_plans: 4
   percent: 14
 ---
@@ -27,9 +27,9 @@ See: .planning/PROJECT.md (updated 2026-10-13)
 
 ## Current Position
 
-Phase: 2 — SDK Tracer Bullet: Widget, Capture & Auto-Redaction
+Phase: 2 (SDK Tracer Bullet: Widget, Capture & Auto-Redaction) — READY TO EXECUTE
 Plan: Not started
-Status: Ready to plan
+Status: Ready to execute
 Last activity: 2026-10-16 - Completed quick task 261016-nnx: Fix api read rate-limit typecheck error: gate on isExceeded via discriminant narrowing
 
 Progress: [█░░░░░░░░░] 14%
@@ -73,6 +73,7 @@ Recent decisions affecting current work:
 - [Phase 1] Scope note: the hardened blob route ships here (C-3/C-4) but DEP-03's "served only through the authenticated API" completes in Phase 5 when auth exists. TTL columns land in the initial migration (M-1/A-02) to avoid schema retrofits.
 - [Phase 4] INT-03's `custom` = init-scoped context riding every report (v1); distinct from ANN-V2-03 per-report custom fields (v2).
 - [Phase 1 · OVERRIDE 2026-10-11 · decision-coverage gate] The `check.decision-coverage-plan` gate returned `passed: false, reason: could-not-parse` because CONTEXT.md's local decision IDs use the `P1-D-NN` grammar, which the parser does not support (it accepts `D-NN`, `D4-NN`, `D-NN — title`). Developer chose "Proceed — parser false positive": the gate's intent is already satisfied — the plan-checker's dimension-7 audit verified all 12 `P1-D-01…P1-D-12` decisions map to plan tasks with no deferred idea implemented and no scope reduction. No plan or CONTEXT.md change was made. **verify-phase must re-surface this:** if its decision-coverage counterpart reports the same `could-not-parse` on `P1-D-NN`, treat it as this same recorded false positive, not as a dropped decision.
+- [Phase 2 · OVERRIDE 2026-10-18 · decision-coverage gate] Same gate, same verdict: `passed: false, reason: could-not-parse` on the `P2-D-NN` grammar (02-CONTEXT.md uses `P2-D-01…P2-D-12`, outside the parser's `D-NN` / `D4-NN` / `D-NN — title` forms). Resolved per the Phase 1 precedent above ("Proceed — parser false positive"): the plan-checker's dimension-7 audit verified all 12 `P2-D-01…P2-D-12` decisions map to plan tasks across 02-01…02-05 with no contradiction, no deferred idea implemented, and no scope reduction (P2-D-05's `selfBrowserSurface` ban explicitly honored; P2-D-01 `type:'bug'` shortcut and P2-D-04 no-locale strings map are the locked decisions themselves). No plan or CONTEXT.md change made. **verify-phase must re-surface this:** if its decision-coverage counterpart reports `could-not-parse` on `P2-D-NN`, treat it as this same recorded false positive, not as a dropped decision.
 - [Phase 01]: A-13: five type-only @types/* devDependencies owner-approved to make npm run lint pass (question gate; recorded in documentation/resolution-record.md A-13)
 - [Phase 01]: Q-08 tooling gate PASS under typescript 7.0.2 - the documented 6.x fallback was not taken
 - [Phase 01]: rate-limit and cors plugins deferred to plan 01-03 per the plan's own artifact table (ING-05 is 01-03's requirement); installing them in 01-01 caused 429s that broke the e2e suite
@@ -133,6 +134,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-16T16:56:37.580Z
-Stopped at: Phase 2 context gathered
-Resume file: .planning/phases/02-sdk-tracer-bullet-widget-capture-auto-redaction/02-CONTEXT.md
+Last session: 2026-10-17T20:33:21.966Z
+Stopped at: Phase 2 UI-SPEC approved
+Resume file: E:/Proyectos Github/Watchbug_TFG/.planning/phases/02-sdk-tracer-bullet-widget-capture-auto-redaction/02-UI-SPEC.md
