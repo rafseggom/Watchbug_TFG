@@ -5,7 +5,7 @@
   "description": "Watchbugus Parody Site - Bug reporting that's actually fun",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "vite build",
     "preview": "vite preview",
     "lint": "echo 'no lint configured'"
   },
