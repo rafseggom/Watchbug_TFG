@@ -2,7 +2,7 @@
  * Chat Widget Component
  */
 
-import type { AppState } from '../data/types.ts';
+import type { AppState } from '../data/types';
 
 const BOT_RESPONSES = [
   "Have you tried turning it off and on again? 🔄",
