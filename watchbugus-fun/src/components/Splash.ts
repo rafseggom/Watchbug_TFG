@@ -23,11 +23,20 @@ export async function initSplash(_state: AppState): Promise<void> {
   await audio.play('generate-start');
 
   // Auto-hide after 2.5s or on click
-  const hideSplash = () => {
+  const hideSplash = async () => {
     splash.classList.add('hidden');
     setTimeout(() => {
       splash.style.display = 'none';
     }, 500);
+
+    // Start background music
+    await audio.playMusic('shop-bossa-loop');
+
+    // Scroll to hero
+    const hero = document.getElementById('generator') || document.querySelector('.hero');
+    if (hero) {
+      hero.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   };
 
   enterBtn.addEventListener('click', hideSplash);

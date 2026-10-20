@@ -29,6 +29,7 @@ import { initFallingMoney } from './components/FallingMoney.ts';
 import { initTitleRotation } from './components/TitleRotation.ts';
 import { initHeadingRandomizer } from './components/HeadingRandomizer.ts';
 import { initPriceCounter } from './components/PriceCounter.ts';
+import { initParodySystems } from './components/ParodySystems.ts';
 import { toast } from './utils/toast.ts';
 import { popup } from './utils/popup.ts';
 import { audio } from './utils/audio.ts';
@@ -80,6 +81,7 @@ async function init() {
   initTitleRotation();
   initHeadingRandomizer();
   initPriceCounter(state);
+  initParodySystems(state);
 
   // Load visit count from "API"
   loadVisitCount();
