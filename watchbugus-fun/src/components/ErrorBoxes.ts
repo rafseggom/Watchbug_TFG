@@ -2,7 +2,7 @@
  * Error Boxes Component (Random Windows 98 style errors)
  */
 
-import { audio } from '../utils/audio';
+import { audio } from '../utils/audio.ts';
 
 export interface AppState {
   credits: number;
