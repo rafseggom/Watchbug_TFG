@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Watchbugus - Bug reporting that's actually fun. No, seriously.">
+  <title>Watchbugus — Make Bug Reports for $0.000001!!!</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐛</text></svg>">
+  <style>
+    /* Critical CSS - inline for instant render */
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{scrollbar-color:#f0f #0f0;font-size:16px}
+    ::-webkit-scrollbar{width:22px}
+    ::-webkit-scrollbar-thumb{background:repeating-linear-gradient(45deg,#f0f 0 10px,#ff0 10px 20px);border:3px solid #000}
+    ::-webkit-scrollbar-track{background:#0f0}
+    ::selection{color:#ff0;background:red}
+    body{font-family:"Comic Sans MS","Comic Sans","Chalkboard SE","Comic Neue",cursive;background:linear-gradient(135deg,#ff6,#f9f 50%,#6ff);background-attachment:fixed;background-size:300% 300%;min-height:100vh;color:#000;line-height:1.5;cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ctext y='18' font-size='20'%3E%F0%9F%90%AD%3C/text%3E%3C/svg%3E") 4 4,auto}
+    @keyframes seasick{25%{transform:rotate(.6deg)}75%{transform:rotate(-.6deg)}}
+    @keyframes pulse{50%{transform:scale(1.06)}}
+    @keyframes spin{100%{transform:rotate(360deg)}}
+    @keyframes wiggle{100%{transform:rotate(4deg) scale(1.05)}}
+    @keyframes marquee{100%{transform:translate(-100%)}}
+    @keyframes bounce-x{0%{left:0}100%{left:calc(-90px + 100vw)}}
+    @keyframes bounce-y{0%{top:0}100%{top:calc(-90px + 100vh)}}
+    @keyframes fall{100%{opacity:0;transform:translateY(60px) rotate(180deg)}}
+    @keyframes shake{25%{transform:translate(-3px) rotate(-1deg)}75%{transform:translate(3px) rotate(1deg)}}
+    @keyframes roll{100%{transform:rotate(360deg)}}
+    @keyframes quake{25%{transform:translate(-8px,4px) rotate(-1deg)}75%{transform:translate(8px,-4px) rotate(1deg)}}
+    @keyframes blink{50%{opacity:0}}
+    @keyframes coupon-rainbow{100%{background-position:300% 0}}
+    @keyframes ring{0%{box-shadow:rgba(0,0,0,.5) 0 0}100%{box-shadow:rgba(0,0,0,0) 0 0 0 26px}}
+    @keyframes flick{50%{transform:rotate(-14deg)}}
+    @keyframes money-fall{100%{transform:translateY(110vh) rotate(720deg)}}
+    @keyframes pop-in{0%{transform:scale(.3)}}
+    @keyframes proof{10%,85%{transform:none}}
+    body>section,body>header,body>footer{animation:9s ease-in-out infinite seasick}
+    .rainbow{background:linear-gradient(90deg,red,orange,#ff0,#0f0,#0ff,#00f,#f0f);-webkit-background-clip:text;background-clip:text;color:transparent;animation:.5s infinite alternate wiggle}
+    .btn{font:inherit;color:#000;cursor:pointer;background:#0f0;border:3px solid #000;border-radius:12px;padding:.6rem 1.2rem;font-weight:700;text-decoration:none;transition:transform .1s;display:inline-block;box-shadow:4px 4px 0 0 #000}
+    .btn:hover{transform:rotate(-3deg) scale(1.08);background:#ff0}
+    .btn:active{transform:translate(4px,4px);box-shadow:none}
+    .btn-big{font-size:1.3rem;padding:1rem 2rem;color:#fff;background:linear-gradient(#f33,#ff0080);animation:1s infinite pulse}
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+  </style>
+</head>
+<body>
+  <!-- Splash Screen -->
+  <div id="splash" class="splash" role="dialog" aria-label="Loading Watchbugus" aria-modal="true">
+    <div class="splash-content">
+      <img src="/img/hotdog.webp" alt="" class="splash-hotdog" aria-hidden="true">
+      <h1 class="rainbow">WATCHBUGUS</h1>
+      <p class="splash-tagline">LOADING BUGS...</p>
+      <p class="splash-sub">u may breathe now.</p>
+      <button id="splash-enter" class="btn btn-big" aria-label="Enter Watchbugus">ENTER</button>
+    </div>
+  </div>
+
+  <!-- Kumar Banner (Sticky Top) -->
+  <header class="kumar-banner" id="kumar-banner" role="banner">
+    <div class="kumar-banner-text">
+      <span class="rainbow">🎉 WATCHBUGUS v0.0.1-pre-alpha-beta-gamma-delta — NOT A SCAM!!! 🎉</span>
+      <u id="kumar-link" class="btn btn-big" tabindex="0" role="button" aria-label="Click for surprise">CLICK HERE FOR FREE HOTDOG 🌭</u>
+    </div>
+  </header>
+
+  <!-- Navigation -->
+  <nav class="nav" role="navigation" aria-label="Main navigation">
+    <div class="brand">
+      <img src="/img/hotdog.webp" alt="" class="brand-img" aria-hidden="true">
+      <span class="logos">
+        <span class="rainbow">WATCH</span><span>BUG</span><span class="rainbow">US</span>
+      </span>
+    </div>
+    <div class="nav-links">
+      <a href="#features" class="btn btn-small">FEATURES</a>
+      <a href="#pricing" class="btn btn-small">PRICING</a>
+      <a href="#gallery" class="btn btn-small">GALLERY</a>
+      <a href="#reviews" class="btn btn-small">REVIEWS</a>
+      <button id="chat-toggle" class="btn btn-small" aria-label="Open chat" aria-expanded="false">CHAT 💬</button>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <header class="hero" role="banner">
+    <div class="hero-content">
+      <h1 class="rainbow">Make Bug Reports<br>for <span class="cheap">$0.000001</span>!!!</h1>
+      <p class="lead">The only bug tracker that <strong>pays YOU</strong> to find bugs. (Terms: payment in exposure & hotdogs)</p>
+      <div class="hero-ctas">
+        <button id="hero-generate" class="btn btn-big" aria-label="Start free trial">START FREE TRIAL 🚀</button>
+        <a href="#pricing" class="btn btn-big" style="background:linear-gradient(#0f0,#00f);animation:none">SEE PRICING</a>
+      </div>
+      <p class="hits"><span id="hits-counter" class="hits-counter">125,847</span> developers already joined (probably bots)</p>
+    </div>
+    <div class="hero-visual">
+      <img src="/img/thumb-shark.webp" alt="Screenshot of Watchbugus dashboard showing a shark wearing a headset" class="hero-thumb" loading="eager">
+      <img src="/img/hotdog.webp" alt="" class="hotdog h1" aria-hidden="true">
+      <img src="/img/hotdog.webp" alt="" class="hotdog h2" aria-hidden="true">
+      <div class="sticker s1" aria-hidden="true">🔥</div>
+      <div class="sticker s2" aria-hidden="true">💯</div>
+    </div>
+  </header>
+
+  <hr>
+
+  <!-- Generator Demo Section -->
+  <section class="gen-box" id="generator" aria-labelledby="gen-heading">
+    <h2 id="gen-heading" class="rainbow">Try the Bug Generator</h2>
+    <p class="lead">Type a bug title, watch our AI generate a <em>perfect</em> reproduction. (AI = A Human Intern)</p>
+    <form id="gen-form" class="generator" aria-label="Bug generator form">
+      <div class="options">
+        <label><input type="checkbox" id="opt-screenshot" checked> Include screenshot (fake)</label>
+        <label><input type="checkbox" id="opt-logs" checked> Include console logs (fake)</label>
+        <label><input type="checkbox" id="opt-env" checked> Include env metadata (fake)</label>
+      </div>
+      <div class="gen-input-wrap">
+        <input type="text" id="bug-title" placeholder="e.g. 'Button click deletes production database'" required autocomplete="off" aria-label="Bug title">
+        <button type="submit" class="btn btn-big" id="gen-submit">GENERATE BUG REPORT</button>
+      </div>
+      <p id="credits" class="credits">Credits remaining: <span id="credits-count">3</span> / 3 (refills never)</p>
+    </form>
+    <div id="gen-output" class="gen-output" hidden aria-live="polite"></div>
+  </section>
+
+  <hr>
+
+  <!-- Features Section -->
+  <section class="features" id="features" aria-labelledby="features-heading">
+    <h2 id="features-heading" class="rainbow">Features (Totally Real)</h2>
+    <div class="feature-grid" id="feature-grid" role="list"></div>
+  </section>
+
+  <hr>
+
+  <!-- Pricing Section -->
+  <section class="pricing" id="pricing" aria-labelledby="pricing-heading">
+    <h2 id="pricing-heading" class="rainbow">Pricing (No Hidden Fees* *fees are hidden)</h2>
+    <div class="plans" id="plans" role="list"></div>
+  </section>
+
+  <hr>
+
+  <!-- Gallery Section -->
+  <section class="gallery" id="gallery" aria-labelledby="gallery-heading">
+    <h2 id="gallery-heading" class="rainbow">Gallery of "Success"</h2>
+    <div class="gallery-grid" id="gallery-grid" role="list"></div>
+  </section>
+
+  <hr>
+
+  <!-- Reviews Section -->
+  <section class="reviews" id="reviews" aria-labelledby="reviews-heading">
+    <h2 id="reviews-heading" class="rainbow">Reviews (100% Authentic)</h2>
+    <div class="review-grid" id="review-grid" role="list"></div>
+  </section>
+
+  <hr>
+
+  <!-- Not Kumar Ad -->
+  <section class="notkumar-ad" id="notkumar" aria-labelledby="notkumar-heading">
+    <h2 id="notkumar-heading" class="rainbow">Not Kumar's Consulting</h2>
+    <div class="notkumar-content">
+      <img src="/img/notkumar.jpg" alt="Steve from accounting pretending to be a developer" class="notkumar-img" loading="lazy">
+      <div class="notkumar-copy">
+        <h3 class="rainbow">Book a Call with Steve</h3>
+        <p>Steve knows <em>everything</em> about bugs. He once fixed a segfault by yelling at the server.</p>
+        <p class="notkumar-price" id="notkumar-price">$47/hr (negotiable in hotdogs)</p>
+        <button id="notkumar-book" class="btn btn-big" aria-label="Book call with Steve">BOOK CALL 📞</button>
+        <p class="notkumar-fine">* Steve is not Kumar. Kumar is not Steve. We are not affiliated with Kumar, Steve, or hotdogs.</p>
+      </div>
+    </div>
+  </section>
+
+  <hr>
+
+  <!-- Footer -->
+  <footer role="contentinfo">
+    <div class="links">
+      <a href="#privacy" class="btn btn-ugly">Privacy (lol)</a>
+      <a href="#terms" class="btn btn-ugly">Terms (yolo)</a>
+      <a href="#contact" class="btn btn-ugly">Contact (don't)</a>
+      <a href="https://github.com" target="_blank" rel="noopener" class="btn btn-ugly">GitHub (stars pls)</a>
+    </div>
+    <p class="copyright">© 2026 Watchbugus Inc. All rights reserved (we reserve the right to not reserve rights).</p>
+    <p class="made-with">Made with 🌭 and questionable decisions</p>
+  </footer>
+
+  <!-- Chat Widget -->
+  <div id="chat-widget" class="chat" role="dialog" aria-label="Chat support" aria-modal="false" hidden>
+    <div class="chat-head">
+      <img src="/img/chatbot.webp" alt="" class="chat-avatar" aria-hidden="true">
+      <div>
+        <strong>PikzBot 3000</strong>
+        <span id="chat-badge" class="badge">3</span>
+      </div>
+      <button id="chat-close" class="btn btn-small" aria-label="Close chat">×</button>
+    </div>
+    <div class="chat-body" id="chat-body" role="log" aria-live="polite"></div>
+    <form class="chat-form" id="chat-form" aria-label="Chat input">
+      <input type="text" id="chat-input" placeholder="Type message..." autocomplete="off" aria-label="Chat message">
+      <button type="submit" class="btn btn-small">SEND</button>
+    </form>
+  </div>
+
+  <!-- Cookie Banner -->
+  <div id="cookie-banner" class="cookie" role="dialog" aria-label="Cookie preferences" hidden>
+    <p>We use cookies to track your bugs, your soul, and your hotdog preferences.</p>
+    <div class="cookie-btns">
+      <button id="cookie-accept" class="btn btn-big" aria-label="Accept all cookies">ACCEPT HARDER 🍪</button>
+      <button id="cookie-reject" class="btn btn-small" aria-label="Reject cookies">reject (boring)</button>
+    </div>
+  </div>
+
+  <!-- Clippy Assistant -->
+  <div id="clippy" class="clippy" role="dialog" aria-label="Clippy assistant" aria-modal="false" hidden>
+    <img src="/img/clippy.webp" alt="Clippy assistant" class="clippy-img" aria-hidden="true">
+    <div class="clippy-bubble" id="clippy-bubble" role="status" aria-live="polite"></div>
+    <div class="clippy-actions">
+      <button id="clippy-yes" class="btn btn-small">YES</button>
+      <button id="clippy-no" class="btn btn-small">NO</button>
+    </div>
+  </div>
+
+  <!-- Popup Modal (reused) -->
+  <div id="popup" class="popup" role="dialog" aria-modal="true" aria-labelledby="popup-title" hidden>
+    <div class="popup-box">
+      <div class="popup-title" id="popup-title"></div>
+      <div class="popup-content" id="popup-content"></div>
+      <div class="popup-actions">
+        <button id="popup-ok" class="btn btn-big">OK</button>
+        <button id="popup-cancel" class="btn btn-small">CANCEL</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notifications -->
+  <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- Virus Scanner (fake) -->
+  <div id="virus-scanner" class="virus" role="dialog" aria-label="Virus scanner" aria-modal="true" hidden>
+    <div class="virus-box">
+      <div class="popup-title">🦠 VIRUS SCANNER 2026 🦠</div>
+      <p class="virus-warn">SCANNING YOUR BROWSER FOR BUGS...</p>
+      <div class="virus-bar"><div id="virus-fill" class="virus-fill"></div></div>
+      <ul id="virus-list" class="virus-list"></ul>
+      <button id="virus-remove" class="btn btn-big">REMOVE ALL ($4.99)</button>
+      <button id="virus-close" class="btn btn-small">I'LL RISK IT</button>
+    </div>
+  </div>
+
+  <!-- Prize Wheel -->
+  <div id="prize-wheel" class="wheel" role="dialog" aria-label="Prize wheel" aria-modal="true" hidden>
+    <div class="wheel-wrap">
+      <div class="wheel-disc" id="wheel-disc" role="img" aria-label="Prize wheel segments">
+        <div class="wheel-msg" id="wheel-msg"></div>
+        <div class="wheel-pointer" id="wheel-pointer"></div>
+      </div>
+      <button id="wheel-spin" class="btn btn-big">SPIN 🎰</button>
+      <button id="wheel-close" class="btn btn-small">NO THANKS</button>
+    </div>
+  </div>
+
+  <!-- Phone Call Modal -->
+  <div id="phone-call" class="call" role="dialog" aria-label="Phone call with Steve" aria-modal="true" hidden>
+    <div class="call-box">
+      <div class="call-avatar" data-state="idle">
+        <img src="/img/notkumar.jpg" alt="Steve">
+      </div>
+      <div class="call-status" id="call-status">RINGING...</div>
+      <div class="call-name">Steve from Accounting</div>
+      <div class="call-role">Senior Bug Consultant</div>
+      <button id="call-hangup" class="btn btn-big">HANG UP 📞</button>
+    </div>
+  </div>
+
+  <!-- Captcha Modal -->
+  <div id="captcha-modal" class="captcha" role="dialog" aria-label="Captcha verification" aria-modal="true" hidden>
+    <div class="captcha-box">
+      <div class="popup-title">🤖 VERIFY YOU'RE HUMAN 🤖</div>
+      <p class="captcha-msg" id="captcha-msg">Select all images with a <strong>RED ARROW</strong></p>
+      <div class="captcha-grid" id="captcha-grid" role="group" aria-label="Captcha images"></div>
+      <button id="captcha-verify" class="btn btn-big" disabled>VERIFY</button>
+    </div>
+  </div>
+
+  <!-- Error Boxes Container -->
+  <div id="error-container" aria-live="assertive" aria-atomic="true"></div>
+
+  <!-- Music Toggle -->
+  <button id="music-toggle" class="music btn" aria-label="Toggle background music" aria-pressed="false">🎵 MUSIC</button>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
