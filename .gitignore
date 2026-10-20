@@ -18,6 +18,7 @@ node_modules/
 .env
 dist/
 data/
+!watchbugus-fun/src/data/
 test-results/
 playwright-report/
 blob-report/
