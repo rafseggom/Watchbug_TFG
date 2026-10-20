@@ -2,7 +2,7 @@
  * Captcha Component (Fake)
  */
 
-import { audio } from '../utils/audio.js';
+import { audio } from '../utils/audio';
 
 // Export for use by Generator
 export const captcha = {

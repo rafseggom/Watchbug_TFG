@@ -6,34 +6,34 @@
 import './style.css';
 
 // Import all components
-import { initSplash } from './components/Splash.js';
-import { initKumarBanner } from './components/KumarBanner.js';
-import { initNavigation } from './components/Navigation.js';
-import { initHero } from './components/Hero.js';
-import { initGenerator } from './components/Generator.js';
-import { initFeatures } from './components/Features.js';
-import { initPricing } from './components/Pricing.js';
-import { initGallery } from './components/Gallery.js';
-import { initReviews } from './components/Reviews.js';
-import { initNotKumar } from './components/NotKumar.js';
-import { initChat } from './components/Chat.js';
-import { initCookie } from './components/Cookie.js';
-import { initClippy } from './components/Clippy.js';
-import { initVirusScanner } from './components/VirusScanner.js';
-import { initPrizeWheel } from './components/PrizeWheel.js';
-import { initPhoneCall } from './components/PhoneCall.js';
-import { initErrorBoxes } from './components/ErrorBoxes.js';
-import { initMusic } from './components/Music.js';
-import { initMouseTrail } from './components/MouseTrail.js';
-import { initFallingMoney } from './components/FallingMoney.js';
-import { initTitleRotation } from './components/TitleRotation.js';
-import { initHeadingRandomizer } from './components/HeadingRandomizer.js';
-import { initPriceCounter } from './components/PriceCounter.js';
-import { toast } from './utils/toast.js';
-import { popup } from './utils/popup.js';
-import { audio } from './utils/audio.js';
-import { chaos } from './utils/chaos.js';
-import { jokes } from './data/jokes.js';
+import { initSplash } from './components/Splash';
+import { initKumarBanner } from './components/KumarBanner';
+import { initNavigation } from './components/Navigation';
+import { initHero } from './components/Hero';
+import { initGenerator } from './components/Generator';
+import { initFeatures } from './components/Features';
+import { initPricing } from './components/Pricing';
+import { initGallery } from './components/Gallery';
+import { initReviews } from './components/Reviews';
+import { initNotKumar } from './components/NotKumar';
+import { initChat } from './components/Chat';
+import { initCookie } from './components/Cookie';
+import { initClippy } from './components/Clippy';
+import { initVirusScanner } from './components/VirusScanner';
+import { initPrizeWheel } from './components/PrizeWheel';
+import { initPhoneCall } from './components/PhoneCall';
+import { initErrorBoxes } from './components/ErrorBoxes';
+import { initMusic } from './components/Music';
+import { initMouseTrail } from './components/MouseTrail';
+import { initFallingMoney } from './components/FallingMoney';
+import { initTitleRotation } from './components/TitleRotation';
+import { initHeadingRandomizer } from './components/HeadingRandomizer';
+import { initPriceCounter } from './components/PriceCounter';
+import { toast } from './utils/toast';
+import { popup } from './utils/popup';
+import { audio } from './utils/audio';
+import { chaos } from './utils/chaos';
+import { jokes } from './data/jokes';
 
 // Global state
 const state = {

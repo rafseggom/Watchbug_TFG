@@ -2,9 +2,9 @@
  * Kumar Banner Component - Sticky top banner
  */
 
-import { audio } from '../utils/audio.js';
-import { chaos } from '../utils/chaos.js';
-import { popup } from '../utils/popup.js';
+import { audio } from '../utils/audio';
+import { chaos } from '../utils/chaos';
+import { popup } from '../utils/popup';
 
 export interface AppState {
   credits: number;

@@ -61,7 +61,7 @@ export function initPhoneCall(state: AppState, audio: any): void {
     callModal.hidden = true;
     avatar.dataset.state = 'idle';
 
-    import('../utils/popup.js').then(({ popup }) => {
+    import('../utils/popup').then(({ popup }) => {
       popup.show({
         title: '📞 CALL ENDED',
         content: `

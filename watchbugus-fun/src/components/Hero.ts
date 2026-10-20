@@ -2,9 +2,9 @@
  * Hero Section Component
  */
 
-import { audio } from '../utils/audio.js';
+import { audio } from '../utils/audio';
 
-import type { AppState } from '../data/types.js';
+import type { AppState } from '../data/types';
 
 export function initHero(_state: AppState): void {
   const generateBtn = document.getElementById('hero-generate')!;
@@ -51,7 +51,7 @@ export function initHero(_state: AppState): void {
 }
 
 async function showExitIntent(): Promise<void> {
-  const { popup } = await import('../utils/popup.js');
+  const { popup } = await import('../utils/popup');
   popup.show({
     title: 'WAIT!!! 🛑',
     content: `

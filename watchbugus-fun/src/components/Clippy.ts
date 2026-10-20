@@ -2,7 +2,7 @@
  * Clippy Assistant Component
  */
 
-import { audio } from '../utils/audio.js';
+import { audio } from '../utils/audio';
 
 export interface AppState {
   credits: number;
