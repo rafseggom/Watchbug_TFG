@@ -2,7 +2,7 @@
  * Not Kumar Ad Component
  */
 
-import { initPhoneCall } from './PhoneCall';
+import { initPhoneCall } from './PhoneCall.ts';
 
 export interface AppState {
   credits: number;

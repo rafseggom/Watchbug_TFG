@@ -61,7 +61,7 @@ function handlePlanAction(action: string): void {
       break;
     case 'popup':
     default:
-      import('../utils/popup').then(({ popup }) => {
+      import('../utils/popup.ts').then(({ popup }) => {
         popup.show({
           title: '🎉 COMING SOON 🎉',
           content: '<p>This feature is still baking in our chaos oven!</p><p>Check back never.</p>'

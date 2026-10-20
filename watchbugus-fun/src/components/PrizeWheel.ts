@@ -2,9 +2,9 @@
  * Prize Wheel Component
  */
 
-import { chaos } from '../utils/chaos';
+import { chaos } from '../utils/chaos.ts';
 
-import type { AppState } from '../data/types';
+import type { AppState } from '../data/types.ts';
 
 const WHEEL_SEGMENTS = [
   { label: '47s WITH KUMAR', weight: 50, color: '#f00' },
@@ -100,7 +100,7 @@ export function initPrizeWheel(state: AppState, audio: any): void {
     // Show result
     msg.textContent = `🎉 ${WHEEL_SEGMENTS[targetSegment].label} 🎉`;
 
-    import('../utils/popup').then(({ popup }) => {
+    import('../utils/popup.ts').then(({ popup }) => {
       popup.show({
         title: '🎰 YOU WON! 🎰',
         content: `
