@@ -2,7 +2,7 @@
  * Navigation Component
  */
 
-import { chaos } from '../utils/chaos';
+import { chaos } from '../utils/chaos.ts';
 
 export interface AppState {
   credits: number;

@@ -2,8 +2,8 @@
  * Virus Scanner Component (Fake)
  */
 
-import { chaos } from '../utils/chaos';
-import type { AppState } from '../data/types';
+import { chaos } from '../utils/chaos.ts';
+import type { AppState } from '../data/types.ts';
 
 const FAKE_VIRUSES = [
   "Trojan:Win32/HotdogStealer.A",
@@ -68,7 +68,7 @@ export function initVirusScanner(state: AppState, audio: any): void {
     await audio.play('wheel-win');
     chaos.triggerConfetti();
     scanner.hidden = true;
-    import('../utils/popup').then(({ popup }) => {
+    import('../utils/popup.ts').then(({ popup }) => {
       popup.show({
         title: '🦠 VIRUSES REMOVED! 🦠',
         content: `
