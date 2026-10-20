@@ -2,11 +2,11 @@
  * Bug Generator Component
  */
 
-import { popup } from '../utils/popup.ts';
-import { toast } from '../utils/toast.ts';
-import { captcha } from './Captcha.ts';
+import { popup } from '../utils/popup';
+import { toast } from '../utils/toast';
+import { captcha } from './Captcha';
 
-import type { AppState, JokeData } from '../data/types.ts';
+import type { AppState, JokeData } from '../data/types';
 
 export function initGenerator(state: AppState, jokes: JokeData, audio: any): void {
   const form = document.getElementById('gen-form')!;

@@ -1,6 +1,5 @@
 /**
- * Audio Utility (Web Audio API) - Generates tones programmatically
- * No external audio files needed!
+ * Audio Utility (Web Audio API) - Generates tones for SFX, loads MP3 for music
  */
 
 interface AudioBufferMap {
@@ -10,38 +9,55 @@ interface AudioBufferMap {
 class AudioManager {
   private context: AudioContext | null = null;
   private buffers: AudioBufferMap = {};
-  private musicOscillators: OscillatorNode[] = [];
+  private musicSource: AudioBufferSourceNode | null = null;
   private musicGain: GainNode | null = null;
   private loaded = false;
+  private loadPromise: Promise<void> | null = null;
 
-  // Tone definitions: { frequency, type, duration, volume }
+  // Tone definitions for SFX: { frequency, type, duration, volume }
   private readonly tones: Record<string, { freq: number; type: OscillatorType; duration: number; volume: number }> = {
-    'generate-start': { freq: 220, type: 'sine', duration: 0.3, volume: 0.3 },      // Low A3
-    'generate-done': { freq: 880, type: 'sine', duration: 0.5, volume: 0.3 },       // High A5
-    'steve-call': { freq: 440, type: 'square', duration: 1.0, volume: 0.2 },       // Ring tone A4
-    'wheel-tick': { freq: 1000, type: 'square', duration: 0.05, volume: 0.4 },     // Tick
-    'wheel-win': { freq: 660, type: 'triangle', duration: 0.8, volume: 0.3 },      // Win E5
-    'coupon-expired': { freq: 150, type: 'sawtooth', duration: 0.6, volume: 0.3 }, // Sad trombone-ish
-    'shop-bossa-loop': { freq: 220, type: 'sine', duration: 2.0, volume: 0.15 }    // Music loop base
+    'generate-start': { freq: 220, type: 'sine', duration: 0.3, volume: 0.3 },
+    'generate-done': { freq: 880, type: 'sine', duration: 0.5, volume: 0.3 },
+    'steve-call': { freq: 440, type: 'square', duration: 1.0, volume: 0.2 },
+    'wheel-tick': { freq: 1000, type: 'square', duration: 0.05, volume: 0.4 },
+    'wheel-win': { freq: 660, type: 'triangle', duration: 0.8, volume: 0.3 },
+    'coupon-expired': { freq: 150, type: 'sawtooth', duration: 0.6, volume: 0.3 },
   };
 
+  // External music file
+  private readonly musicFile = '/audio/background.mp3';
+
   init(): void {
-    if (this.loaded) return;
-    this.generateTones();
-    this.loaded = true;
+    if (this.loadPromise) return;
+    this.loadPromise = this.loadAll();
   }
 
-  private generateTones(): void {
+  private async loadAll(): Promise<void> {
     try {
       this.context = new (window.AudioContext || (window as any).webkitAudioContext)();
       this.musicGain = this.context.createGain();
       this.musicGain.gain.value = 0.2;
       this.musicGain.connect(this.context.destination);
 
-      // Generate all tone buffers
+      // Generate SFX tones
       Object.entries(this.tones).forEach(([name, config]) => {
         this.buffers[name] = this.createToneBuffer(config);
       });
+
+      // Load background music
+      try {
+        const response = await fetch(this.musicFile);
+        const arrayBuffer = await response.arrayBuffer();
+        this.buffers['shop-bossa-loop'] = await this.context!.decodeAudioData(arrayBuffer);
+      } catch (err) {
+        console.warn('Failed to load background music, using generated tone:', err);
+        // Fallback to generated tone
+        this.buffers['shop-bossa-loop'] = this.createToneBuffer({
+          freq: 220, type: 'sine', duration: 2.0, volume: 0.15
+        });
+      }
+
+      this.loaded = true;
     } catch (err) {
       console.warn('Web Audio API not available', err);
     }
@@ -74,7 +90,6 @@ class AudioManager {
           break;
       }
 
-      // Apply envelope (attack/decay)
       const attackTime = 0.01;
       const decayTime = config.duration * 0.8;
       let envelope = 1;
@@ -97,7 +112,12 @@ class AudioManager {
         this.musicGain = this.context.createGain();
         this.musicGain.gain.value = 0.2;
         this.musicGain.connect(this.context.destination);
-        this.generateTones();
+        // Generate tones
+        Object.entries(this.tones).forEach(([name, config]) => {
+          this.buffers[name] = this.createToneBuffer(config);
+        });
+        // Load music in background
+        this.loadMusicFile();
       } catch {
         return null;
       }
@@ -105,11 +125,25 @@ class AudioManager {
     return this.context;
   }
 
+  private async loadMusicFile(): Promise<void> {
+    if (!this.context || this.buffers['shop-bossa-loop']) return;
+    try {
+      const response = await fetch(this.musicFile);
+      const arrayBuffer = await response.arrayBuffer();
+      this.buffers['shop-bossa-loop'] = await this.context.decodeAudioData(arrayBuffer);
+    } catch (err) {
+      console.warn('Failed to load background music:', err);
+      this.buffers['shop-bossa-loop'] = this.createToneBuffer({
+        freq: 220, type: 'sine', duration: 2.0, volume: 0.15
+      });
+    }
+  }
+
   async play(name: string, options: { volume?: number; loop?: boolean } = {}): Promise<void> {
+    if (!this.loaded) await this.loadPromise;
     const ctx = this.ensureContext();
     if (!ctx || !this.buffers[name]) return;
 
-    // Resume context if suspended (browser autoplay policy)
     if (ctx.state === 'suspended') {
       await ctx.resume();
     }
@@ -127,67 +161,33 @@ class AudioManager {
 
     return new Promise(resolve => {
       source.onended = () => resolve();
-      // Safety timeout
       setTimeout(resolve, (this.buffers[name].duration + 0.1) * 1000);
     });
   }
 
-  async playMusic(_name: string): Promise<void> {
+  async playMusic(name: string): Promise<void> {
+    if (!this.loaded) await this.loadPromise;
     const ctx = this.ensureContext();
-    if (!ctx) return;
+    if (!ctx || !this.buffers[name]) return;
 
     if (ctx.state === 'suspended') {
       await ctx.resume();
     }
 
-    // Stop current music
     this.stopMusic();
 
-    // Create a simple bossa-nova-ish loop using multiple oscillators
-    // This is a very simple approximation - just a repeating pattern
-    const playLoop = () => {
-      if (!this.musicGain) return;
-
-      // Bass note
-      const bass = ctx.createOscillator();
-      bass.type = 'sine';
-      bass.frequency.value = 110; // A2
-      const bassGain = ctx.createGain();
-      bassGain.gain.value = 0.1;
-      bass.connect(bassGain);
-      bassGain.connect(this.musicGain);
-      bass.start(ctx.currentTime);
-      bass.stop(ctx.currentTime + 2);
-      this.musicOscillators.push(bass);
-
-      // Chord
-      const chordFreqs = [220, 277, 330]; // A3, C#4, E4
-      chordFreqs.forEach((freq, i) => {
-        const osc = ctx.createOscillator();
-        osc.type = 'triangle';
-        osc.frequency.value = freq;
-        const gain = ctx.createGain();
-        gain.gain.value = 0.05;
-        osc.connect(gain);
-        gain.connect(this.musicGain!);
-        const delay = i * 0.1;
-        osc.start(ctx.currentTime + delay);
-        osc.stop(ctx.currentTime + 2);
-        this.musicOscillators.push(osc);
-      });
-
-      // Schedule next loop
-      setTimeout(playLoop, 2000);
-    };
-
-    playLoop();
+    this.musicSource = ctx.createBufferSource();
+    this.musicSource.buffer = this.buffers[name];
+    this.musicSource.loop = true;
+    this.musicSource.connect(this.musicGain!);
+    this.musicSource.start(0);
   }
 
   pauseMusic(): void {
-    this.musicOscillators.forEach(osc => {
-      try { osc.stop(0); } catch {}
-    });
-    this.musicOscillators = [];
+    if (this.musicSource) {
+      this.musicSource.stop(0);
+      this.musicSource = null;
+    }
   }
 
   stopMusic(): void {
