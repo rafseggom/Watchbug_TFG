@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 225" role="img" aria-label="A baguette wearing sunglasses">
+  <rect width="400" height="225" fill="#ffe9a8"/>
+  <g transform="translate(70 40) rotate(-14)" stroke="#000" stroke-width="5" stroke-linejoin="round">
+    <path d="M0 74C0 30 34 0 78 0h96c44 0 78 30 78 74s-34 74-78 74H78C34 148 0 118 0 74z" fill="#e8a92f"/>
+    <path d="M38 42l28-18M60 74l30-20M34 104l26-18M80 118l26-18M250 34l26 18M244 70l28 18M252 102l24 16" fill="none" stroke="#a86f18" stroke-width="7" stroke-linecap="round"/>
+    <rect x="60" y="54" width="72" height="34" rx="12" fill="#111"/>
+    <rect x="154" y="54" width="72" height="34" rx="12" fill="#111"/>
+    <path d="M132 70h22" stroke="#111" stroke-width="6"/>
+    <path d="M120 112c18 10 40 10 58 0" fill="none"/>
+  </g>
+  <g font-family="Comic Sans MS, cursive" fill="#000">
+    <text x="250" y="52" font-size="18" transform="rotate(8 250 52)">GONE WRONG</text>
+    <text x="28" y="212" font-size="16">the croissant conspiracy is real</text>
+  </g>
+</svg>

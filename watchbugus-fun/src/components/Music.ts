@@ -2,37 +2,31 @@
  * Music Toggle Component
  */
 
-export interface AppState {
-  credits: number;
-  visitCount: number;
-  chatOpen: boolean;
+import { audio } from '../utils/audio.ts';
+
+interface AppState {
   musicPlaying: boolean;
-  clippyShown: boolean;
-  virusShown: boolean;
-  wheelShown: boolean;
-  callActive: boolean;
 }
 
-export function initMusic(state: AppState, audio: any): void {
-  const toggle = document.getElementById('music-toggle')!;
+export function initMusic(state: AppState, _audio?: unknown): void {
+  const toggle = document.getElementById('music-toggle')! as HTMLButtonElement;
+
+  const render = (playing: boolean): void => {
+    state.musicPlaying = playing;
+    toggle.setAttribute('aria-pressed', String(playing));
+    toggle.textContent = playing ? '🎵 MUSIC ON' : '🔇 MUSIC OFF';
+    toggle.classList.toggle('music-playing', playing);
+  };
+
+  window.addEventListener('watchbug:music', (event) => {
+    const detail = (event as CustomEvent<{ playing: boolean }>).detail;
+    render(!!detail?.playing);
+  });
 
   toggle.addEventListener('click', async () => {
-    state.musicPlaying = !state.musicPlaying;
-    toggle.setAttribute('aria-pressed', state.musicPlaying.toString());
-
-    if (state.musicPlaying) {
-      await audio.playMusic('shop-bossa-loop');
-      toggle.textContent = '🎵 MUSIC ON';
-    } else {
-      audio.stopMusic();
-      toggle.textContent = '🔇 MUSIC OFF';
-    }
+    const playing = await audio.toggleMusic();
+    render(playing);
   });
 
-  // Pause music during phone call
-  window.addEventListener('watchbugus:call', () => {
-    if (state.musicPlaying) {
-      audio.pauseMusic();
-    }
-  });
+  render(audio.musicPlaying);
 }

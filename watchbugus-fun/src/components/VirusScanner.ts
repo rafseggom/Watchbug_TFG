@@ -25,12 +25,12 @@ export function initVirusScanner(state: AppState, audio: any): void {
   const removeBtn = document.getElementById('virus-remove')!;
   const closeBtn = document.getElementById('virus-close')!;
 
-  // Show after 25 seconds
+  // Show after 60 seconds. A full-screen modal is a gag, not a greeting.
   setTimeout(() => {
     if (state.virusShown) return;
     state.virusShown = true;
     showScanner();
-  }, 25000);
+  }, 60000);
 
   function showScanner(): void {
     scanner.hidden = false;
@@ -64,8 +64,8 @@ export function initVirusScanner(state: AppState, audio: any): void {
     }, 300);
   }
 
-  removeBtn.addEventListener('click', async () => {
-    await audio.play('wheel-win');
+  removeBtn.addEventListener('click', () => {
+    void audio.play('wheel-win');
     chaos.triggerConfetti();
     scanner.hidden = true;
     import('../utils/popup.ts').then(({ popup }) => {

@@ -1,11 +1,13 @@
 /**
- * Watchbugus Fun - Main Entry Point
- * Parody bug reporting site with chaotic energy
+ * Watchbug Fun - Main Entry Point
+ *
+ * A parody marketing page for the real Watchbug SDK. The rule of this page:
+ * jokes on top, real content underneath, and an obvious way out of every popup.
  */
 
 import './style.css';
+import './content.css';
 
-// Import all components
 import { initSplash } from './components/Splash.ts';
 import { initKumarBanner } from './components/KumarBanner.ts';
 import { initNavigation } from './components/Navigation.ts';
@@ -27,19 +29,21 @@ import { initMusic } from './components/Music.ts';
 import { initMouseTrail } from './components/MouseTrail.ts';
 import { initFallingMoney } from './components/FallingMoney.ts';
 import { initTitleRotation } from './components/TitleRotation.ts';
-import { initHeadingRandomizer } from './components/HeadingRandomizer.ts';
 import { initPriceCounter } from './components/PriceCounter.ts';
 import { initParodySystems } from './components/ParodySystems.ts';
+import { initCrawlingBugs } from './components/CrawlingBugs.ts';
+import { initMaskDemo } from './components/MaskDemo.ts';
+import { initPanicButton } from './components/Panic.ts';
+
 import { toast } from './utils/toast.ts';
 import { popup } from './utils/popup.ts';
 import { audio } from './utils/audio.ts';
 import { chaos } from './utils/chaos.ts';
 import { jokes } from './data/jokes.ts';
 
-// Global state
 const state = {
   credits: 3,
-  visitCount: 125847,
+  visitCount: 2847,
   chatOpen: false,
   musicPlaying: false,
   clippyShown: false,
@@ -48,69 +52,66 @@ const state = {
   callActive: false,
 };
 
-// Initialize all components
-async function init() {
-  // Initialize utilities first
+function init(): void {
+  // Utilities first: everything below may fire a toast or a popup.
   toast.init();
   popup.init();
   audio.init();
-  chaos.init();
+  chaos.init({ typoProbability: 0, rollProbability: 0 });
 
-  // Initialize components
-  await initSplash(state);
+  // Music before the splash so the toggle reflects the state the ENTER click
+  // is about to create.
+  initMusic(state);
+  initSplash(state);
+  initPanicButton();
+
   initKumarBanner(state);
   initNavigation(state);
   initHero(state);
+  initMaskDemo();
   initGenerator(state, jokes, audio);
   initFeatures(jokes);
   initPricing(jokes);
   initGallery(jokes);
   initReviews(jokes);
-  initNotKumar(state, audio);
+  initNotKumar(state);
   initChat(state, audio);
   initCookie(state);
-  initClippy(state, jokes);
+  initClippy(state);
   initVirusScanner(state, audio);
   initPrizeWheel(state, audio);
-  initPhoneCall(state, audio);
-  // captcha is used by Generator, no init needed
+  initPhoneCall(state);
   initErrorBoxes(state);
-  initMusic(state, audio);
   initMouseTrail(state);
   initFallingMoney(state);
   initTitleRotation();
-  initHeadingRandomizer();
   initPriceCounter(state);
   initParodySystems(state);
+  initCrawlingBugs(state);
 
-  // Load visit count from "API"
   loadVisitCount();
 
-  console.log('%c🐛 Watchbugus Loaded!', 'font-size: 24px; color: #f0f; text-shadow: 2px 2px #000;');
-  console.log('%cMade with 🌭 and questionable decisions', 'color: #0f0; font-family: Comic Sans MS;');
+  console.log('%c🐛 Watchbug loaded (parody edition)', 'font-size: 22px; color: #6b2cff; text-shadow: 2px 2px #000;');
+  console.log('%cReal product. Fake hotdogs. Click the crawling bugs.', 'color: #0a7a2f; font-family: Comic Sans MS;');
 }
 
 init();
 
-// Mock API calls
-async function loadVisitCount() {
+function loadVisitCount(): void {
+  const key = 'watchbug_visits';
   try {
-    // In production, this would be a real API call
-    // const response = await fetch('/api/visit', { method: 'POST' });
-    // const data = await response.json();
-    // state.visitCount = data.visits;
-    document.getElementById('hits-counter')!.textContent = state.visitCount.toLocaleString();
+    const stored = Number.parseInt(localStorage.getItem(key) || '', 10);
+    state.visitCount = Number.isFinite(stored) && stored > 0 ? stored + 1 : state.visitCount + 1;
+    localStorage.setItem(key, String(state.visitCount));
   } catch {
-    // Fallback to localStorage
-    const stored = localStorage.getItem('watchbugus_visits');
-    if (stored) {
-      state.visitCount = parseInt(stored, 10);
-    }
-    state.visitCount++;
-    localStorage.setItem('watchbugus_visits', state.visitCount.toString());
-    document.getElementById('hits-counter')!.textContent = state.visitCount.toLocaleString();
+    state.visitCount += 1;
+  }
+
+  const counter = document.getElementById('hits-counter');
+  if (counter) {
+    counter.textContent = state.visitCount.toLocaleString('en-US');
   }
 }
 
-// Export for debugging
-(window as any).__WATCHBUGUS__ = { state, audio, chaos };
+// Export for debugging / for the curious who open DevTools.
+(window as unknown as { __WATCHBUG__: unknown }).__WATCHBUG__ = { state, audio, chaos, jokes };

@@ -4,8 +4,8 @@
 
 export const config = {
   site: {
-    name: 'Watchbugus',
-    tagline: 'Bug reporting that\'s actually fun',
+    name: 'Watchbug',
+    tagline: 'Bug reports your users actually finish',
     version: '0.0.1-pre-alpha-beta-gamma-delta',
     domain: 'fun.watchbugus.com'
   },
@@ -43,15 +43,15 @@ export const config = {
   captcha: {
     gridSize: 9,
     images: [
-      'thumb-shark.webp',
-      'thumb-omg.webp',
-      'thumb-lambo.webp',
-      'thumb-minecraft.webp',
-      'thumb-cat.webp',
-      'thumb-toaster.webp',
-      'thumb-baguette.webp',
-      'hotdog.webp',
-      'mascot.webp'
+      'thumb-shark.svg',
+      'thumb-omg.svg',
+      'thumb-lambo.svg',
+      'thumb-minecraft.svg',
+      'thumb-cat.svg',
+      'thumb-toaster.svg',
+      'thumb-baguette.svg',
+      'hotdog.svg',
+      'mascot.png'
     ]
   },
 
@@ -85,24 +85,24 @@ export const config = {
 
   assets: {
     images: {
-      hotdog: 'hotdog.webp',
-      mascot: 'mascot.webp',
+      hotdog: 'hotdog.svg',
+      mascot: 'mascot.png',
       thumbnails: [
-        'thumb-shark.webp',
-        'thumb-omg.webp',
-        'thumb-lambo.webp',
-        'thumb-minecraft.webp',
-        'thumb-cat.webp',
-        'thumb-toaster.webp',
-        'thumb-baguette.webp'
+        'thumb-shark.svg',
+        'thumb-omg.svg',
+        'thumb-lambo.svg',
+        'thumb-minecraft.svg',
+        'thumb-cat.svg',
+        'thumb-toaster.svg',
+        'thumb-baguette.svg'
       ],
       avatars: [
-        'avatar-1.webp',
-        'avatar-2.webp'
+        'avatar-1.svg',
+        'avatar-2.svg'
       ],
-      notkumar: 'notkumar.jpg',
-      chatbot: 'chatbot.webp',
-      clippy: 'clippy.webp'
+      notkumar: 'notkumar.svg',
+      chatbot: 'chatbot.svg',
+      clippy: 'clippy.svg'
     },
     audio: [
       'generate-start.mp3',

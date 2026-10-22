@@ -11,7 +11,7 @@ const BOT_RESPONSES = [
   "Have you checked the console? F12 → Console → Pray 🙏",
   "Works on my machine ¯\\_(ツ)_/¯",
   "That's a <em>quantum bug</em> - it exists and doesn't exist simultaneously ⚛️",
-  "Ticket created: #BUG-${Math.floor(Math.random() * 999999)} (will be ignored)",
+  `Ticket created: #BUG-${Math.floor(Math.random() * 999999)} (will be ignored)`,
   "Senior dev says: \"It's a browser issue\" 🌐",
   "Have you tried sacrificing a hotdog? 🌭",
   "Our turnstile captcha says you're 47% human 🤖"
@@ -65,7 +65,9 @@ export function initChat(state: AppState, audio: any): void {
   function addMessage(content: string, type: 'user' | 'bot'): void {
     const div = document.createElement('div');
     div.className = `msg ${type}`;
-    div.innerHTML = content;
+    // Bot copy is trusted (it is ours and contains deliberate markup).
+    // User copy must never be interpreted as HTML.
+    div.innerHTML = type === 'user' ? escapeHtml(content) : content;
     chatBody.appendChild(div);
     chatBody.scrollTop = chatBody.scrollHeight;
 
@@ -89,6 +91,12 @@ export function initChat(state: AppState, audio: any): void {
 
   // Initial bot message
   setTimeout(() => {
-    addMessage("Welcome to Watchbugus Support! I'm PikzBot 3000, your AI assistant. (I'm actually a very small shell script) 🤖", 'bot');
+    addMessage("Welcome to Watchbug Support! I'm BugBot 3000, your AI assistant. (I'm actually a very small shell script) 🤖", 'bot');
   }, 1000);
+}
+
+function escapeHtml(text: string): string {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
 }

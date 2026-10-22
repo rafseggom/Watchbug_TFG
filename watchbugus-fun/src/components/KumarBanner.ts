@@ -18,10 +18,17 @@ export interface AppState {
 }
 
 export function initKumarBanner(_state: AppState): void {
+  const banner = document.getElementById('kumar-banner')!;
   const link = document.getElementById('kumar-link')!;
+  const closeBtn = document.getElementById('kumar-close')!;
 
-  link.addEventListener('click', async () => {
-    await audio.play('coupon-expired');
+  closeBtn.addEventListener('click', () => {
+    banner.classList.add('is-gone');
+    banner.hidden = true;
+  });
+
+  link.addEventListener('click', () => {
+    void audio.play('coupon-expired');
     chaos.triggerConfetti();
     popup.show({
       title: '🌭 FREE HOTDOG 🌭',
@@ -30,16 +37,18 @@ export function initKumarBanner(_state: AppState): void {
         <p>Redemption code: <code>HOTDOG-4-LIFE</code></p>
         <p><small>Valid at participating imaginations only. No nutritional value.</small></p>
       `,
+      confirmText: 'DELICIOUS',
+      cancelText: 'I WANT A REFUND',
       onConfirm: () => {
-        audio.play('generate-done');
-      }
+        void audio.play('generate-done');
+      },
     });
   });
 
-  // Also trigger on Enter/Space for accessibility
-  link.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
+  // Also trigger on Enter/Space for accessibility.
+  link.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
       link.click();
     }
   });

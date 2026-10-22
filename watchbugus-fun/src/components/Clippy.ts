@@ -32,10 +32,10 @@ export function initClippy(state: AppState, _jokes: any): void {
   const yesBtn = document.getElementById('clippy-yes')!;
   const noBtn = document.getElementById('clippy-no')!;
 
-  // Show after 8 seconds
+  // Show after 14 seconds: present, but not immediately in the way.
   setTimeout(() => {
     showClippy();
-  }, 8000);
+  }, 14000);
 
   function showClippy(): void {
     if (state.clippyShown) return;

@@ -27,10 +27,15 @@ export function initPrizeWheel(state: AppState, audio: any): void {
   buildWheel();
 
   // Listen for wheel event from pricing
-  window.addEventListener('watchbugus:wheel', () => {
+  window.addEventListener('watchbug:wheel', () => {
     if (state.wheelShown) return;
     state.wheelShown = true;
     wheel.hidden = false;
+  });
+
+  window.addEventListener('watchbug:panic', () => {
+    wheel.hidden = true;
+    state.wheelShown = false;
   });
 
   let spinning = false;
@@ -94,7 +99,7 @@ export function initPrizeWheel(state: AppState, audio: any): void {
 
     await new Promise(r => setTimeout(r, 4200));
 
-    await audio.play('wheel-win');
+    void audio.play('wheel-win');
     chaos.triggerConfetti();
 
     // Show result

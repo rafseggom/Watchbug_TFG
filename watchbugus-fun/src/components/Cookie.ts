@@ -19,7 +19,7 @@ export function initCookie(_state: AppState): void {
   const rejectBtn = document.getElementById('cookie-reject')!;
 
   // Check if already accepted
-  const accepted = localStorage.getItem('watchbugus_cookies');
+  const accepted = localStorage.getItem('watchbug_cookies');
   if (accepted) {
     return;
   }
@@ -33,12 +33,12 @@ export function initCookie(_state: AppState): void {
   }, 2000);
 
   acceptBtn.addEventListener('click', () => {
-    localStorage.setItem('watchbugus_cookies', 'accepted');
+    localStorage.setItem('watchbug_cookies', 'accepted');
     hideBanner();
   });
 
   rejectBtn.addEventListener('click', () => {
-    localStorage.setItem('watchbugus_cookies', 'rejected');
+    localStorage.setItem('watchbug_cookies', 'rejected');
     hideBanner();
     // Chaotic transform on reject
     setTimeout(() => {

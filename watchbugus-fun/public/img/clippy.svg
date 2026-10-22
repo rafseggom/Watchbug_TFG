@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="A paperclip assistant with googly eyes">
+  <g transform="translate(20 6)" fill="none" stroke="#000" stroke-width="7" stroke-linecap="round">
+    <path d="M44 12v52c0 14-10 22-22 22S0 78 0 64V22C0 10 8 2 18 2s18 8 18 18v44c0 7-4 11-10 11s-10-4-10-11V22" stroke="#cfd4dd"/>
+    <path d="M44 12v52c0 14-10 22-22 22S0 78 0 64V22C0 10 8 2 18 2s18 8 18 18v44c0 7-4 11-10 11s-10-4-10-11V22"/>
+  </g>
+  <circle cx="48" cy="40" r="9" fill="#fff" stroke="#000" stroke-width="3"/>
+  <circle cx="50" cy="41" r="4" fill="#000"/>
+  <circle cx="70" cy="46" r="7" fill="#fff" stroke="#000" stroke-width="3"/>
+  <circle cx="72" cy="47" r="3" fill="#000"/>
+</svg>

@@ -31,19 +31,22 @@ const ERROR_MESSAGES = [
 export function initErrorBoxes(_state: AppState): void {
   const container = document.getElementById('error-container')!;
 
-  // First error at 18 seconds
+  // First error at 45 seconds: the page should be readable first.
   setTimeout(() => {
     showRandomError();
-  }, 18000);
+  }, 45000);
 
-  // Then every 15-30 seconds
+  // Then rarely, and never more than one fake error on screen at a time.
   setInterval(() => {
-    if (Math.random() < 0.3) {
+    if (Math.random() < 0.25) {
       showRandomError();
     }
-  }, 20000);
+  }, 45000);
 
   function showRandomError(): void {
+    // Two overlapping fake errors look like actual breakage, not a joke.
+    if (container.children.length > 0) return;
+
     const error = ERROR_MESSAGES[Math.floor(Math.random() * ERROR_MESSAGES.length)];
     const div = document.createElement('div');
     div.className = 'error-box';
@@ -66,10 +69,10 @@ export function initErrorBoxes(_state: AppState): void {
     container.appendChild(div);
     audio.play('generate-start');
 
-    // Auto-remove after 10 seconds
+    // Auto-remove after 8 seconds
     setTimeout(() => {
       if (div.parentNode) div.remove();
-    }, 10000);
+    }, 8000);
   }
 }
 

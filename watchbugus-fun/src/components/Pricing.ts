@@ -52,12 +52,10 @@ function handlePlanAction(action: string): void {
   switch (action) {
     case 'call':
       // Trigger phone call modal
-      const event = new CustomEvent('watchbugus:call');
-      window.dispatchEvent(event);
+      window.dispatchEvent(new CustomEvent('watchbug:call'));
       break;
     case 'wheel':
-      const wheelEvent = new CustomEvent('watchbugus:wheel');
-      window.dispatchEvent(wheelEvent);
+      window.dispatchEvent(new CustomEvent('watchbug:wheel'));
       break;
     case 'popup':
     default:

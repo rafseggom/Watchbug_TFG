@@ -3,6 +3,13 @@
    ========================================================================== */
 
 /* --- CSS Custom Properties --- */
+/* The single most important rule on this site: `hidden` must win over
+   display:grid/flex used by the modal styles. Without this, every modal is
+   permanently visible and stacks on top of the actual content. */
+[hidden] {
+  display: none !important;
+}
+
 :root {
   /* Core Brand Colors */
   --hot-pink: #f0f;
@@ -460,8 +467,8 @@ section + section {
 
 /* --- Kumar Banner --- */
 .kumar-banner {
-  position: sticky;
-  top: 0;
+  position: relative;
+  top: auto;
   z-index: var(--z-kumar);
   background: var(--gradient-notkumar);
   border-bottom: 4px solid var(--black);
@@ -737,7 +744,7 @@ section + section {
 .feature:nth-child(4n+4) { --feature-bg: #ffc; }
 
 .feature:hover {
-  transform: rotate(180deg);
+  transform: rotate(-1.5deg) scale(1.02);
 }
 
 .feature h3 {

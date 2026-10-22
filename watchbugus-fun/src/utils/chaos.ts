@@ -4,6 +4,7 @@
 
 interface ChaosOptions {
   typoProbability?: number;
+  rollProbability?: number;
 }
 
 const WORDS_TO_CORRUPT = new Map([
@@ -36,7 +37,7 @@ const WORDS_TO_CORRUPT = new Map([
 
 export const chaos = {
   init(options: ChaosOptions = {}): void {
-    const { typoProbability = 0.02 } = options;
+    const { typoProbability = 0.02, rollProbability = 0.1 } = options;
 
     // Random typo injection
     if (typoProbability > 0) {
@@ -47,15 +48,18 @@ export const chaos = {
       }, 3000);
     }
 
-    // Random page roll (10% chance on click)
-    document.addEventListener('click', () => {
-      if (Math.random() < 0.1) {
-        this.triggerRoll();
-      }
-    });
+    // Random page roll on click (disabled on the fun site: it made the page
+    // feel broken right when someone pressed ENTER).
+    if (rollProbability > 0) {
+      document.addEventListener('click', () => {
+        if (Math.random() < rollProbability) {
+          this.triggerRoll();
+        }
+      });
+    }
 
     // Random quake on certain events
-    window.addEventListener('watchbugus:generate', () => {
+    window.addEventListener('watchbug:generate', () => {
       if (Math.random() < 0.2) {
         this.triggerQuake();
       }

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 140" role="img" aria-label="A cartoon hotdog">
+  <g stroke="#000" stroke-width="6" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M28 78c0-26 20-46 46-46h92c26 0 46 20 46 46s-20 46-46 46H74c-26 0-46-20-46-46z" fill="#f5b942"/>
+    <path d="M28 78c4 26 22 46 48 46h88c26 0 44-20 48-46-12 14-38 22-92 22S40 92 28 78z" fill="#d99a2b"/>
+    <path d="M52 92c22-18 52-27 76-27s52 9 68 23" fill="none" stroke="#a86f18" stroke-width="10"/>
+    <path d="M42 74c18-22 46-34 78-34s60 12 78 34" fill="none" stroke="#e8a92f" stroke-width="14"/>
+    <path d="M44 78c20-16 46-24 76-24s56 8 76 24c-8 18-38 28-76 28S52 96 44 78z" fill="#e2543f"/>
+    <path d="M58 76l16 10 14-10 16 10 14-10 16 10 14-10 16 10" fill="none" stroke="#ffd400" stroke-width="8"/>
+  </g>
+  <g fill="#000">
+    <circle cx="86" cy="62" r="4"/><circle cx="154" cy="62" r="4"/>
+  </g>
+  <path d="M100 68c10 10 30 10 40 0" fill="none" stroke="#000" stroke-width="4" stroke-linecap="round"/>
+</svg>

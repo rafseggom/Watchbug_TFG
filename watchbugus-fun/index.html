@@ -3,315 +3,431 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Watchbugus - Bug reporting that's actually fun. No, seriously.">
-  <title>Watchbugus — Make Bug Reports for $0.000001!!!</title>
+  <meta name="description" content="Watchbug - self-hosted, privacy-first bug reporting. One script tag, screenshots that get masked before they leave the browser.">
+  <meta name="theme-color" content="#6b2cff">
+  <title>Watchbug — Bug reports your users actually finish</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐛</text></svg>">
   <style>
-    /* Critical CSS - inline for instant render */
-    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    html{scrollbar-color:#f0f #0f0;font-size:16px}
-    ::-webkit-scrollbar{width:22px}
-    ::-webkit-scrollbar-thumb{background:repeating-linear-gradient(45deg,#f0f 0 10px,#ff0 10px 20px);border:3px solid #000}
-    ::-webkit-scrollbar-track{background:#0f0}
-    ::selection{color:#ff0;background:red}
-    body{font-family:"Comic Sans MS","Comic Sans","Chalkboard SE","Comic Neue",cursive;background:linear-gradient(135deg,#ff6,#f9f 50%,#6ff);background-attachment:fixed;background-size:300% 300%;min-height:100vh;color:#000;line-height:1.5;cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ctext y='18' font-size='20'%3E%F0%9F%90%AD%3C/text%3E%3C/svg%3E") 4 4,auto}
-    @keyframes seasick{25%{transform:rotate(.6deg)}75%{transform:rotate(-.6deg)}}
-    @keyframes pulse{50%{transform:scale(1.06)}}
-    @keyframes spin{100%{transform:rotate(360deg)}}
-    @keyframes wiggle{100%{transform:rotate(4deg) scale(1.05)}}
-    @keyframes marquee{100%{transform:translate(-100%)}}
-    @keyframes bounce-x{0%{left:0}100%{left:calc(-90px + 100vw)}}
-    @keyframes bounce-y{0%{top:0}100%{top:calc(-90px + 100vh)}}
-    @keyframes fall{100%{opacity:0;transform:translateY(60px) rotate(180deg)}}
-    @keyframes shake{25%{transform:translate(-3px) rotate(-1deg)}75%{transform:translate(3px) rotate(1deg)}}
-    @keyframes roll{100%{transform:rotate(360deg)}}
-    @keyframes quake{25%{transform:translate(-8px,4px) rotate(-1deg)}75%{transform:translate(8px,-4px) rotate(1deg)}}
-    @keyframes blink{50%{opacity:0}}
-    @keyframes coupon-rainbow{100%{background-position:300% 0}}
-    @keyframes ring{0%{box-shadow:rgba(0,0,0,.5) 0 0}100%{box-shadow:rgba(0,0,0,0) 0 0 0 26px}}
-    @keyframes flick{50%{transform:rotate(-14deg)}}
-    @keyframes money-fall{100%{transform:translateY(110vh) rotate(720deg)}}
-    @keyframes pop-in{0%{transform:scale(.3)}}
-    @keyframes proof{10%,85%{transform:none}}
-    body>section,body>header,body>footer{animation:9s ease-in-out infinite seasick}
-    .rainbow{background:linear-gradient(90deg,red,orange,#ff0,#0f0,#0ff,#00f,#f0f);-webkit-background-clip:text;background-clip:text;color:transparent;animation:.5s infinite alternate wiggle}
-    .btn{font:inherit;color:#000;cursor:pointer;background:#0f0;border:3px solid #000;border-radius:12px;padding:.6rem 1.2rem;font-weight:700;text-decoration:none;transition:transform .1s;display:inline-block;box-shadow:4px 4px 0 0 #000}
-    .btn:hover{transform:rotate(-3deg) scale(1.08);background:#ff0}
-    .btn:active{transform:translate(4px,4px);box-shadow:none}
-    .btn-big{font-size:1.3rem;padding:1rem 2rem;color:#fff;background:linear-gradient(#f33,#ff0080);animation:1s infinite pulse}
-    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-    
-    /* System Status Panel */
-    .system-status{background:#fff;border:4px solid #000;border-radius:20px;padding:1.5rem;margin:1rem 0;box-shadow:6px 6px 0 0 #0ff}
-    .status-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-bottom:1.5rem}
-    .status-item{background:#f0f;border:3px solid #000;border-radius:12px;padding:1rem;text-align:center;box-shadow:4px 4px 0 0 #000}
-    .status-item .label{font-size:0.9rem;color:#888;margin-bottom:0.5rem;font-family:"Courier New",monospace}
-    .status-item .value{font-size:1.5rem;font-weight:700;font-family:"Courier New",monospace;color:#c00}
-    .status-item.ok .value{color:#0c0}
-    .status-item.warn .value{color:#ff0}
-    
-    /* Fake Load Bar */
-    .fake-load-bar{background:#000;border:3px solid #fff;border-radius:12px;padding:1rem;color:#fff}
-    .load-label{font-family:"Courier New",monospace;font-size:1.2rem;font-weight:700;margin-right:1rem}
-    .load-bar-container{display:flex;align-items:center;gap:1rem;flex:1;height:30px;background:#222;border:2px solid #0f0;border-radius:999px;overflow:hidden}
-    .load-bar{height:100%;background:linear-gradient(90deg,#f00,#ff0,#0f0);border-radius:999px;transition:width 0.5s ease;min-width:2%}
-    .load-percent{font-family:"Courier New",monospace;font-size:1.2rem;font-weight:700;color:#ff0;min-width:60px;text-align:right}
-    
-    /* Achievements */
-    .achievements{background:#ff9;border:4px dashed #c00;border-radius:20px;padding:1.5rem;margin:1rem 0}
-    .achievements h3{text-align:center;margin-bottom:1rem;font-size:1.5rem}
-    .achievement-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:0.5rem}
-    .achievement{background:#fff;border:2px solid #000;border-radius:8px;padding:0.75rem;display:flex;align-items:center;gap:0.5rem;box-shadow:2px 2px 0 0 #000}
-    .achievement.unlocked{background:#efe;border-color:#0c0}
-    .achievement.locked{opacity:0.5;background:#fafafa}
-    .achievement-icon{font-size:2rem}
-    .achievement-text{font-size:0.85rem;font-weight:700}
-    
-    /* Daily Challenge */
-    .daily-challenge{background:linear-gradient(45deg,#f0f,#0ff);border:4px solid #000;border-radius:20px;padding:1.5rem;margin:1rem 0;position:relative;overflow:hidden}
-    .daily-challenge::before{content:'';position:absolute;top:0;left:0;right:0;bottom:0;background:repeating-linear-gradient(45deg,transparent,transparent 10px,rgba(0,0,0,0.05) 10px,rgba(0,0,0,0.05) 20px);pointer-events:none}
-    .daily-challenge h3{text-align:center;margin-bottom:1rem;font-size:1.5rem;color:#c00}
-    .challenge-content{display:flex;align-items:center;justify-content:center;gap:1rem;flex-wrap:wrap}
-    .challenge-btn{animation:1s infinite pulse}
-    
-    /* Fake Notifications Panel */
-    .notifications-panel{position:fixed;top:80px;right:20px;width:320px;max-height:400px;background:#fff;border:3px solid #000;border-radius:12px;box-shadow:6px 6px 0 0 #f0f;z-index:110;overflow:hidden;display:flex;flex-direction:column}
-    .notifications-panel.hidden{display:none}
-    .notifications-header{background:linear-gradient(90deg,#f00,#f0f);color:#fff;padding:0.75rem 1rem;font-weight:700;display:flex;justify-content:space-between;align-items:center}
-    .notifications-list{flex:1;overflow-y:auto;padding:0.5rem;display:flex;flex-direction:column;gap:0.5rem}
-    .notification{background:#fafafa;border:2px solid #000;border-radius:8px;padding:0.75rem;font-size:0.85rem;box-shadow:2px 2px 0 0 #000;animation:0.3s ease-out pop-in}
-    .notification.warning{border-color:#ff0;background:#fffbcc}
-    .notification.error{border-color:#f00;background:#ffecec}
-    .notification.success{border-color:#0c0;background:#ecffec}
-    .notification-title{font-weight:700;margin-bottom:0.25rem}
-    .notification-time{font-size:0.7rem;color:#888;font-family:"Courier New",monospace}
-    
-    /* Bug of the Day */
-    .bug-of-day{background:#fff;border:4px solid #000;border-radius:20px;padding:1.5rem;margin:1rem 0;box-shadow:6px 6px 0 0 #f90;position:relative}
-    .bug-of-day::before{content:'🐛 BUG OF THE DAY';position:absolute;top:-12px;left:20px;background:#f90;color:#fff;padding:0.25rem 0.75rem;border-radius:999px;font-size:0.8rem;font-weight:700;box-shadow:3px 3px 0 0 #000}
-    .bug-of-day-content{display:grid;grid-template-columns:1fr auto;gap:1rem;align-items:start}
-    .bug-of-day-info h4{font-size:1.3rem;margin-bottom:0.5rem;color:#c00}
-    .bug-of-day-meta{font-size:0.85rem;color:#888;font-family:"Courier New",monospace}
-    .bug-of-day-btn{white-space:nowrap}
-    
-    /* Responsive */
-    @media (max-width: 760px) {
-      .system-status{padding:1rem}
-      .fake-load-bar{padding:0.75rem}
-      .load-label{font-size:1rem}
-      .notifications-panel{right:10px;left:10px;width:auto;top:70px}
-      .achievement-grid{grid-template-columns:1fr}
-      .challenge-content{flex-direction:column}
-      .bug-of-day-content{grid-template-columns:1fr}
+    /* Critical CSS: the splash must look right before the bundle loads. */
+    html, body { margin: 0; padding: 0; }
+    body { background: linear-gradient(135deg, #ff6, #f9f 50%, #6ff); min-height: 100vh; }
+    #splash {
+      position: fixed; inset: 0; z-index: 9000;
+      display: grid; place-items: center;
+      background: repeating-conic-gradient(#f0f 0 15deg, #0ff 15deg 30deg);
+      transition: opacity .35s ease, visibility .35s ease;
     }
+    #splash.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+    #splash .splash-content {
+      text-align: center;
+      background: #fff;
+      border: 5px solid #000;
+      border-radius: 28px;
+      padding: 2rem 2.5rem;
+      box-shadow: 12px 12px 0 0 #000;
+      max-width: min(90vw, 520px);
+      font-family: "Comic Sans MS", "Comic Sans", cursive;
+    }
+    #splash h1 { font-size: clamp(2.5rem, 9vw, 4.5rem); margin: .5rem 0; }
+    #splash .splash-sub { margin-bottom: 1.25rem; }
+    #splash-enter {
+      font: inherit; font-weight: 700; font-size: 1.3rem; cursor: pointer;
+      padding: .9rem 2.4rem; color: #fff;
+      background: linear-gradient(#f33, #ff0080);
+      border: 4px solid #000; border-radius: 14px;
+      box-shadow: 6px 6px 0 0 #000;
+    }
+    #splash-enter:active { transform: translate(4px, 4px); box-shadow: none; }
   </style>
 </head>
 <body>
   <!-- Splash Screen -->
-  <div id="splash" class="splash" role="dialog" aria-label="Loading Watchbugus" aria-modal="true">
+  <div id="splash" role="dialog" aria-label="Welcome to Watchbug" aria-modal="true">
     <div class="splash-content">
-      <img src="/img/mascot.png" alt="" class="splash-hotdog" aria-hidden="true">
+      <img src="/img/mascot.png" alt="" class="splash-hotdog" aria-hidden="true" width="120" height="120">
       <h1 class="rainbow">WATCHBUG</h1>
       <p class="splash-tagline">LOADING BUGS...</p>
-      <p class="splash-sub">u may breathe now.</p>
-      <button id="splash-enter" class="btn btn-big" aria-label="Enter Watchbugus">ENTER</button>
+      <p class="splash-sub">100% real bugs. 0% real promises.</p>
+      <button id="splash-enter" type="button" aria-label="Enter the Watchbug site">ENTER 🐛</button>
+      <p class="splash-sub" style="font-size:.75rem;margin:1rem 0 0;">(or press any key — we are not holding you hostage)</p>
     </div>
   </div>
 
-  <!-- Kumar Banner (Sticky Top) -->
+  <!-- Kumar Banner (sticky, closable) -->
   <header class="kumar-banner" id="kumar-banner" role="banner">
+    <button id="kumar-close" class="kumar-close" type="button" aria-label="Dismiss this very important announcement">×</button>
     <div class="kumar-banner-text">
-      <span class="rainbow">🎉 WATCHBUGUS v0.0.1-pre-alpha-beta-gamma-delta — NOT A SCAM!!! 🎉</span>
-      <u id="kumar-link" class="btn btn-big" tabindex="0" role="button" aria-label="Click for surprise">CLICK HERE FOR FREE HOTDOG 🌭</u>
+      <span class="rainbow">🎉 Watchbug v0.0.1-pre-alpha-beta-gamma-delta — NOT A SCAM!!! 🎉</span>
+      <button id="kumar-link" class="btn btn-big" type="button" aria-label="Click for surprise">CLICK HERE FOR A FREE HOTDOG 🌭</button>
     </div>
   </header>
 
   <!-- Navigation -->
   <nav class="nav" role="navigation" aria-label="Main navigation">
     <div class="brand">
-      <img src="/img/mascot.png" alt="" class="brand-img" aria-hidden="true">
-      <span class="logos">
-        <span class="rainbow">WATCH</span><span>BUG</span><span class="rainbow">US</span>
-      </span>
+      <img src="/img/mascot.png" alt="" class="brand-img" aria-hidden="true" width="48" height="48">
+      <span class="logos"><span class="rainbow">WATCH</span><span>BUG</span></span>
     </div>
     <div class="nav-links">
+      <a href="#what" class="btn btn-small">WHAT IS IT</a>
+      <a href="#how" class="btn btn-small">HOW IT WORKS</a>
       <a href="#features" class="btn btn-small">FEATURES</a>
       <a href="#pricing" class="btn btn-small">PRICING</a>
-      <a href="#gallery" class="btn btn-small">GALLERY</a>
-      <a href="#reviews" class="btn btn-small">REVIEWS</a>
-      <button id="chat-toggle" class="btn btn-small" aria-label="Open chat" aria-expanded="false">CHAT 💬</button>
+      <a href="#faq" class="btn btn-small">FAQ</a>
+      <button id="chat-toggle" class="btn btn-small" type="button" aria-label="Open chat" aria-expanded="false">CHAT 💬</button>
     </div>
   </nav>
 
-  <!-- Hero Section -->
-  <header class="hero" role="banner">
-    <div class="hero-content">
-      <h1 class="rainbow">Make Bug Reports<br>for <span class="cheap">$0.000001</span>!!!</h1>
-      <p class="lead">The only bug tracker that <strong>pays YOU</strong> to find bugs. (Terms: payment in exposure & hotdogs)</p>
-      <div class="hero-ctas">
-        <button id="hero-generate" class="btn btn-big" aria-label="Start free trial">START FREE TRIAL 🚀</button>
-        <a href="#pricing" class="btn btn-big" style="background:linear-gradient(#0f0,#00f);animation:none">SEE PRICING</a>
+  <main>
+    <!-- ================= HERO ================= -->
+    <header class="hero-editorial" role="banner">
+      <div>
+        <p class="section-kicker">Open source · Self-hosted · No SaaS</p>
+        <h1>Bug reports your users <span class="rainbow">actually finish</span>.</h1>
+        <p class="lead">
+          Watchbug is a tiny bug-reporting widget you host yourself. One script tag adds a
+          floating button. Your user clicks it, screenshots the page, scribbles on it — and
+          Watchbug <strong>erases the sensitive pixels before the image is ever encoded</strong>.
+          You get a report you can reproduce. Nobody else gets your users' data.
+        </p>
+        <ul class="hero-points">
+          <li>~16 KB gzipped core</li>
+          <li>0 runtime deps</li>
+          <li>3 containers</li>
+          <li>your infra only</li>
+        </ul>
+        <div class="hero-ctas">
+          <a href="#what" class="btn btn-big">WHAT IS WATCHBUG?</a>
+          <button id="hero-generate" class="btn btn-big" type="button" style="background:linear-gradient(#0f0,#00f);animation:none">TRY THE FAKE DEMO 🚀</button>
+        </div>
+        <p class="hits"><span id="hits-counter" class="hits-counter">0</span> developers pretend to use Watchbug right now</p>
       </div>
-      <p class="hits"><span id="hits-counter" class="hits-counter">125,847</span> developers already joined (probably bots)</p>
-    </div>
-    <div class="hero-visual">
-      <img src="/img/thumb-shark.webp" alt="Screenshot of Watchbugus dashboard showing a shark wearing a headset" class="hero-thumb" loading="eager">
-      <img src="/img/hotdog.webp" alt="" class="hotdog h1" aria-hidden="true">
-      <img src="/img/hotdog.webp" alt="" class="hotdog h2" aria-hidden="true">
-      <div class="sticker s1" aria-hidden="true">🔥</div>
-      <div class="sticker s2" aria-hidden="true">💯</div>
-    </div>
-  </header>
-
-  <hr>
-
-  <!-- Fake System Status Panel -->
-  <section class="system-status" id="system-status" aria-labelledby="system-status-heading">
-    <h2 id="system-status-heading" class="rainbow">🖥️ SYSTEM STATUS</h2>
-    <div class="status-grid" id="status-grid"></div>
-    <div class="fake-load-bar">
-      <span class="load-label">SYSTEM LOAD:</span>
-      <div class="load-bar-container">
-        <div id="load-bar" class="load-bar"></div>
-        <span id="load-percent" class="load-percent">0%</span>
+      <div class="hero-stage">
+        <img src="/img/mascot.png" alt="Watchbug mascot: a cheerful bug wearing a headset" class="hero-mascot" width="340" height="340">
+        <span class="hero-tag t1">SEC-02 approved*</span>
+        <span class="hero-tag t2">*not actually audited</span>
       </div>
-    </div>
-  </section>
+    </header>
 
-  <hr>
+    <!-- ================= WHAT IS IT ================= -->
+    <section class="section wrap" id="what" aria-labelledby="what-heading">
+      <p class="section-kicker">The honest version</p>
+      <h2 id="what-heading" class="rainbow-text">What the hell is Watchbug? 🐛</h2>
+      <p class="section-lede">
+        It is a bug-reporting tool, like the little "Send feedback" button every SaaS app has —
+        except it runs on <strong>your</strong> server, and the screenshot is cleaned
+        <strong>on the user's machine</strong> before it is sent anywhere. Not in a dashboard.
+        Not in a cloud bucket. On the canvas, before encoding. That distinction is the whole product.
+      </p>
 
-  <!-- System Status Panel -->
-  <section class="system-status" id="system-status" aria-labelledby="system-status-heading">
-    <h2 id="system-status-heading" class="rainbow">🖥️ SYSTEM STATUS</h2>
-    <div class="status-grid" id="status-grid"></div>
-    <div class="fake-load-bar">
-      <span class="load-label">SYSTEM LOAD:</span>
-      <div class="load-bar-container">
-        <div id="load-bar" class="load-bar"></div>
-        <span id="load-percent" class="load-percent">0%</span>
+      <div class="card-grid">
+        <article class="info-card">
+          <span class="emoji" aria-hidden="true">🔌</span>
+          <h3>One &lt;script&gt; tag</h3>
+          <p>Drop <code>&lt;script src="/watchbug.js" async&gt;&lt;/script&gt;</code> in your page and call <code>Watchbug.init()</code>. No npm install, no build step, no React context provider you have to thread through 14 files.</p>
+        </article>
+        <article class="info-card">
+          <span class="emoji" aria-hidden="true">🏠</span>
+          <h3>Self-hosted by default</h3>
+          <p>API, panel and PostgreSQL, all in one <code>docker-compose.yml</code>. Your reports live in your database and your filesystem volume. There is no "our cloud" to opt out of.</p>
+        </article>
+        <article class="info-card">
+          <span class="emoji" aria-hidden="true">🖤</span>
+          <h3>Destructive masking</h3>
+          <p>Passwords, tokens, card numbers and anything marked <code>data-watchbug-sensitive</code> get a flat opaque fill painted over the <code>ImageData</code>. The original pixels are gone. No CSS overlay. No blur to un-blur.</p>
+        </article>
+        <article class="info-card">
+          <span class="emoji" aria-hidden="true">🧾</span>
+          <h3>Context, not vibes</h3>
+          <p>Every report can carry console logs, environment metadata, the URL, the viewport and the annotation layer. Enough to reproduce, small enough to read on a laptop.</p>
+        </article>
       </div>
-    </div>
-  </section>
 
-  <hr>
+      <p class="callout">
+        <strong>Reality check:</strong> this page is a parody for a university project. The product
+        above is real; the hotdogs, the prize wheel and Steve are not. Steve is a stock character
+        and, frankly, a liability.
+      </p>
+    </section>
 
-  <!-- Achievements -->
-  <section class="achievements" id="achievements" aria-labelledby="achievements-heading">
-    <h2 id="achievements-heading" class="rainbow">🏆 ACHIEVEMENTS</h2>
-    <div class="achievement-grid" id="achievement-grid"></div>
-  </section>
+    <!-- ================= HOW IT WORKS ================= -->
+    <section class="section wrap" id="how" aria-labelledby="how-heading">
+      <p class="section-kicker">Three steps, no mystery</p>
+      <h2 id="how-heading" class="rainbow-text">How it works</h2>
+      <p class="section-lede">The flow is deliberately boring, because "boring" is what makes a bug report trustworthy.</p>
 
-  <hr>
+      <ol class="steps-grid">
+        <li class="step-card">
+          <h3>The user clicks the floating bug</h3>
+          <p>The widget opens in a closed Shadow DOM, so your CSS cannot break it and its CSS cannot break you. The user captures the current tab through the browser's own screen-share picker.</p>
+        </li>
+        <li class="step-card">
+          <h3>They annotate, then Watchbug masks</h3>
+          <p>Arrows, boxes, text. Then the redactor walks the pixels: password fields, credential patterns and <code>data-watchbug-sensitive</code> nodes are filled with solid black <em>inside the canvas data</em>. Only then is the image encoded to WebP or PNG.</p>
+        </li>
+        <li class="step-card">
+          <h3>You get a report you can act on</h3>
+          <p>A multipart POST lands on your API: image, annotation layer, console logs, environment. It is stored in your PostgreSQL and your volume, and rendered inert in your admin panel. No third party in the loop.</p>
+        </li>
+      </ol>
+    </section>
 
-  <!-- Daily Challenge -->
-  <section class="daily-challenge" id="daily-challenge" aria-labelledby="challenge-heading">
-    <h2 id="challenge-heading" class="rainbow">🎯 DAILY CHALLENGE</h2>
-    <div class="challenge-content" id="challenge-content"></div>
-  </section>
+    <!-- ================= WHY SELF-HOST ================= -->
+    <section class="section wrap" id="why" aria-labelledby="why-heading">
+      <p class="section-kicker">The uncomfortable comparison</p>
+      <h2 id="why-heading" class="rainbow-text">Why not just use a SaaS?</h2>
+      <p class="section-lede">You absolutely can. It is faster to set up, and someone else carries the pager. The trade is where the screenshots end up.</p>
 
-  <hr>
-
-  <!-- Bug of the Day -->
-  <section class="bug-of-day" id="bug-of-day" aria-labelledby="bug-day-heading">
-    <h2 id="bug-day-heading" class="rainbow">🐛 BUG OF THE DAY</h2>
-    <div class="bug-of-day-content" id="bug-of-day-content"></div>
-  </section>
-
-  <hr>
-
-  <!-- Generator Demo Section -->
-  <section class="gen-box" id="generator" aria-labelledby="gen-heading">
-    <h2 id="gen-heading" class="rainbow">Try the Bug Generator</h2>
-    <p class="lead">Type a bug title, watch our AI generate a <em>perfect</em> reproduction. (AI = A Human Intern)</p>
-    <form id="gen-form" class="generator" aria-label="Bug generator form">
-      <div class="options">
-        <label><input type="checkbox" id="opt-screenshot" checked> Include screenshot (fake)</label>
-        <label><input type="checkbox" id="opt-logs" checked> Include console logs (fake)</label>
-        <label><input type="checkbox" id="opt-env" checked> Include env metadata (fake)</label>
+      <div class="table-scroll">
+        <table class="compare">
+          <thead>
+            <tr>
+              <th scope="col">Question</th>
+              <th scope="col">Typical SaaS widget</th>
+              <th scope="col">Watchbug, self-hosted</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">Where does the screenshot live?</th>
+              <td>Vendor object storage, under their retention policy</td>
+              <td class="yes">Your disk, under your retention policy (or your `rm`)</td>
+            </tr>
+            <tr>
+              <th scope="row">Who can read your users' console logs?</th>
+              <td>You, the vendor, and whoever buys the vendor</td>
+              <td class="yes">Only the people you give a login to</td>
+            </tr>
+            <tr>
+              <th scope="row">Can you audit the masking code?</th>
+              <td class="no">No — minified bundle, closed server</td>
+              <td class="yes">Yes — it is a file in the repo</td>
+            </tr>
+            <tr>
+              <th scope="row">What happens when you stop paying?</th>
+              <td class="no">Your widget stops, your history is export-limited</td>
+              <td class="yes">Nothing. It is a container on your box.</td>
+            </tr>
+            <tr>
+              <th scope="row">Setup effort</th>
+              <td class="yes">Copy-paste, five minutes</td>
+              <td class="no">Compose up, env vars, one admin user — an afternoon</td>
+            </tr>
+            <tr>
+              <th scope="row">Vibe</th>
+              <td>Enterprise gradient, "book a demo"</td>
+              <td>Comic Sans, a bug with a headset, and this page</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-      <div class="gen-input-wrap">
-        <input type="text" id="bug-title" placeholder="e.g. 'Button click deletes production database'" required autocomplete="off" aria-label="Bug title">
-        <button type="submit" class="btn btn-big" id="gen-submit">GENERATE BUG REPORT</button>
+    </section>
+
+    <!-- ================= MASK DEMO ================= -->
+    <section class="section wrap" id="masking" aria-labelledby="masking-heading">
+      <p class="section-kicker">SEC-02, but make it visible</p>
+      <h2 id="masking-heading" class="rainbow-text">Watch the pixels die 🖤</h2>
+      <p class="section-lede">
+        Masking is not a translucent rectangle drawn on top of a screenshot. It is a write into the
+        image buffer, before encoding. Here is a miniature, honest demo of the idea.
+      </p>
+
+      <div class="mask-demo">
+        <div class="mock-window" aria-label="Fake customer account form">
+          <div class="mock-bar" aria-hidden="true">
+            <span class="mock-dot"></span><span class="mock-dot"></span><span class="mock-dot"></span>
+            <span style="margin-left:.4rem;">account-settings.html</span>
+          </div>
+          <div class="mock-body">
+            <div class="mock-row"><span>Email</span><div class="mock-value">dave@example.com</div></div>
+            <div class="mock-row"><span>Password</span><div class="mock-value sensitive" data-mask>hunter2-but-better</div></div>
+            <div class="mock-row"><span>API key</span><div class="mock-value sensitive" data-mask>wb_live_9f3a…c41d</div></div>
+            <div class="mock-row"><span>Card</span><div class="mock-value sensitive" data-mask>4242 4242 4242 4242</div></div>
+            <div class="mock-row"><span>Plan</span><div class="mock-value">Broke (free)</div></div>
+          </div>
+        </div>
+
+        <div class="mask-demo-copy">
+          <p><strong>What Watchbug does on capture:</strong></p>
+          <ul>
+            <li>Find <code>input[type=password]</code> and credential-looking values.</li>
+            <li>Find anything marked <code>data-watchbug-sensitive</code>.</li>
+            <li>Paint a flat, fully opaque rectangle into the <code>ImageData</code>.</li>
+            <li>Only then call <code>toBlob()</code> and upload.</li>
+          </ul>
+          <button id="mask-demo-btn" class="btn btn-big" type="button">MASK THE SECRETS</button>
+          <p id="mask-demo-status" role="status" aria-live="polite">3 secrets currently exposed. This is bad.</p>
+          <p style="font-size:.78rem;color:#57506a;">Demo runs on DOM, not a real canvas — click it twice and nothing bad happens. That is the point.</p>
+        </div>
       </div>
-      <p id="credits" class="credits">Credits remaining: <span id="credits-count">3</span> / 3 (refills never)</p>
-    </form>
-    <div id="gen-output" class="gen-output" hidden aria-live="polite"></div>
-  </section>
+    </section>
 
-  <hr>
+    <!-- ================= FEATURES ================= -->
+    <section class="section wrap" id="features" aria-labelledby="features-heading">
+      <p class="section-kicker">The feature list, lightly roasted</p>
+      <h2 id="features-heading" class="rainbow-text">Features (mostly real)</h2>
+      <p class="section-lede">Each card is a real capability. The joke is in the delivery, not in the claim.</p>
+      <div class="feature-grid" id="feature-grid" role="list"></div>
+    </section>
 
-  <!-- Features Section -->
-  <section class="features" id="features" aria-labelledby="features-heading">
-    <h2 id="features-heading" class="rainbow">Features (Totally Real)</h2>
-    <div class="feature-grid" id="feature-grid" role="list"></div>
-  </section>
+    <!-- ================= FAQ ================= -->
+    <section class="section wrap" id="faq" aria-labelledby="faq-heading">
+      <p class="section-kicker">Questions people actually ask</p>
+      <h2 id="faq-heading" class="rainbow-text">FAQ (answers included)</h2>
 
-  <hr>
-
-  <!-- Pricing Section -->
-  <section class="pricing" id="pricing" aria-labelledby="pricing-heading">
-    <h2 id="pricing-heading" class="rainbow">Pricing (No Hidden Fees* *fees are hidden)</h2>
-    <div class="plans" id="plans" role="list"></div>
-  </section>
-
-  <hr>
-
-  <!-- Gallery Section -->
-  <section class="gallery" id="gallery" aria-labelledby="gallery-heading">
-    <h2 id="gallery-heading" class="rainbow">Gallery of "Success"</h2>
-    <div class="gallery-grid" id="gallery-grid" role="list"></div>
-  </section>
-
-  <hr>
-
-  <!-- Reviews Section -->
-  <section class="reviews" id="reviews" aria-labelledby="reviews-heading">
-    <h2 id="reviews-heading" class="rainbow">Reviews (100% Authentic)</h2>
-    <div class="review-grid" id="review-grid" role="list"></div>
-  </section>
-
-  <hr>
-
-  <!-- Not Kumar Ad -->
-  <section class="notkumar-ad" id="notkumar" aria-labelledby="notkumar-heading">
-    <h2 id="notkumar-heading" class="rainbow">Not Kumar's Consulting</h2>
-    <div class="notkumar-content">
-      <img src="/img/notkumar.jpg" alt="Steve from accounting pretending to be a developer" class="notkumar-img" loading="lazy">
-      <div class="notkumar-copy">
-        <h3 class="rainbow">Book a Call with Steve</h3>
-        <p>Steve knows <em>everything</em> about bugs. He once fixed a segfault by yelling at the server.</p>
-        <p class="notkumar-price" id="notkumar-price">$47/hr (negotiable in hotdogs)</p>
-        <button id="notkumar-book" class="btn btn-big" aria-label="Book call with Steve">BOOK CALL 📞</button>
-        <p class="notkumar-fine">* Steve is not Kumar. Kumar is not Steve. We are not affiliated with Kumar, Steve, or hotdogs.</p>
+      <div class="faq">
+        <details>
+          <summary>Is this a real product or a joke?</summary>
+          <div>Both, awkwardly. Watchbug is the real project this parody site is promoting: a self-hosted bug-reporting SDK with destructive screenshot masking. The site around it is a joke. The repository is not.</div>
+        </details>
+        <details>
+          <summary>Does it really need only one script tag?</summary>
+          <div>Yes: one async script for the core, plus a lazy chunk for the annotation editor when the user actually opens it. The core stays small because it refuses to ship a framework to draw a rectangle.</div>
+        </details>
+        <details>
+          <summary>What exactly gets masked?</summary>
+          <div>Password inputs, values that look like credentials/tokens/card numbers, and any element you mark with <code>data-watchbug-sensitive</code>. The mask is a flat opaque fill written into the pixel buffer before encoding. Blur is deliberately not offered: it is partly invertible.</div>
+        </details>
+        <details>
+          <summary>Can Watchbug read my users' cookies or tokens?</summary>
+          <div>No, and that is a hard rule, not a setting. The SDK never reads cookies, local/session storage, auth headers or bearer tokens. The only thing it sends that identifies your project is the public, write-only <code>project_key</code>.</div>
+        </details>
+        <details>
+          <summary>What do I need to run it?</summary>
+          <div>Docker and a domain. <code>docker compose up</code> gives you the API, the admin panel and PostgreSQL. Configuration is environment variables; there are no secrets in the repository.</div>
+        </details>
+        <details>
+          <summary>Why is the admin panel so ugly here?</summary>
+          <div>Because this is the marketing parody, not the panel. The panel is a calm, boring triage screen. Calm and boring is a compliment in ops tooling.</div>
+        </details>
+        <details>
+          <summary>Who is Steve?</summary>
+          <div>Steve from Accounting is a fictional "senior bug consultant" invented for this parody. He knows nothing about bugs. He will still call you.</div>
+        </details>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <hr>
+    <!-- ================= PRICING ================= -->
+    <section class="section wrap" id="pricing" aria-labelledby="pricing-heading">
+      <p class="section-kicker">A parody within a parody</p>
+      <h2 id="pricing-heading" class="rainbow-text">Pricing (no hidden fees* *fees are hidden)</h2>
+      <p class="section-lede">The real project is open source and costs $0. This pricing table is a joke at the expense of pricing tables.</p>
+      <div class="plans" id="plans" role="list"></div>
+    </section>
+
+    <!-- ================= GENERATOR DEMO ================= -->
+    <section class="section wrap" id="generator" aria-labelledby="gen-heading">
+      <p class="section-kicker">Interactive nonsense</p>
+      <h2 id="gen-heading" class="rainbow-text">Try the Bug Generator</h2>
+      <p class="section-lede">Type a bug title and watch our AI (A Human Intern) produce a completely fabricated report. It will not fix anything. It will judge you.</p>
+      <form id="gen-form" class="generator" aria-label="Bug generator form">
+        <div class="options">
+          <label><input type="checkbox" id="opt-screenshot" checked> Include screenshot (fake)</label>
+          <label><input type="checkbox" id="opt-logs" checked> Include console logs (fake)</label>
+          <label><input type="checkbox" id="opt-env" checked> Include env metadata (fake)</label>
+        </div>
+        <div class="gen-input-wrap">
+          <input type="text" id="bug-title" placeholder="e.g. 'Button click deletes production database'" required autocomplete="off" aria-label="Bug title">
+          <button type="submit" class="btn btn-big" id="gen-submit">GENERATE BUG REPORT</button>
+        </div>
+        <p id="credits" class="credits">Credits remaining: <span id="credits-count">3</span> / 3 (refills never)</p>
+      </form>
+      <div id="gen-output" class="gen-output" hidden aria-live="polite"></div>
+    </section>
+
+    <!-- ================= PLAYGROUND ================= -->
+    <section class="section wrap playground" id="playground" aria-labelledby="playground-heading">
+      <p class="section-kicker">The joke layer, clearly labelled</p>
+      <h2 id="playground-heading" class="rainbow-text">The Unnecessary Dashboard™</h2>
+      <p class="section-lede">None of these numbers mean anything. They update constantly to create the sensation of productivity. Enjoy.</p>
+
+      <div class="system-status" id="system-status" aria-labelledby="system-status-heading">
+        <h3 id="system-status-heading">🖥️ SYSTEM STATUS</h3>
+        <div class="status-grid" id="status-grid"></div>
+        <div class="fake-load-bar">
+          <span class="load-label">SYSTEM LOAD:</span>
+          <div class="load-bar-container">
+            <div id="load-bar" class="load-bar"></div>
+            <span id="load-percent" class="load-percent">0%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="achievements" id="achievements" aria-labelledby="achievements-heading">
+        <h3 id="achievements-heading">🏆 ACHIEVEMENTS</h3>
+        <div class="achievement-grid" id="achievement-grid"></div>
+      </div>
+
+      <div class="daily-challenge" id="daily-challenge" aria-labelledby="challenge-heading">
+        <h3 id="challenge-heading">🎯 DAILY CHALLENGE</h3>
+        <div class="challenge-content" id="challenge-content"></div>
+      </div>
+
+      <div class="bug-of-day" id="bug-of-day" aria-labelledby="bug-day-heading">
+        <h3 id="bug-day-heading">🐛 BUG OF THE DAY</h3>
+        <div class="bug-of-day-content" id="bug-of-day-content"></div>
+      </div>
+    </section>
+
+    <!-- ================= GALLERY ================= -->
+    <section class="section wrap" id="gallery" aria-labelledby="gallery-heading">
+      <p class="section-kicker">Definitely not stock photos</p>
+      <h2 id="gallery-heading" class="rainbow-text">Gallery of "Success"</h2>
+      <p class="section-lede">Imaginary screenshots from imaginary customers who are doing great, thank you for asking.</p>
+      <div class="gallery-grid" id="gallery-grid" role="list"></div>
+    </section>
+
+    <!-- ================= REVIEWS ================= -->
+    <section class="section wrap" id="reviews" aria-labelledby="reviews-heading">
+      <p class="section-kicker">100% authentic, 0% verifiable</p>
+      <h2 id="reviews-heading" class="rainbow-text">Reviews</h2>
+      <div class="review-grid" id="review-grid" role="list"></div>
+    </section>
+
+    <!-- ================= NOT KUMAR ================= -->
+    <section class="section wrap notkumar-ad" id="notkumar" aria-labelledby="notkumar-heading">
+      <p class="section-kicker">A completely unnecessary upsell</p>
+      <h2 id="notkumar-heading" class="rainbow-text">Not Kumar's Consulting</h2>
+      <div class="notkumar-content">
+        <img src="/img/notkumar.svg" alt="Steve from accounting pretending to be a developer" class="notkumar-img" loading="lazy" width="320" height="320">
+        <div class="notkumar-copy">
+          <h3>Book a call with Steve</h3>
+          <p>Steve knows <em>everything</em> about bugs. He once fixed a segfault by yelling at the server. He will not read your code.</p>
+          <p class="notkumar-price" id="notkumar-price">$47/hr (negotiable in hotdogs)</p>
+          <button id="notkumar-book" class="btn btn-big" type="button" aria-label="Book call with Steve">BOOK CALL 📞</button>
+          <p class="notkumar-fine">* Steve is not Kumar. Kumar is not Steve. We are not affiliated with Kumar, Steve, or hotdogs.</p>
+        </div>
+      </div>
+    </section>
+  </main>
 
   <!-- Footer -->
   <footer role="contentinfo">
     <div class="links">
-      <a href="#privacy" class="btn btn-ugly">Privacy (lol)</a>
-      <a href="#terms" class="btn btn-ugly">Terms (yolo)</a>
-      <a href="#contact" class="btn btn-ugly">Contact (don't)</a>
-      <a href="https://github.com" target="_blank" rel="noopener" class="btn btn-ugly">GitHub (stars pls)</a>
+      <a href="#what" class="btn btn-ugly">What is Watchbug</a>
+      <a href="#features" class="btn btn-ugly">Features</a>
+      <a href="#faq" class="btn btn-ugly">FAQ</a>
+      <a href="https://github.com/rafseggom/Watchbug_TFG" target="_blank" rel="noopener noreferrer" class="btn btn-ugly">GitHub (stars pls)</a>
     </div>
-    <p class="copyright">© 2026 Watchbugus Inc. All rights reserved (we reserve the right to not reserve rights).</p>
+    <p class="legal-note">
+      Watchbug is an open-source, self-hostable bug-reporting SDK. This domain hosts a parody
+      marketing page for it, built for fun and for a TFG. Hotdogs are virtual, Steve is fictional,
+      and no bug was harmed (many were invented). © 2026 the Watchbug project.
+    </p>
     <p class="made-with">Made with 🌭 and questionable decisions</p>
   </footer>
 
   <!-- Chat Widget -->
   <div id="chat-widget" class="chat" role="dialog" aria-label="Chat support" aria-modal="false" hidden>
     <div class="chat-head">
-      <img src="/img/chatbot.webp" alt="" class="chat-avatar" aria-hidden="true">
+      <img src="/img/chatbot.svg" alt="" class="chat-avatar" aria-hidden="true" width="40" height="40">
       <div>
-        <strong>PikzBot 3000</strong>
+        <strong>BugBot 3000</strong>
         <span id="chat-badge" class="badge">3</span>
       </div>
-      <button id="chat-close" class="btn btn-small" aria-label="Close chat">×</button>
+      <button id="chat-close" class="btn btn-small" type="button" aria-label="Close chat">×</button>
     </div>
     <div class="chat-body" id="chat-body" role="log" aria-live="polite"></div>
     <form class="chat-form" id="chat-form" aria-label="Chat input">
@@ -322,31 +438,32 @@
 
   <!-- Cookie Banner -->
   <div id="cookie-banner" class="cookie" role="dialog" aria-label="Cookie preferences" hidden>
-    <p>We use cookies to track your bugs, your soul, and your hotdog preferences.</p>
+    <p>We use cookies to remember that you clicked "accept". That is genuinely all this site stores.</p>
     <div class="cookie-btns">
-      <button id="cookie-accept" class="btn btn-big" aria-label="Accept all cookies">ACCEPT HARDER 🍪</button>
-      <button id="cookie-reject" class="btn btn-small" aria-label="Reject cookies">reject (boring)</button>
+      <button id="cookie-accept" class="btn btn-big" type="button" aria-label="Accept cookies">ACCEPT 🍪</button>
+      <button id="cookie-reject" class="btn btn-small" type="button" aria-label="Reject cookies">reject (it still works)</button>
     </div>
   </div>
 
   <!-- Clippy Assistant -->
   <div id="clippy" class="clippy" role="dialog" aria-label="Clippy assistant" aria-modal="false" hidden>
-    <img src="/img/clippy.webp" alt="Clippy assistant" class="clippy-img" aria-hidden="true">
+    <img src="/img/clippy.svg" alt="" class="clippy-img" aria-hidden="true" width="80" height="80">
     <div class="clippy-bubble" id="clippy-bubble" role="status" aria-live="polite"></div>
     <div class="clippy-actions">
-      <button id="clippy-yes" class="btn btn-small">YES</button>
-      <button id="clippy-no" class="btn btn-small">NO</button>
+      <button id="clippy-yes" class="btn btn-small" type="button">YES</button>
+      <button id="clippy-no" class="btn btn-small" type="button">NO</button>
     </div>
   </div>
 
   <!-- Popup Modal (reused) -->
   <div id="popup" class="popup" role="dialog" aria-modal="true" aria-labelledby="popup-title" hidden>
     <div class="popup-box">
+      <button id="popup-x" class="popup-x" type="button" aria-label="Close dialog">×</button>
       <div class="popup-title" id="popup-title"></div>
       <div class="popup-content" id="popup-content"></div>
       <div class="popup-actions">
-        <button id="popup-ok" class="btn btn-big">OK</button>
-        <button id="popup-cancel" class="btn btn-small">CANCEL</button>
+        <button id="popup-ok" class="btn btn-big" type="button">OK</button>
+        <button id="popup-cancel" class="btn btn-small" type="button">CLOSE</button>
       </div>
     </div>
   </div>
@@ -361,8 +478,8 @@
       <p class="virus-warn">SCANNING YOUR BROWSER FOR BUGS...</p>
       <div class="virus-bar"><div id="virus-fill" class="virus-fill"></div></div>
       <ul id="virus-list" class="virus-list"></ul>
-      <button id="virus-remove" class="btn btn-big">REMOVE ALL ($4.99)</button>
-      <button id="virus-close" class="btn btn-small">I'LL RISK IT</button>
+      <button id="virus-remove" class="btn btn-big" type="button">REMOVE ALL ($4.99)</button>
+      <button id="virus-close" class="btn btn-small" type="button">I'LL RISK IT</button>
     </div>
   </div>
 
@@ -373,8 +490,8 @@
         <div class="wheel-msg" id="wheel-msg"></div>
         <div class="wheel-pointer" id="wheel-pointer"></div>
       </div>
-      <button id="wheel-spin" class="btn btn-big">SPIN 🎰</button>
-      <button id="wheel-close" class="btn btn-small">NO THANKS</button>
+      <button id="wheel-spin" class="btn btn-big" type="button">SPIN 🎰</button>
+      <button id="wheel-close" class="btn btn-small" type="button">NO THANKS</button>
     </div>
   </div>
 
@@ -382,22 +499,24 @@
   <div id="phone-call" class="call" role="dialog" aria-label="Phone call with Steve" aria-modal="true" hidden>
     <div class="call-box">
       <div class="call-avatar" data-state="idle">
-        <img src="/img/notkumar.jpg" alt="Steve">
+        <img src="/img/notkumar.svg" alt="" width="96" height="96">
       </div>
       <div class="call-status" id="call-status">RINGING...</div>
       <div class="call-name">Steve from Accounting</div>
       <div class="call-role">Senior Bug Consultant</div>
-      <button id="call-hangup" class="btn btn-big">HANG UP 📞</button>
+      <button id="call-hangup" class="btn btn-big" type="button">HANG UP 📞</button>
     </div>
   </div>
 
   <!-- Captcha Modal -->
   <div id="captcha-modal" class="captcha" role="dialog" aria-label="Captcha verification" aria-modal="true" hidden>
     <div class="captcha-box">
+      <button id="captcha-close" class="popup-x" type="button" aria-label="Cancel captcha">×</button>
       <div class="popup-title">🤖 VERIFY YOU'RE HUMAN 🤖</div>
       <p class="captcha-msg" id="captcha-msg">Select all images with a <strong>RED ARROW</strong></p>
       <div class="captcha-grid" id="captcha-grid" role="group" aria-label="Captcha images"></div>
-      <button id="captcha-verify" class="btn btn-big" disabled>VERIFY</button>
+      <button id="captcha-verify" class="btn btn-big" type="button" disabled>VERIFY</button>
+      <button id="captcha-cancel" class="btn btn-small" type="button">CANCEL (I'm a robot)</button>
     </div>
   </div>
 
@@ -408,13 +527,22 @@
   <div id="notifications-panel" class="notifications-panel hidden" role="region" aria-label="Notifications" aria-live="polite">
     <div class="notifications-header">
       <span>🔔 NOTIFICATIONS</span>
-      <button id="notifications-close" class="btn btn-small" aria-label="Close notifications">×</button>
+      <button id="notifications-close" class="btn btn-small" type="button" aria-label="Close notifications">×</button>
     </div>
     <div class="notifications-list" id="notifications-list"></div>
   </div>
 
+  <!-- Crawling bugs (the actual game) -->
+  <div id="bug-layer" role="group" aria-label="Crawling bugs mini-game"></div>
+  <div class="bug-counter" id="bug-counter">🐛 squashed: <span class="count" id="bugs-squashed">0</span></div>
+
+  <!-- Leap of faith -->
+  <button id="panic-btn" class="panic-btn" type="button" title="Close every popup, modal and banner on this page">
+    🚪 CLOSE EVERYTHING
+  </button>
+
   <!-- Music Toggle -->
-  <button id="music-toggle" class="music btn" aria-label="Toggle background music" aria-pressed="false">🎵 MUSIC</button>
+  <button id="music-toggle" class="music btn" type="button" aria-label="Toggle background music" aria-pressed="false">🔇 MUSIC OFF</button>
 
   <script type="module" src="/src/main.ts"></script>
 </body>

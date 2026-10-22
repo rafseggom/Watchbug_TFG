@@ -2,8 +2,6 @@
  * Not Kumar Ad Component
  */
 
-import { initPhoneCall } from './PhoneCall.ts';
-
 export interface AppState {
   credits: number;
   visitCount: number;
@@ -15,19 +13,11 @@ export interface AppState {
   callActive: boolean;
 }
 
-export function initNotKumar(state: AppState, audio: any): void {
+export function initNotKumar(_state: AppState): void {
   const bookBtn = document.getElementById('notkumar-book')!;
 
   bookBtn.addEventListener('click', () => {
-    // Dispatch event to trigger phone call
-    window.dispatchEvent(new CustomEvent('watchbugus:call'));
-  });
-
-  // Listen for call event from pricing
-  window.addEventListener('watchbugus:call', () => {
-    const callModal = document.getElementById('phone-call')!;
-    callModal.hidden = false;
-    state.callActive = true;
-    initPhoneCall(state, audio);
+    // PhoneCall owns the listener and the modal state.
+    window.dispatchEvent(new CustomEvent('watchbug:call'));
   });
 }

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 225" role="img" aria-label="A fancy car next to a tiny toy car">
+  <rect width="400" height="225" fill="#31e7ff"/>
+  <path d="M0 168h400v57H0z" fill="#20202e"/>
+  <path d="M0 168h400" stroke="#fff" stroke-width="6" stroke-dasharray="28 20"/>
+  <!-- big car -->
+  <g transform="translate(24 96)" stroke="#000" stroke-width="5" stroke-linejoin="round">
+    <path d="M18 58c-10 0-16-8-14-18l6-18c2-6 8-10 14-10h96c8 0 14 4 18 10l16 20c6 8 2 16-8 16z" fill="#ff0080"/>
+    <path d="M44 12l12-18h46l10 18z" fill="#c9f6ff"/>
+    <circle cx="54" cy="58" r="18" fill="#20202e"/><circle cx="54" cy="58" r="7" fill="#ddd"/>
+    <circle cx="132" cy="58" r="18" fill="#20202e"/><circle cx="132" cy="58" r="7" fill="#ddd"/>
+    <rect x="10" y="34" width="18" height="8" rx="4" fill="#ffd400"/>
+  </g>
+  <text x="52" y="98" font-family="Comic Sans MS, cursive" font-size="14" fill="#000">$1,000,000 bug</text>
+  <!-- toy car -->
+  <g transform="translate(286 138)" stroke="#000" stroke-width="4" stroke-linejoin="round">
+    <path d="M8 26c-6 0-8-4-6-9l3-8c1-3 4-5 7-5h38c4 0 7 2 9 5l6 9c3 4 0 8-4 8z" fill="#b6ff3c"/>
+    <circle cx="22" cy="27" r="8" fill="#20202e"/><circle cx="58" cy="27" r="8" fill="#20202e"/>
+  </g>
+  <text x="250" y="132" font-family="Comic Sans MS, cursive" font-size="14" fill="#000">$1 bug</text>
+  <text x="120" y="205" font-family="Comic Sans MS, cursive" font-size="18" fill="#fff">guess which one crashed prod</text>
+</svg>

@@ -21,7 +21,7 @@ const STATUS_ITEMS = [
 const ACHIEVEMENTS = [
   { id: 'first-bug', name: 'First Bug', desc: 'Submitted your first bug report', icon: '🐛', unlocked: true },
   { id: 'hotdog-lover', name: 'Hotdog Lover', desc: 'Clicked the hotdog button 10 times', icon: '🌭', unlocked: true },
-  { id: 'night-owl', name: 'Night Owl', desc: 'Used Watchbugus at 3 AM', icon: '🦉', unlocked: false },
+  { id: 'night-owl', name: 'Night Owl', desc: 'Used Watchbug at 3 AM', icon: '🦉', unlocked: false },
   { id: 'bug-squasher', name: 'Bug Squasher', desc: 'Fixed 100 bugs (in your dreams)', icon: '🔨', unlocked: false },
   { id: 'steve-friend', name: 'Steve\'s Friend', desc: 'Talked to Steve for 10 minutes', icon: '📞', unlocked: false },
   { id: 'wheel-master', name: 'Wheel Master', desc: 'Won the rigged prize wheel', icon: '🎰', unlocked: false },
@@ -164,10 +164,10 @@ function handleChallengeAction(action: string): void {
       document.getElementById('kumar-link')!.click();
       break;
     case 'wheel':
-      window.dispatchEvent(new CustomEvent('watchbugus:wheel'));
+      window.dispatchEvent(new CustomEvent('watchbug:wheel'));
       break;
     case 'call':
-      window.dispatchEvent(new CustomEvent('watchbugus:call'));
+      window.dispatchEvent(new CustomEvent('watchbug:call'));
       break;
     case 'virus':
       const virusScanner = document.getElementById('virus-scanner')!;
@@ -208,11 +208,12 @@ function initNotifications(): void {
   const list = document.getElementById('notifications-list')!;
   const closeBtn = document.getElementById('notifications-close')!;
   
-  // Show panel after 5 seconds
+  // Show panel after 15 seconds, then get out of the way on its own.
   setTimeout(() => {
     panel.classList.remove('hidden');
     showRandomNotification();
-  }, 5000);
+    setTimeout(() => panel.classList.add('hidden'), 12000);
+  }, 15000);
   
   closeBtn.addEventListener('click', () => {
     panel.classList.add('hidden');

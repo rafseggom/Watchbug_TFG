@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 225" role="img" aria-label="Blocky video game landscape with a diamond ore">
+  <rect width="400" height="225" fill="#7ec9ff"/>
+  <rect y="120" width="400" height="105" fill="#5b8f3a"/>
+  <g fill="#7fbf4f">
+    <rect x="0" y="120" width="40" height="20"/><rect x="80" y="140" width="40" height="20"/><rect x="160" y="120" width="40" height="20"/>
+    <rect x="240" y="140" width="40" height="20"/><rect x="320" y="120" width="40" height="20"/>
+  </g>
+  <g fill="#8b5a2b" stroke="#3d2612" stroke-width="4">
+    <rect x="20" y="160" width="60" height="60"/><rect x="80" y="160" width="60" height="60"/>
+    <rect x="140" y="160" width="60" height="60"/><rect x="200" y="160" width="60" height="60"/>
+    <rect x="260" y="160" width="60" height="60"/><rect x="320" y="160" width="60" height="60"/>
+  </g>
+  <g fill="#31e7ff" stroke="#000" stroke-width="3">
+    <rect x="100" y="180" width="16" height="16"/><rect x="120" y="180" width="16" height="16"/>
+    <rect x="100" y="200" width="16" height="16"/><rect x="120" y="200" width="16" height="16"/>
+    <rect x="110" y="190" width="16" height="16" fill="#b6ff3c"/>
+  </g>
+  <g font-family="Courier New, monospace" font-weight="700" fill="#000">
+    <text x="196" y="46" font-size="24" transform="rotate(-2 196 46)">NOT CLICKBAIT</text>
+    <text x="150" y="204" font-size="14" fill="#fff">DIAMOND IN node_modules</text>
+  </g>
+</svg>

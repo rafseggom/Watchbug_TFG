@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" role="img" aria-label="Steve from accounting, wearing a headset and a very serious tie">
+  <rect width="320" height="320" fill="#b6ff3c"/>
+  <circle cx="160" cy="160" r="150" fill="#ffd400" stroke="#000" stroke-width="8"/>
+  <g stroke="#000" stroke-width="9" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M62 320c6-52 44-78 98-78s92 26 98 78z" fill="#31e7ff"/>
+    <path d="M160 242l-34 78h68z" fill="#fff"/>
+    <path d="M160 268l-16 52h32z" fill="#c0002c"/>
+    <circle cx="160" cy="150" r="62" fill="#ffd9b3"/>
+    <path d="M98 136c-2-38 26-64 62-64s64 26 62 64c-14-22-30-30-62-30s-48 8-62 30z" fill="#5b3a2a"/>
+    <circle cx="138" cy="150" r="7" fill="#000"/><circle cx="182" cy="150" r="7" fill="#000"/>
+    <path d="M146 180c8 8 20 8 28 0" fill="none"/>
+    <path d="M92 150c-18 0-24 16-14 28 8 10 22 8 28-2" fill="#ffd9b3"/>
+    <path d="M228 150c18 0 24 16 14 28-8 10-22 8-28-2" fill="#ffd9b3"/>
+  </g>
+  <rect x="60" y="126" width="26" height="44" rx="12" fill="#ff0080" stroke="#000" stroke-width="7"/>
+  <rect x="234" y="126" width="26" height="44" rx="12" fill="#ff0080" stroke="#000" stroke-width="7"/>
+  <path d="M73 126c0-38 38-58 87-58s87 20 87 58" fill="none" stroke="#000" stroke-width="9" stroke-linecap="round"/>
+  <path d="M247 170c14 14 10 34-6 42" fill="none" stroke="#000" stroke-width="7" stroke-linecap="round"/>
+  <g font-family="Comic Sans MS, cursive" fill="#000">
+    <text x="46" y="44" font-size="20" transform="rotate(-6 46 44)">SENIOR BUG</text>
+    <text x="58" y="68" font-size="20" transform="rotate(-6 58 68)">CONSULTANT</text>
+    <text x="188" y="306" font-size="14">(not affiliated)</text>
+  </g>
+</svg>

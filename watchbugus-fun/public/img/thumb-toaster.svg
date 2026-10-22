@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 225" role="img" aria-label="An evil toaster with glowing eyes and a piece of toast">
+  <rect width="400" height="225" fill="#232333"/>
+  <path d="M140 40L40 0M260 40l100-40M200 30V0" stroke="#ffd400" stroke-width="8" stroke-linecap="round"/>
+  <g stroke="#000" stroke-width="5" stroke-linejoin="round">
+    <path d="M96 92h208c12 0 20 8 20 20v78c0 12-8 20-20 20H96c-12 0-20-8-20-20v-78c0-12 8-20 20-20z" fill="#c9c9d6"/>
+    <rect x="70" y="80" width="260" height="18" rx="9" fill="#8b8b9c"/>
+    <circle cx="140" cy="146" r="16" fill="#ff0044"/><circle cx="260" cy="146" r="16" fill="#ff0044"/>
+    <circle cx="140" cy="146" r="6" fill="#fff"/><circle cx="260" cy="146" r="6" fill="#fff"/>
+    <path d="M158 186c14-10 70-10 84 0" fill="none" stroke="#000"/>
+    <path d="M120 186l8 12M280 186l-8 12" />
+  </g>
+  <g transform="translate(170 44) rotate(-6)">
+    <path d="M0 22l10-22h44l10 22z" fill="#f5b942" stroke="#000" stroke-width="4"/>
+    <rect x="6" y="22" width="52" height="34" rx="4" fill="#e8a92f" stroke="#000" stroke-width="4"/>
+  </g>
+  <text x="24" y="212" font-family="Comic Sans MS, cursive" font-size="16" fill="#ffd400">IT WAS STEALING YOUR TOAST</text>
+</svg>
