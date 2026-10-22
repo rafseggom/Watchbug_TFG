@@ -18,7 +18,7 @@ export const config = {
 
   timing: {
     splashDuration: 2500,
-    kumarBannerDelay: 0,
+    promoBannerDelay: 0,
     clippyDelay: 8000,
     virusDelay: 25000,
     errorFirstDelay: 18000,
@@ -57,14 +57,14 @@ export const config = {
 
   wheel: {
     segments: [
-      { label: '47s WITH KUMAR', weight: 50 },
+      { label: '47s WITH STEVE', weight: 50 },
       { label: 'FREE HOTDOG 🌭', weight: 10 },
       { label: 'BUG CREDIT +1', weight: 10 },
       { label: 'NOTHING 😭', weight: 15 },
       { label: 'TRY AGAIN', weight: 10 },
       { label: 'MYSTERY BOX', weight: 5 }
     ],
-    riggedWinner: 0 // Index of "47s WITH KUMAR"
+    riggedWinner: 0 // Index of "47s WITH STEVE"
   },
 
   audio: {
@@ -100,7 +100,7 @@ export const config = {
         'avatar-1.svg',
         'avatar-2.svg'
       ],
-      notkumar: 'notkumar.svg',
+      steve: 'steve.svg',
       chatbot: 'chatbot.svg',
       clippy: 'clippy.svg'
     },
@@ -122,7 +122,7 @@ export const config = {
   },
 
   legal: {
-    disclaimer: 'This is a parody site. No actual bug tracking occurs. Hotdogs are virtual. Steve is fictional. Kumar is not affiliated.',
+    disclaimer: 'This is a parody site. No actual bug tracking occurs. Hotdogs are virtual. Steve is fictional (allegedly).',
     privacy: 'We collect your bugs, your soul, and your hotdog preferences. GDPR? Never heard of her.',
     terms: 'By using this site you agree to sacrifice one (1) virtual hotdog per bug report. No refunds.'
   }

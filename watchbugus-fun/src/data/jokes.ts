@@ -158,7 +158,7 @@ export const jokes: JokeData = {
         'Priority support (Steve replies)',
         'Custom branding (your logo + a hotdog)',
         'Advanced masking (solid fill, or solid fill)',
-        'Weekly call with Not Kumar',
+        'Weekly call with Steve',
         '* Blur is a lie, we do not ship it',
       ],
       popular: true,
@@ -243,7 +243,7 @@ export const jokes: JokeData = {
       avatar: 'avatar-1.svg',
     },
     {
-      text: '"Not a scam! The prize wheel is totally fair. I won \'47s with Kumar\' three times in a row. Still waiting for the call. The hotdogs are imaginary but the masking is real."',
+      text: '"Not a scam! The prize wheel is totally fair. I won \'47s with Steve\' three times in a row. Still waiting for the call. The hotdogs are imaginary but the masking is real."',
       author: 'Sarah',
       role: 'QA Engineer (Questions Everything)',
       avatar: 'avatar-2.svg',

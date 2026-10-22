@@ -7,7 +7,7 @@ import { chaos } from '../utils/chaos.ts';
 import type { AppState } from '../data/types.ts';
 
 const WHEEL_SEGMENTS = [
-  { label: '47s WITH KUMAR', weight: 50, color: '#f00' },
+  { label: '47s WITH STEVE', weight: 50, color: '#f00' },
   { label: 'FREE HOTDOG 🌭', weight: 10, color: '#f90' },
   { label: 'BUG CREDIT +1', weight: 10, color: '#0f0' },
   { label: 'NOTHING 😭', weight: 15, color: '#888' },
@@ -76,10 +76,10 @@ export function initPrizeWheel(state: AppState, audio: any): void {
   }
 
   async function spin(): Promise<void> {
-    // Rigged: always land on "47s WITH KUMAR" (index 0)
+    // Rigged: always land on "47s WITH STEVE" (index 0)
     // But animate to look random
     const totalSpins = 5 + Math.random() * 3;
-    const targetSegment = 0; // Always first segment (47s WITH KUMAR)
+    const targetSegment = 0; // Always first segment (47s WITH STEVE)
     const segmentAngle = 360 / WHEEL_SEGMENTS.length;
     const targetAngle = totalSpins * 360 + (targetSegment * segmentAngle) + (segmentAngle / 2);
 

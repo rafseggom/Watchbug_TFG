@@ -54,7 +54,7 @@ const NOTIFICATION_TEMPLATES = [
   { type: 'warning', title: 'Steve is calling', msg: 'Steve from Accounting wants to talk about your bugs. Answer or face the consequences.' },
   { type: 'success', title: 'Daily challenge complete!', msg: 'You earned +50 XP! Tomorrow: "Survive the virus scanner".' },
   { type: 'error', title: 'Virus detected', msg: 'Trojan:Win32/HotdogStealer.A found in your cookies. Pay $4.99 to remove.' },
-  { type: 'success', title: 'Prize wheel spun', msg: 'You won "47s WITH KUMAR"! (It\'s rigged, everyone wins this)' },
+  { type: 'success', title: 'Prize wheel spun', msg: 'You won "47s WITH STEVE"! (It\'s rigged, everyone wins this)' },
 ];
 
 export function initParodySystems(state: AppState): void {
@@ -161,7 +161,7 @@ function handleChallengeAction(action: string): void {
       document.getElementById('generator')!.scrollIntoView({ behavior: 'smooth' });
       break;
     case 'hotdog':
-      document.getElementById('kumar-link')!.click();
+      document.getElementById('promo-link')!.click();
       break;
     case 'wheel':
       window.dispatchEvent(new CustomEvent('watchbug:wheel'));

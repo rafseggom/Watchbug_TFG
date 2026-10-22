@@ -28,7 +28,7 @@
   --gradient-nav: #00f;
   --gradient-splash: repeating-conic-gradient(#f0f 0 15deg, #0ff 15deg 30deg);
   --gradient-plan-popular: #ff9;
-  --gradient-notkumar: #ff6;
+  --gradient-promo: #ff6;
 
   /* Neutrals */
   --black: #000;
@@ -69,7 +69,7 @@
   --shadow-gallery: 6px 6px 0 0 var(--black);
   --shadow-review: 6px 6px 0 0 var(--electric-blue);
   --shadow-plan-popular: 8px 8px 0 0 var(--black);
-  --shadow-kumar: 0 4px 0 0 rgb(255, 0, 128);
+  --shadow-promo: 0 4px 0 0 rgb(255, 0, 128);
   --shadow-hero: 10px 10px 0 0 var(--hot-pink);
   --shadow-accent-cyan: 6px 6px 0 0 var(--electric-blue);
   --shadow-accent-magenta: 6px 6px 0 0 var(--hot-pink);
@@ -86,7 +86,7 @@
   --z-toast: 110;
   --z-error: 115;
   --z-virus: 120;
-  --z-kumar: 150;
+  --z-promo: 150;
   --z-splash: 200;
   --z-trail: 300;
 
@@ -465,18 +465,18 @@ section + section {
   opacity: 0.8;
 }
 
-/* --- Kumar Banner --- */
-.kumar-banner {
+/* --- Promo Banner --- */
+.promo-banner {
   position: relative;
   top: auto;
-  z-index: var(--z-kumar);
-  background: var(--gradient-notkumar);
+  z-index: var(--z-promo);
+  background: var(--gradient-promo);
   border-bottom: 4px solid var(--black);
-  box-shadow: var(--shadow-kumar);
+  box-shadow: var(--shadow-promo);
   padding: var(--space-3) var(--space-4);
 }
 
-.kumar-banner-text {
+.promo-banner-text {
   max-width: 1100px;
   margin: 0 auto;
   text-align: center;
@@ -484,17 +484,17 @@ section + section {
   font-weight: 700;
 }
 
-.kumar-banner-text .rainbow {
+.promo-banner-text .rainbow {
   animation: 1s infinite pulse;
 }
 
-#kumar-link {
+#promo-link {
   display: inline-block;
   margin-top: var(--space-2);
   animation: 1s infinite pulse;
 }
 
-.kumar-banner u {
+.promo-banner u {
   text-decoration: none;
   border-bottom: 3px dashed var(--black);
   cursor: pointer;
@@ -502,7 +502,7 @@ section + section {
   box-shadow: 3px 3px 0 0 var(--black);
 }
 
-.kumar-banner u:hover {
+.promo-banner u:hover {
   transform: translate(3px, 3px);
   box-shadow: none;
 }
@@ -941,8 +941,8 @@ section + section {
   object-fit: cover;
 }
 
-/* --- Not Kumar Ad --- */
-.notkumar-ad {
+/* --- Steve's Consulting --- */
+.consulting-ad {
   background: var(--white);
   border: 4px solid var(--black);
   border-radius: var(--radius-xl);
@@ -951,40 +951,40 @@ section + section {
   box-shadow: var(--shadow-accent-magenta);
 }
 
-.notkumar-ad h2 {
+.consulting-ad h2 {
   text-align: center;
   margin-bottom: var(--space-6);
 }
 
-.notkumar-content {
+.consulting-content {
   display: grid;
   grid-template-columns: 200px 1fr;
   gap: var(--space-6);
   align-items: start;
 }
 
-.notkumar-img {
+.consulting-img {
   width: 200px;
   aspect-ratio: 1;
-  border-radius: var(--radius-circle);
+  border-radius: 24px;
   border: 4px solid var(--black);
   object-fit: cover;
   image-rendering: pixelated;
   box-shadow: var(--shadow-gallery);
 }
 
-.notkumar-copy h3 {
+.consulting-copy h3 {
   font-size: 1.8rem;
   margin-bottom: var(--space-3);
   text-align: center;
 }
 
-.notkumar-copy p {
+.consulting-copy p {
   margin-bottom: var(--space-3);
   line-height: 1.6;
 }
 
-.notkumar-price {
+.consulting-price {
   font-size: 2rem;
   font-weight: 900;
   text-align: center;
@@ -993,7 +993,7 @@ section + section {
   margin-bottom: var(--space-4);
 }
 
-.notkumar-fine {
+.consulting-fine {
   font-size: 0.75rem;
   color: var(--mid-gray);
   text-align: center;
@@ -1619,12 +1619,12 @@ footer {
     display: none;
   }
 
-  .notkumar-content {
+  .consulting-content {
     grid-template-columns: 1fr;
     text-align: center;
   }
 
-  .notkumar-img {
+  .consulting-img {
     margin: 0 auto;
   }
 
@@ -1653,11 +1653,11 @@ footer {
 }
 
 @media (width <= 600px) {
-  .kumar-banner-text {
+  .promo-banner-text {
     font-size: 0.9rem;
   }
 
-  #kumar-link {
+  #promo-link {
     font-size: 0.9rem;
     padding: 0.6rem 1rem;
   }
@@ -1705,7 +1705,7 @@ footer {
 /* --- Print --- */
 @media print {
   .chat, .cookie, .clippy, .popup, .virus, .wheel, .call, .captcha,
-  .toast-container, .music, .nav, .kumar-banner, .hotdog, .sticker {
+  .toast-container, .music, .nav, .promo-banner, .hotdog, .sticker {
     display: none !important;
   }
   body { background: var(--white); }

@@ -1,5 +1,5 @@
 /**
- * Not Kumar Ad Component
+ * Steve's Bug Consulting Component
  */
 
 export interface AppState {
@@ -13,8 +13,8 @@ export interface AppState {
   callActive: boolean;
 }
 
-export function initNotKumar(_state: AppState): void {
-  const bookBtn = document.getElementById('notkumar-book')!;
+export function initConsulting(_state: AppState): void {
+  const bookBtn = document.getElementById('consulting-book')!;
 
   bookBtn.addEventListener('click', () => {
     // PhoneCall owns the listener and the modal state.

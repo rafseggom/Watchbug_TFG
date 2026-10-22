@@ -1,5 +1,5 @@
 /**
- * Kumar Banner Component - Sticky top banner
+ * Promo Banner Component - the loud strip at the top of the page
  */
 
 import { audio } from '../utils/audio.ts';
@@ -17,10 +17,10 @@ export interface AppState {
   callActive: boolean;
 }
 
-export function initKumarBanner(_state: AppState): void {
-  const banner = document.getElementById('kumar-banner')!;
-  const link = document.getElementById('kumar-link')!;
-  const closeBtn = document.getElementById('kumar-close')!;
+export function initPromoBanner(_state: AppState): void {
+  const banner = document.getElementById('promo-banner')!;
+  const link = document.getElementById('promo-link')!;
+  const closeBtn = document.getElementById('promo-close')!;
 
   closeBtn.addEventListener('click', () => {
     banner.classList.add('is-gone');

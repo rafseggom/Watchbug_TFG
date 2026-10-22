@@ -701,8 +701,8 @@ table.compare .no { color: #c0002c; font-weight: 700; }
   box-shadow: none;
 }
 
-/* --- Kumar banner close -------------------------------------------------- */
-.kumar-close {
+/* --- Promo banner close -------------------------------------------------- */
+.promo-close {
   position: absolute;
   top: 6px;
   right: 8px;
@@ -717,11 +717,9 @@ table.compare .no { color: #c0002c; font-weight: 700; }
   padding: 0;
 }
 
-.kumar-close:hover { background: #ffd400; }
+.promo-close:hover { background: #ffd400; }
 
-.kumar-banner.is-gone { display: none; }
-
-.kumar-banner { position: sticky; }
+.promo-banner.is-gone { display: none; }
 
 /* --- Small print / footer ------------------------------------------------ */
 .legal-note {

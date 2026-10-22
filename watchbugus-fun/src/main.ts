@@ -9,7 +9,7 @@ import './style.css';
 import './content.css';
 
 import { initSplash } from './components/Splash.ts';
-import { initKumarBanner } from './components/KumarBanner.ts';
+import { initPromoBanner } from './components/PromoBanner.ts';
 import { initNavigation } from './components/Navigation.ts';
 import { initHero } from './components/Hero.ts';
 import { initGenerator } from './components/Generator.ts';
@@ -17,7 +17,7 @@ import { initFeatures } from './components/Features.ts';
 import { initPricing } from './components/Pricing.ts';
 import { initGallery } from './components/Gallery.ts';
 import { initReviews } from './components/Reviews.ts';
-import { initNotKumar } from './components/NotKumar.ts';
+import { initConsulting } from './components/Consulting.ts';
 import { initChat } from './components/Chat.ts';
 import { initCookie } from './components/Cookie.ts';
 import { initClippy } from './components/Clippy.ts';
@@ -65,7 +65,7 @@ function init(): void {
   initSplash(state);
   initPanicButton();
 
-  initKumarBanner(state);
+  initPromoBanner(state);
   initNavigation(state);
   initHero(state);
   initMaskDemo();
@@ -74,7 +74,7 @@ function init(): void {
   initPricing(jokes);
   initGallery(jokes);
   initReviews(jokes);
-  initNotKumar(state);
+  initConsulting(state);
   initChat(state, audio);
   initCookie(state);
   initClippy(state);

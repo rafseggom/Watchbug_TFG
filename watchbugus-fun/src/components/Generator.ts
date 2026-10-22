@@ -39,7 +39,7 @@ export function initGenerator(state: AppState, jokes: JokeData, audio: any): voi
         `,
         confirmText: 'BUY PRO CREATOR',
         onConfirm: () => {
-          document.getElementById('notkumar-book')!.click();
+          document.getElementById('consulting-book')!.click();
         }
       });
       return;
