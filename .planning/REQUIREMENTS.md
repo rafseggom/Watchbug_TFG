@@ -43,7 +43,7 @@ A requirement is **Complete** when:
 
 ### Integration
 
-- [ ] **INT-01**: A developer can add Watchbug to a web app with a single async script tag and no build step
+- [x] **INT-01**: A developer can add Watchbug to a web app with a single async script tag and no build step
 - [ ] **INT-02**: A developer can initialise Watchbug with a public project key and options via `window.Watchbug.init()`
 - [ ] **INT-03**: A developer can attach `user`, `appVersion` and `custom` context at init and have it ride on every report
 - [ ] **INT-04**: A developer can turn off end-user identity collection with `privacy: { userIdentity: false }`
@@ -54,7 +54,7 @@ A requirement is **Complete** when:
 - [ ] **WDG-01**: An end user can open the widget from a floating launcher button
 - [ ] **WDG-02**: Hostile host CSS (e.g. `* { display: none !important }`) cannot hide, restyle or break the widget
 - [ ] **WDG-03**: The widget never leaks styles, classes or CSS variables into the host document
-- [ ] **WDG-04**: The host page gains exactly one global (`window.Watchbug`) and no native prototype is modified
+- [x] **WDG-04**: The host page gains exactly one global (`window.Watchbug`) and no native prototype is modified
 - [ ] **WDG-05**: The widget renders above all host content regardless of host stacking context or layout
 - [ ] **WDG-06**: An end user can use the widget in English or Spanish, auto-matched to browser language with a manual override
 
@@ -212,7 +212,7 @@ Which phases cover which requirements. **Updated during roadmap creation** — e
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INT-01 | Phase 2 | Pending |
+| INT-01 | Phase 2 | Complete |
 | INT-02 | Phase 2 | Pending |
 | INT-03 | Phase 4 | Pending |
 | INT-04 | Phase 4 | Pending |
@@ -220,7 +220,7 @@ Which phases cover which requirements. **Updated during roadmap creation** — e
 | WDG-01 | Phase 2 | Pending |
 | WDG-02 | Phase 2 | Pending |
 | WDG-03 | Phase 2 | Pending |
-| WDG-04 | Phase 2 | Pending |
+| WDG-04 | Phase 2 | Complete |
 | WDG-05 | Phase 2 | Pending |
 | WDG-06 | Phase 3 | Pending |
 | CAP-01 | Phase 2 | Pending |

@@ -79,7 +79,7 @@ Plans:
 
 Plans:
 **Wave 1**
-- [ ] 02-01-PLAN.md — Widget shell + harness: `init()`/`WatchbugHost`/launcher/status-panel renderer + locked strings (P2-D-01/02/04), `SHADOW_MODE` build variant (R-14), boot + global-surface rows (INT-01, WDG-04)
+- [x] 02-01-PLAN.md — Widget shell + harness: `init()`/`WatchbugHost`/launcher/status-panel renderer + locked strings (P2-D-01/02/04), `SHADOW_MODE` build variant (R-14), boot + global-surface rows (INT-01, WDG-04)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 02-02-PLAN.md — Tracer: widget gesture → one real report filed end-to-end (T1 redaction ordering at first build) + status-panel state machine with P2-D-03 retry (INT-02/INT-05/WDG-01) + hostile-CSS isolation proof (CA-04, WDG-02/03/05)
@@ -93,7 +93,7 @@ Plans:
 **Wave 5** *(blocked on Wave 4 completion)*
 - [ ] 02-05-PLAN.md — Payload privacy + budget gates + suite closure: host-credential sentinel proof, path-only URL, ≤ 45 KB / zero runtime deps, webkit premise correction (PRV-05/06, PRF-01/04)
 
-**Plans:** 5 plans
+**Plans:** 1/5 plans executed
 **UI hint**: yes
 **Rationale / Risks:** **⚠ Architecture-loaded decision #1 — `WidgetHost` isolation must be right at first build** (H-2/H-3; a retrofit is a rewrite of every style): inline `!important` on the host element (outranks document `!important`), host appended as the last child of `document.documentElement`, `:host { all: initial }` first then explicit re-declaration of every needed property, px-only units (zero `rem`), no `part`/`::theme`, `--wb-` custom properties declared locally, `<style>` inside the shadow root (not `adoptedStyleSheets`), and the `SHADOW_MODE=open` e2e build with a module-scoped root registry so Playwright can pierce closed roots (R-14). **⚠ Architecture-loaded decision #2 — redaction ordering starts here (T1):** auto-redact runs destructively on `ImageData` at capture, *before the editor ever displays the image*; T2/T3 complete in Phase 3. Per A-05, `CaptureSource.capture()` returns raw `ImageData`, never a Blob — a Blob-returning port would let unmasked encoded bytes exist before `Redactor` runs (structural SEC-02). R-13/A-01: **flat opaque fill (α=255) is the only automatic primitive** — no blur, no CSS overlays, no semi-transparent fills (C-1). H-1: mask geometry lives in bitmap/device-pixel space from the very first mask (HiDPI misregistration leaks edge characters). Transport is lane 1 only: plain `fetch` with idempotency-keyed bounded retry — **never** `keepalive`/`sendBeacon` for image-bearing reports (H-9, 64 KiB spec cap); the IndexedDB durability lane lands in Phase 7 (ING-02). M-3: detect the silent WebP→PNG fallback by sniffing `blob.type`. H-4/H-5: capture-degradation UX (manual attach, text-only filing, visible failure state) ships with the composer in Phase 3 — until then capture errors must surface loudly, never as a silently blank image (M-6). C-5 groundwork: the payload is a closed schema and the `document.cookie|localStorage|sessionStorage|Authorization|Bearer |credentials:` grep gate lands in `packages/sdk` now. PRF-01/PRF-04 enforce 45 KB / zero-deps at the gate; PRF-03's total-budget proof waits for the editor chunk (Phase 3). Research flag: the hostile-CSS belt-and-braces set needs one spike against a real fixture in this phase.
 
@@ -209,7 +209,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Contracts & Ingest Slice | 4/4 | Complete    | 2026-10-13 |
-| 2. SDK Tracer Bullet: Widget, Capture & Auto-Redaction | 0/4 | Planned | - |
+| 2. SDK Tracer Bullet: Widget, Capture & Auto-Redaction | 1/5 | In Progress|  |
 | 3. Report Composer & Annotation Editor (lazy) | 0/TBD | Not started | - |
 | 4. Report Payload & Enrichment | 0/TBD | Not started | - |
 | 5. Secure Admin Access & Projects | 0/TBD | Not started | - |

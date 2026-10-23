@@ -1,18 +1,18 @@
 ---
 gsd_state_version: "1.0"
-current_phase: 2
+current_phase: 02
 current_phase_name: "SDK Tracer Bullet: Widget, Capture & Auto-Redaction"
 status: executing
-stopped_at: Phase 2 UI-SPEC approved
-last_updated: "2026-10-17T22:12:17.985Z"
-last_activity: 2026-10-16
-last_activity_desc: Phase 01 complete, transitioned to Phase 2
-state_head: 5b3c21f9d9ecfb47093f9722aaa035b0c9c46335
+stopped_at: Completed 02-01-PLAN.md
+last_updated: "2026-10-23T20:37:30.754Z"
+last_activity: 2026-10-23
+last_activity_desc: Phase 02 execution started
+state_head: b00fe112f19ead1cd19080c57edc9c22d55b807e
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 9
-  completed_plans: 4
+  completed_plans: 5
   percent: 14
 ---
 
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-10-13)
 
 ## Current Position
 
-Phase: 2 (SDK Tracer Bullet: Widget, Capture & Auto-Redaction) — READY TO EXECUTE
-Plan: Not started
+Phase: 02 (SDK Tracer Bullet: Widget, Capture & Auto-Redaction) — EXECUTING
+Plan: 2 of 5
 Status: Ready to execute
-Last activity: 2026-10-16 - Completed quick task 261016-nnx: Fix api read rate-limit typecheck error: gate on isExceeded via discriminant narrowing
+Last activity: 2026-10-23 — Phase 02 execution started
 
 Progress: [█░░░░░░░░░] 14%
 
@@ -60,6 +60,7 @@ Progress: [█░░░░░░░░░] 14%
 | Phase 01 P02 | 40min | 3 tasks | 16 files |
 | Phase 01 P03 | 37min | 3 tasks | 10 files |
 | Phase 01 P04 | 45min | 3 tasks | 15 files |
+| Phase 02 P01 | 45min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -90,6 +91,10 @@ Recent decisions affecting current work:
 - [Phase 01]: 01-04: ingest order kept validate -> sanitise -> re-validate: post-sanitise re-validation guarantees a stored value never exceeds the cap it validated against (200 '&' stores as 200 chars)
 - [Phase 01]: 01-04: empty-state e2e rows intercept GET /api/incidents with [] (shared stack is never empty); /api/setup, the EmptyState component and the emitted curl stay real, and one row spawns the emitted snippet verbatim (201 -> visible after reload)
 - [Phase 01]: 01-04: meta JSON content-type defect closed - the multipart loop re-stringifies an object field back to JSON text (curl -F shape ingests 201); CA-01 schema untouched; deferred-items entry 1 marked RESOLVED
+- [Phase 02]: Host element is an unregistered <watchbug-host>: customElements.define would mutate the page's global registry (pre-emptable by a hostile page) and WDG-03/04 forbid host-visible state; attachShadow works unregistered
+- [Phase 02]: endpoint defaults from document.currentScript.src captured at module evaluation, falling back to document.baseURI origin - import.meta.url cannot survive the IIFE lane
+- [Phase 02]: Open-mode e2e artifacts (watchbug.e2e.js/.mjs) are emitted by every npm run build as two extra core calls rather than an argv flag; check:size budgets by filename so the variant is outside the gate
+- [Phase 02]: The shadow-root registry is populated only when SHADOW_MODE === 'open'; Playwright pierces via host.shadowRoot, so no second global exists even in the test build
 
 ### Pending Todos
 
@@ -134,6 +139,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-17T20:33:21.966Z
-Stopped at: Phase 2 UI-SPEC approved
-Resume file: E:/Proyectos Github/Watchbug_TFG/.planning/phases/02-sdk-tracer-bullet-widget-capture-auto-redaction/02-UI-SPEC.md
+Last session: 2026-10-23T20:37:30.636Z
+Stopped at: Completed 02-01-PLAN.md
+Resume file: None
