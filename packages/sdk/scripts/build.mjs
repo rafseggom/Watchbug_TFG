@@ -20,6 +20,13 @@ import { build } from 'esbuild';
  * build-time flag; values are JS expressions here, which is why this lives in
  * the esbuild JS API instead of an npm script under cmd.exe).
  * Zero runtime dependencies (R-01): nothing is external, nothing is imported.
+ *
+ * **R-14 e2e variant.** Two extra core calls emit `watchbug.e2e.js` /
+ * `watchbug.e2e.mjs`: identical source, `SHADOW_MODE = 'open'`, so Playwright
+ * can pierce the shadow root (Pitfall 10). The names are deliberately distinct
+ * from `watchbug.js` / `.mjs` — `scripts/check-size.mjs` budgets by filename,
+ * so the test-only artifact can never be mistaken for the shipped bundle and
+ * is never gated. Production never loads it.
  */
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -69,4 +76,23 @@ for (const artifact of built) {
   if (!existsSync(artifact.outfile)) throw new Error(`esbuild did not emit ${artifact.outfile}`);
   const gz = gzipSync(readFileSync(artifact.outfile)).length;
   console.log(`built ${artifact.lane.padEnd(17)} ${artifact.format.padEnd(4)} ${(gz / 1024).toFixed(1)} KB gz  ${artifact.outfile}`);
+}
+
+// R-14: the open-mode e2e artifacts. Same entry, same format matrix, only the
+// shadow mode differs — and a filename the size gate does not budget.
+const E2E_CORE = { lane: 'core-e2e', entry: 'src/index.ts', out: 'watchbug.e2e' };
+
+for (const role of FORMAT_ROLES) {
+  const outfile = join(dist, `${E2E_CORE.out}${role.ext}`);
+  await build({
+    ...shared,
+    define: { ...shared.define, SHADOW_MODE: JSON.stringify('open') },
+    entryPoints: [join(here, '..', E2E_CORE.entry)],
+    outfile,
+    format: role.format,
+    ...(role.globalName ? { globalName: role.globalName } : {}),
+  });
+  if (!existsSync(outfile)) throw new Error(`esbuild did not emit ${outfile}`);
+  const gz = gzipSync(readFileSync(outfile)).length;
+  console.log(`built ${E2E_CORE.lane.padEnd(17)} ${role.format.padEnd(4)} ${(gz / 1024).toFixed(1)} KB gz  ${outfile}`);
 }
