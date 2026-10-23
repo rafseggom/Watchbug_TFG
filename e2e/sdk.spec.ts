@@ -1,10 +1,58 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import {
   addedNames,
+  FIXTURE_ORIGIN,
   openHostFixture,
+  projectKey,
   readSnapshot,
   waitForSnapshot,
 } from './helpers/host-fixtures';
+import {
+  clickLauncher,
+  collectHeadlines,
+  installCaptureStub,
+  probeWidget,
+  readHeadlines,
+  waitForHeadline,
+  waitForWidget,
+} from './helpers/capture-stubs';
+
+/**
+ * The SDK post endpoint, matched by **one shared RegExp**. `page.unroute`
+ * removes a route by source+flags equality, so an inline duplicate would not
+ * unregister and the next row's mock would leak into this one (the same
+ * convention `e2e/ingest.spec.ts` adopted for the list route).
+ */
+const INCIDENT_POST_RE = /\/api\/incidents$/;
+const INTERCEPTED_ID = '11111111-1111-4111-8111-111111111111';
+
+interface PostCall {
+  headers: Record<string, string>;
+  body: string;
+}
+
+/** Intercept SDK reports, letting each row decide the reply per attempt. */
+async function interceptIncidentPosts(
+  page: Page,
+  reply: (call: PostCall, index: number) => Promise<{ status: number; body: string }>,
+): Promise<PostCall[]> {
+  const calls: PostCall[] = [];
+  await page.route(INCIDENT_POST_RE, async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.continue();
+      return;
+    }
+    const request = route.request();
+    const call: PostCall = {
+      headers: request.headers(),
+      body: (request.postDataBuffer() ?? Buffer.alloc(0)).toString('utf8'),
+    };
+    calls.push(call);
+    const { status, body } = await reply(call, calls.length - 1);
+    await route.fulfill({ status, contentType: 'application/json', body });
+  });
+  return calls;
+}
 
 /**
  * INT-01 / WDG-04 — the boot and global-surface group.
@@ -141,4 +189,141 @@ test('WDG-04: the IIFE lane adds exactly one global, the ESM lane adds none, and
   await expect(esmPage.locator('watchbug-host')).toHaveCount(1);
 
   await esmPage.close();
+});
+
+/* ------------------------------------------------------------------------- */
+/* Tracer rows — 02-02 Task 1                                                */
+/* ------------------------------------------------------------------------- */
+
+test('INT-02: one launcher gesture files a real report that returns 201 and renders in the panel', async ({ page, browserName }) => {
+  await installCaptureStub(page, browserName);
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+
+  // P2-D-01: the title is read at send time — set it before the gesture.
+  await page.evaluate(() => {
+    document.title = 'INT-02 tracer report';
+  });
+
+  let captured: PostCall | null = null;
+  let responseStatus = 0;
+  let responseBody = '';
+
+  // Real compose stack: inspect the outgoing request, then let it through with
+  // `route.fetch()` — the 201 comes from Fastify, not from this test.
+  await page.route(INCIDENT_POST_RE, async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.continue();
+      return;
+    }
+    const request = route.request();
+    captured = {
+      headers: request.headers(),
+      body: (request.postDataBuffer() ?? Buffer.alloc(0)).toString('utf8'),
+    };
+    const response = await route.fetch();
+    responseStatus = response.status();
+    responseBody = await response.text();
+    await route.fulfill({ response });
+  });
+
+  await clickLauncher(page);
+  await waitForHeadline(page, 'Report sent ✓', 15_000);
+
+  expect(captured).not.toBeNull();
+  if (captured === null) return;
+  const call: PostCall = captured;
+
+  // CA-01 wire shape: two multipart parts, both headers present.
+  expect(call.headers['content-type']).toContain('multipart/form-data; boundary=');
+  expect(call.headers['x-project-key']).toBe(projectKey());
+  expect(call.headers['idempotency-key']).toMatch(/^[0-9a-f-]{36}$/);
+  expect(call.body).toContain('name="meta"');
+  expect(call.body).toContain('name="image"');
+  expect(call.body).toContain('"type":"bug"');
+  expect(call.body).toContain('"title":"INT-02 tracer report"');
+  expect(call.body).toContain('"url":"/__e2e/host-fixture.html"');
+  expect(call.body).toContain('filename="screenshot.');
+
+  expect(responseStatus).toBe(201);
+  const created = JSON.parse(responseBody) as { id?: string };
+  expect(created.id).toMatch(/^[0-9a-f-]{36}$/);
+
+  // The report is now a row in the real panel, read through nginx.
+  await page.goto(`${FIXTURE_ORIGIN}/`, { waitUntil: 'load' });
+  await expect(page.getByText('INT-02 tracer report').first()).toBeVisible({ timeout: 10_000 });
+});
+
+test('INT-05: the ESM build boots the same widget and adds zero window properties', async ({ page, context }) => {
+  await openHostFixture(page, { bundle: 'watchbug.mjs', mode: 'esm' });
+  await waitForSnapshot(page);
+  await waitForWidget(page);
+
+  const before = await readSnapshot(page, 'before');
+  const after = await readSnapshot(page, 'after');
+  expect(before.w).not.toContain('Watchbug');
+  expect(addedNames(after.w, before.w)).toEqual([]);
+  expect(after.p).toEqual(before.p);
+
+  const esm = await page.evaluate(async () => {
+    const host = document.querySelector('watchbug-host');
+    const module = (await import('/__e2e/bundles/watchbug.mjs')) as {
+      init?: unknown;
+      WATCHBUG_VERSION?: unknown;
+    };
+    return {
+      hostPresent: host !== null,
+      // Production ESM lane is the closed build: no page-visible shadow root.
+      shadowRoot: host?.shadowRoot ?? null,
+      hasInit: typeof module.init === 'function',
+      version: module.WATCHBUG_VERSION,
+      exports: Object.keys(module).sort(),
+    };
+  });
+
+  expect(esm.hostPresent).toBe(true);
+  expect(esm.shadowRoot).toBeNull();
+  expect(esm.hasInit).toBe(true);
+  expect(esm.version).toBe('0.1.0');
+
+  // One module namespace, two projections: the IIFE global must expose exactly
+  // the ESM exports (assumption-delta decision: the module export is primary).
+  const iifePage = await context.newPage();
+  await openHostFixture(iifePage, { bundle: 'watchbug.js', mode: 'iife' });
+  const iifeExports = await iifePage.evaluate(() => {
+    const api = (window as unknown as { Watchbug?: Record<string, unknown> }).Watchbug;
+    return api === undefined ? [] : Object.keys(api).sort();
+  });
+  expect(iifeExports).toEqual(esm.exports);
+  await iifePage.close();
+});
+
+test('WDG-01: the launcher is a 48x48 shadow-root button and renders disabled while the panel is open', async ({ page, browserName }) => {
+  await installCaptureStub(page, browserName);
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+
+  // Hold the reply so the in-flight `Sending…` panel is observable.
+  let release: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const calls = await interceptIncidentPosts(page, async () => {
+    await held;
+    return { status: 201, body: JSON.stringify({ id: INTERCEPTED_ID }) };
+  });
+
+  await clickLauncher(page);
+  await waitForHeadline(page, 'Sending…', 10_000);
+
+  const inFlight = await probeWidget(page);
+  expect(inFlight.launcherWidth).toBe(48);
+  expect(inFlight.launcherHeight).toBe(48);
+  expect(inFlight.launcherDisabled).toBe(true);
+  expect(inFlight.panelHidden).toBe('false');
+  expect(inFlight.headline).toBe('Sending…');
+
+  release();
+  await waitForHeadline(page, 'Report sent ✓', 10_000);
+  expect(calls).toHaveLength(1);
 });

@@ -25,6 +25,13 @@
 
 /** The exact UI-SPEC host style — inline, `!important`, px-only. */
 export const HOST_STYLE = [
+  // `display` is load-bearing, not cosmetic: a hostile `* { display: none
+  // !important }` is an **author-origin important** declaration, which outranks
+  // the shadow tree's normal `:host { display: block }`. Only an inline
+  // `!important` on the host element itself wins that contest (CA-04/WDG-02).
+  // `hideSync()` appends `display: none !important` after this list, so the
+  // capture-time hide still wins over this declaration.
+  'display: block !important',
   'position: fixed !important',
   'z-index: 2147483647 !important',
   'right: 24px !important',

@@ -20,6 +20,7 @@
  * already invokes in the click's task (P2-D-02/05 — transient activation).
  */
 
+import { createCaptureFlow, type CaptureFlow } from './capture/pipeline.ts';
 import { HOST_CSS, mountHost, type WatchbugHost } from './widget/host.ts';
 import { createLauncher, LAUNCHER_CSS, type Launcher } from './widget/launcher.ts';
 import { createStatusPanel, PANEL_CSS, type StatusPanel } from './widget/status-panel.ts';
@@ -103,40 +104,40 @@ function resolveOptions(options: WatchbugInitOptions): ResolvedInitOptions {
 }
 
 /**
- * Flow entry seam (P2-D-02/05). Called synchronously by the launcher's click
- * handler, in the same task as the user gesture, so a capture call placed here
- * inherits transient activation.
- *
- * This shell restores the host immediately (there is nothing to capture yet).
- * 02-02 replaces the body with `runCaptureFlow(...)` at this exact call site —
- * no architectural change, no re-sequencing of the gesture.
- */
-function enterFlow(): void {
-  const current = mounted;
-  if (current === null) return;
-
-  current.launcher.setDisabled(true);
-  current.host.restore();
-  current.launcher.setDisabled(false);
-}
-
-/**
- * Mount the widget. Idempotent: the first call wins and a second call is a
- * documented no-op (re-mount guard — ARCHITECTURE.md:248).
+ * Flow wiring (P2-D-02/05). `runCaptureFlow` is invoked *synchronously* by the
+ * launcher's click handler, in the same task as the user gesture, so the
+ * capture call placed at the top of the pipeline inherits transient activation.
+ * `flowRef` exists only because the launcher and the panel are constructed
+ * before the flow can be; the indirection never introduces an `await`.
  */
 export function init(options: WatchbugInitOptions): void {
   if (mounted !== null) return;
 
   const config = resolveOptions(options);
   const host = mountHost(`${HOST_CSS}\n${LAUNCHER_CSS}\n${PANEL_CSS}`);
+
+  const flowRef: { current: CaptureFlow | null } = { current: null };
   const launcher = createLauncher({
     hide: () => host.hideSync(),
-    onActivate: enterFlow,
+    onActivate: () => flowRef.current?.start(),
   });
   const panel: StatusPanel = createStatusPanel({
-    onRetry: enterFlow,
-    onDismiss: () => panel.render({ kind: 'idle' }),
+    onRetry: () => flowRef.current?.retry(),
+    // Dismiss (button, Escape or the 5 s auto-dismiss) returns to the idle
+    // launcher and re-arms it (UI-SPEC A-5/A-7).
+    onDismiss: () => {
+      panel.render({ kind: 'idle' });
+      launcher.setDisabled(false);
+    },
   });
+
+  const flow = createCaptureFlow({
+    host,
+    launcher,
+    config,
+    onView: (view) => panel.render(view),
+  });
+  flowRef.current = flow;
 
   panel.render({ kind: 'idle' });
   host.content.appendChild(launcher.element);
