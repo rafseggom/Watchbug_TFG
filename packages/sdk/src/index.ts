@@ -22,6 +22,7 @@
 
 import { HOST_CSS, mountHost, type WatchbugHost } from './widget/host.ts';
 import { createLauncher, LAUNCHER_CSS, type Launcher } from './widget/launcher.ts';
+import { createStatusPanel, PANEL_CSS, type StatusPanel } from './widget/status-panel.ts';
 
 /** Bundle identity, surfaced on the IIFE global for support/debug. */
 export const WATCHBUG_VERSION = '0.1.0';
@@ -49,6 +50,7 @@ interface ResolvedInitOptions {
 interface MountedWidget {
   host: WatchbugHost;
   launcher: Launcher;
+  panel: StatusPanel;
   config: ResolvedInitOptions;
 }
 
@@ -126,14 +128,20 @@ export function init(options: WatchbugInitOptions): void {
   if (mounted !== null) return;
 
   const config = resolveOptions(options);
-  const host = mountHost(`${HOST_CSS}\n${LAUNCHER_CSS}`);
+  const host = mountHost(`${HOST_CSS}\n${LAUNCHER_CSS}\n${PANEL_CSS}`);
   const launcher = createLauncher({
     hide: () => host.hideSync(),
     onActivate: enterFlow,
   });
+  const panel: StatusPanel = createStatusPanel({
+    onRetry: enterFlow,
+    onDismiss: () => panel.render({ kind: 'idle' }),
+  });
 
+  panel.render({ kind: 'idle' });
   host.content.appendChild(launcher.element);
-  mounted = { host, launcher, config };
+  host.content.appendChild(panel.element);
+  mounted = { host, launcher, panel, config };
 }
 
 export default { WATCHBUG_VERSION, init };
