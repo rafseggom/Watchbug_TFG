@@ -5,7 +5,13 @@ import { defineConfig, devices } from '@playwright/test';
  *
  * Three browser projects, three real code paths:
  *   chromium — the WebP encode path
- *   webkit   — the silent WebP→PNG fallback (R-11) — never optional
+ *   webkit   — engine-divergent rendering + the `CaptureSource`-seam capture
+ *              tier; NEVER optional. It does **not** produce the R-11 WebP→PNG
+ *              fallback naturally on this platform: Playwright's WebKit encodes
+ *              real `RIFF….WEBP` here (magic-byte probe, 2026-10-17), so M-3
+ *              fallback coverage comes from the forced-PNG stub row
+ *              (`forcePngEncode` / `M-3:`) instead — correction recorded in
+ *              `documentation/resolution-record.md` A-14.
  *   firefox  — the no-`ImageCapture` capture path (Q-9)
  *
  * The suite runs against the **compose stack** (INV-03): `globalSetup` fails
