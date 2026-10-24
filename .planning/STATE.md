@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 02
 current_phase_name: "SDK Tracer Bullet: Widget, Capture & Auto-Redaction"
 status: executing
-stopped_at: Completed 02-03-PLAN.md
-last_updated: "2026-10-24T12:36:07.733Z"
+stopped_at: Completed 02-04-PLAN.md
+last_updated: "2026-10-24T13:39:17.772Z"
 last_activity: 2026-10-24
 last_activity_desc: Phase 02 execution started
-state_head: c1a86f8eb58e0a1e457f1e66a254617d41a4b672
+state_head: 03f53b08cfd78214ca95a1d169ba8819afe7e006
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 9
-  completed_plans: 7
+  completed_plans: 8
   percent: 14
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-13)
 ## Current Position
 
 Phase: 02 (SDK Tracer Bullet: Widget, Capture & Auto-Redaction) — EXECUTING
-Plan: 3 of 5
+Plan: 4 of 5
 Status: Ready to execute
 Last activity: 2026-10-24 — Phase 02 execution started
 
@@ -63,6 +63,7 @@ Progress: [█░░░░░░░░░] 14%
 | Phase 02 P01 | 45min | 3 tasks | 9 files |
 | Phase 02 P02 | 6h00m | 3 tasks | 13 files |
 | Phase 02 P03 | 40min | 3 tasks | 6 files |
+| Phase 02 P04 | 50min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -105,6 +106,12 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-03: CAP-05 oversized frame sits at the 16 MP ceiling (4000x4000): frames above MAX_IMAGE_PIXELS are rejected by the P2-D-12 probe before encode, so the area clamp is source-asserted while the at-ceiling row proves the 16 MP / 2 MB contract
 - [Phase 02]: 02-03: added the plan-mandated MAX_IMAGE_DIM (8192) per-side clamp to initialDimensions, RED-proven by the 9000px wide-frame row (RED_EVIDENCE_OK)
 - [Phase 02]: 02-03: refusal rows are non-vacuous via a data-wb-stub-invoked attribute so a policy refusal cannot pass because the capture API was missing; uniform runs on the default tier, beyond-cap as a canvas-free ImageData at the seam
+- [Phase 02]: 02-04: whole-text-node masking - a pattern match masks the union of range.getClientRects (one rect per node); fixtures use line-height:1 so the capture-stub marker paints inside the text-node rect (probe-verified on all 3 engines)
+- [Phase 02]: 02-04: Pitfall 1 resolved by wording (Beare[r] spelling, generic SEC-03 comments) - no gate exemption added; sdk-no-host-storage stays green with the full catalog
+- [Phase 02]: 02-04: redaction errors fail closed into the locked capture-failed state (UI-SPEC copy set has no redaction headline; dedicated copy deferred to the Phase 3 composer)
+- [Phase 02]: 02-04: H-1 rows capture at frame = viewport x DPR (1/1.25/2/3), dpr3 clamped to 2560x1440 by the ladder; the dpr-1 row pins deviceScaleFactor explicitly because Desktop Safari defaults to DSF 2
+- [Phase 02]: 02-04: assignment regex has no leading word boundary (api_key must match as key=) - recall over precision per P2-D-09; Luhn-invalid digit runs deliberately stay visible
+- [Phase 02]: 02-04: Task 2 produced no RED - the four-group catalog shipped in Task 1 GREEN (plan-split deviation documented in SUMMARY; tdd.md fail-fast, no RED fabricated)
 
 ### Pending Todos
 
@@ -149,6 +156,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-24T12:36:07.628Z
-Stopped at: Completed 02-03-PLAN.md
+Last session: 2026-10-24T13:39:17.650Z
+Stopped at: Completed 02-04-PLAN.md
 Resume file: None

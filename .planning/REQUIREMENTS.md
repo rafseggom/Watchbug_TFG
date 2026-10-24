@@ -77,9 +77,9 @@ A requirement is **Complete** when:
 
 ### Privacy & Masking
 
-- [ ] **PRV-01**: `input[type=password]` values are excluded from the capture automatically
-- [ ] **PRV-02**: Credential, token and payment-card patterns are redacted automatically
-- [ ] **PRV-03**: Elements marked `data-watchbug-sensitive` are redacted automatically
+- [x] **PRV-01**: `input[type=password]` values are excluded from the capture automatically
+- [x] **PRV-02**: Credential, token and payment-card patterns are redacted automatically
+- [x] **PRV-03**: Elements marked `data-watchbug-sensitive` are redacted automatically
 - [ ] **PRV-04**: A masked region is destroyed at the pixel level and is unrecoverable from the encoded image
 - [ ] **PRV-05**: The SDK never reads or transmits host cookies, storage or auth headers
 - [ ] **PRV-06**: URL query strings and fragments are stripped before transmission
@@ -234,9 +234,9 @@ Which phases cover which requirements. **Updated during roadmap creation** — e
 | ANN-04 | Phase 3 | Pending |
 | ANN-05 | Phase 3 | Pending |
 | ANN-06 | Phase 3 | Pending |
-| PRV-01 | Phase 2 | Pending |
-| PRV-02 | Phase 2 | Pending |
-| PRV-03 | Phase 2 | Pending |
+| PRV-01 | Phase 2 | Complete |
+| PRV-02 | Phase 2 | Complete |
+| PRV-03 | Phase 2 | Complete |
 | PRV-04 | Phase 3 | Pending |
 | PRV-05 | Phase 2 | Pending |
 | PRV-06 | Phase 2 | Pending |
