@@ -51,6 +51,50 @@ function multipartPart(buffer: Buffer, name: string): Buffer | null {
   return buffer.subarray(headerEnd + 4, nextBoundary);
 }
 
+/** What `analyzeImagePixels` reports about one decoded outgoing image. */
+interface ImageAnalysis {
+  width: number;
+  height: number;
+  /** Pixels whose RGB is exactly the launcher accent `#2f6feb` (CAP-04). */
+  accentCount: number;
+  /** Distinct colours among every 100th pixel — a blank frame scores 1. */
+  sampledDistinct: number;
+}
+
+/**
+ * Decode the bytes that left the browser **inside the page**, so the engine
+ * that produced the image is also the engine that decodes it (no Node-side
+ * image dependency, R-12). Used by the CAP-01/CAP-04/CAP-05 rows.
+ */
+async function analyzeImagePixels(page: Page, bytes: Buffer): Promise<ImageAnalysis> {
+  const base64 = bytes.toString('base64');
+  return page.evaluate(async (payload) => {
+    const binary = atob(payload);
+    const raw = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) raw[index] = binary.charCodeAt(index);
+    const bitmap = await createImageBitmap(new Blob([raw.buffer]));
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const context = canvas.getContext('2d');
+    if (context === null) throw new Error('analyzeImagePixels: a 2D canvas is unavailable');
+    context.drawImage(bitmap, 0, 0);
+    const data = context.getImageData(0, 0, canvas.width, canvas.height).data;
+    let accentCount = 0;
+    const distinct = new Set<number>();
+    for (let at = 0; at < data.length; at += 4) {
+      if (data[at] === 0x2f && data[at + 1] === 0x6f && data[at + 2] === 0xeb) accentCount += 1;
+      if ((at / 4) % 100 === 0) distinct.add((data[at] << 16) | (data[at + 1] << 8) | data[at + 2]);
+    }
+    return {
+      width: bitmap.width,
+      height: bitmap.height,
+      accentCount,
+      sampledDistinct: distinct.size,
+    };
+  }, base64);
+}
+
 /** Intercept SDK reports, letting each row decide the reply per attempt. */
 async function interceptIncidentPosts(
   page: Page,
@@ -358,6 +402,77 @@ test('WDG-01: the launcher is a 48x48 shadow-root button and renders disabled wh
   release();
   await waitForHeadline(page, 'Report sent ✓', 10_000);
   expect(calls).toHaveLength(1);
+});
+
+/* ------------------------------------------------------------------------- */
+/* Capture rows — 02-03 Task 1 (CAP-01, CAP-04)                               */
+/* ------------------------------------------------------------------------- */
+
+test('CAP-04: the widget host is hidden when the capture runs and its accent pixels are absent from the sent image', async ({ page, browserName }) => {
+  await installCaptureStub(page, browserName);
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+
+  // Non-vacuity: the widget's own launcher really is filled with `#2f6feb`, so
+  // "zero accent pixels in the decoded frame" is a claim about the widget.
+  const launcherFill = await page.evaluate(() => {
+    const host = document.querySelector('watchbug-host');
+    const launcher = host?.shadowRoot?.querySelector('button.launcher') as HTMLButtonElement | null;
+    return launcher === null ? '' : getComputedStyle(launcher).backgroundColor;
+  });
+  expect(launcherFill).toBe('rgb(47, 111, 235)');
+
+  // Real compose stack: inspect, then `route.continue()` — `route.fetch()`
+  // rebuilds multipart bodies and drops WebKit's blob parts (02-02 deviation 2).
+  let captured: PostCall | null = null;
+  await page.route(INCIDENT_POST_RE, async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.continue();
+      return;
+    }
+    const request = route.request();
+    const buffer = request.postDataBuffer() ?? Buffer.alloc(0);
+    captured = { headers: request.headers(), body: buffer.toString('utf8'), buffer };
+    await route.continue();
+  });
+  const responsePromise = page.waitForResponse(
+    (response) => response.url().endsWith('/api/incidents') && response.request().method() === 'POST',
+  );
+
+  await clickLauncher(page);
+  await waitForHeadline(page, 'Report sent ✓', 15_000);
+
+  const response = await responsePromise;
+  expect(response.status()).toBe(201);
+  expect(captured).not.toBeNull();
+  if (captured === null) return;
+  const call: PostCall = captured;
+
+  // (a) The stub invocation must have OBSERVED the host already hidden — the
+  // inline `display: none` (P2-D-05) that keeps the widget out of its own
+  // screenshot, recorded by whichever tier ran (Pitfall 2: media on
+  // chromium/firefox, the CaptureSource seam on webkit).
+  const observationRaw = await page.locator('html').getAttribute('data-wb-stub-observation');
+  expect(observationRaw, 'the capture stub must record the host state it observed').not.toBeNull();
+  const observation = JSON.parse(observationRaw ?? '{}') as {
+    tier?: string;
+    display?: string;
+    inline?: string;
+    inlineHidden?: boolean;
+  };
+  expect(observation.tier).toBe(browserName === 'webkit' ? 'seam' : 'media');
+  expect(observation.display).toBe('none');
+  expect(observation.inlineHidden).toBe(true);
+  expect(observation.inline).toContain('display: none');
+
+  // (b) The bytes that left the browser decode to an image containing zero
+  // widget-accent pixels (CAP-04 — the widget is provably not in its own shot).
+  const image = multipartPart(call.buffer, 'image');
+  expect(image).not.toBeNull();
+  if (image === null) return;
+  const analysis = await analyzeImagePixels(page, image);
+  expect(analysis.accentCount).toBe(0);
+  expect(analysis.sampledDistinct).toBeGreaterThan(4);
 });
 
 /* ------------------------------------------------------------------------- */
