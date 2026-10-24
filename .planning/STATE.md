@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 02
 current_phase_name: "SDK Tracer Bullet: Widget, Capture & Auto-Redaction"
 status: executing
-stopped_at: Completed 02-01-PLAN.md
-last_updated: "2026-10-23T20:37:30.754Z"
-last_activity: 2026-10-23
+stopped_at: Completed 02-02-PLAN.md
+last_updated: "2026-10-24T11:36:08.798Z"
+last_activity: 2026-10-24
 last_activity_desc: Phase 02 execution started
-state_head: b00fe112f19ead1cd19080c57edc9c22d55b807e
+state_head: 76247b4fa41bafda174a7c2486a98cf62db24fc0
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 9
-  completed_plans: 5
+  completed_plans: 6
   percent: 14
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-10-13)
 Phase: 02 (SDK Tracer Bullet: Widget, Capture & Auto-Redaction) — EXECUTING
 Plan: 2 of 5
 Status: Ready to execute
-Last activity: 2026-10-23 — Phase 02 execution started
+Last activity: 2026-10-24 — Phase 02 execution started
 
 Progress: [█░░░░░░░░░] 14%
 
@@ -61,6 +61,7 @@ Progress: [█░░░░░░░░░] 14%
 | Phase 01 P03 | 37min | 3 tasks | 10 files |
 | Phase 01 P04 | 45min | 3 tasks | 15 files |
 | Phase 02 P01 | 45min | 3 tasks | 9 files |
+| Phase 02 P02 | 6h00m | 3 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -95,6 +96,10 @@ Recent decisions affecting current work:
 - [Phase 02]: endpoint defaults from document.currentScript.src captured at module evaluation, falling back to document.baseURI origin - import.meta.url cannot survive the IIFE lane
 - [Phase 02]: Open-mode e2e artifacts (watchbug.e2e.js/.mjs) are emitted by every npm run build as two extra core calls rather than an argv flag; check:size budgets by filename so the variant is outside the gate
 - [Phase 02]: The shadow-root registry is populated only when SHADOW_MODE === 'open'; Playwright pierces via host.shadowRoot, so no second global exists even in the test build
+- [Phase 02]: 02-02: real-stack e2e rows inspect the intercepted request then pass it through with route.continue() and read the real response via waitForResponse - Playwright WebKit cannot serialize blob-backed FormData into postDataBuffer, so route.fetch() re-sent an empty image part and the API 400'd on magic bytes
+- [Phase 02]: 02-02: the WebP capability probe validates RIFF/WEBP magic bytes (not blob.type alone) and encodeLadder rejects any zero-byte encode - WebKit answers a WebP request with a zero-byte blob still labelled image/webp
+- [Phase 02]: 02-02: WDG-03 leak scan enumerates every --wb- custom property in computed style across all host-document elements incl. watchbug-host (custom props enumerable on all 3 engines); WDG-05 elementFromPoint asserted as launcher containment because the centre point is the SVG glyph
+- [Phase 02]: 02-02: hostile-CSS matrix is one template variant per fixture document lifted by openHostileFixture with a paired control element per rule (CA-04 non-vacuous), served only by page.route fulfilment at the panel origin (Pitfall 4); isolation rows run on the closed production bundle where observable, copy/geometry on the open-mode build (Pitfall 10)
 
 ### Pending Todos
 
@@ -139,6 +144,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-23T20:37:30.636Z
-Stopped at: Completed 02-01-PLAN.md
+Last session: 2026-10-24T11:35:53.598Z
+Stopped at: Completed 02-02-PLAN.md
 Resume file: None
