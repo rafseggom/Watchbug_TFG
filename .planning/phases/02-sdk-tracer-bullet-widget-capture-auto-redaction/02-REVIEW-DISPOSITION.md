@@ -5,11 +5,11 @@ titles: json
 findings:
   - id: CR-01
     severity: critical
-    disposition: open
+    disposition: fixed
     title: "Report POST re-leaks the page's query string in the `Referer` header (external: prv06-referrer)"
   - id: CR-02
     severity: critical
-    disposition: open
+    disposition: fixed
     title: "Card pattern silently skips a valid card once the digit run is glued to neighbouring digits - two adjacent valid cards mask nothing (external: card-glue-fn)"
   - id: CR-03
     severity: critical
@@ -39,7 +39,8 @@ findings:
     severity: info
     disposition: open
     title: "The P2-D-03 byte-equality assertion is vacuous on WebKit"
-open: 9
+open: 7
+fixed: 2
 total: 9
 recorded: 2026-10-24T18:30:00.000Z
 ---
@@ -48,9 +49,9 @@ recorded: 2026-10-24T18:30:00.000Z
 
 | Finding | Severity | Disposition | Source |
 |---------|----------|-------------|--------|
-| CR-01 | critical | open | - |
-| CR-02 | critical | open | - |
-| CR-03 | critical | open | - |
+| CR-01 | critical | fixed | c2d7a50 fix(02): send report with referrerPolicy no-referrer (review CR-01) |
+| CR-02 | critical | fixed | 7c9b299 fix(02): validate card digit groups so glued runs mask (review CR-02) |
+| CR-03 | critical | open | deferred by user decision 2026-10-24 |
 | WR-01 | warning | open | - |
 | WR-02 | warning | open | - |
 | WR-03 | warning | open | - |
