@@ -18,7 +18,11 @@
  * then q0.6, q0.5 → 0.75× downscale and repeat → hard ceiling
  * `MAX_ENCODED_IMAGE_BYTES` (2 MB, the server's 413 boundary).
  */
-import { MAX_ENCODED_IMAGE_BYTES, MAX_IMAGE_PIXELS } from '@watchbug/contracts/constants';
+import {
+  MAX_ENCODED_IMAGE_BYTES,
+  MAX_IMAGE_DIM,
+  MAX_IMAGE_PIXELS,
+} from '@watchbug/contracts/constants';
 
 /** The agreed soft target; the 2 MB contract cap is the hard stop (CAP-05). */
 export const TARGET_ENCODED_IMAGE_BYTES = 800 * 1024;
@@ -121,7 +125,7 @@ function scaledCopy(source: HTMLCanvasElement, width: number, height: number): H
   return canvas;
 }
 
-/** Apply the devicePixelRatio clamp and the 16 MP ceiling to the raw frame. */
+/** Apply the devicePixelRatio clamp, MAX_IMAGE_DIM and the 16 MP ceiling. */
 function initialDimensions(width: number, height: number): { width: number; height: number } {
   let nextWidth = width;
   let nextHeight = height;
@@ -130,6 +134,15 @@ function initialDimensions(width: number, height: number): { width: number; heig
   if (ratio > 2) {
     nextWidth = Math.round((width * 2) / ratio);
     nextHeight = Math.round((height * 2) / ratio);
+  }
+
+  // No side may exceed MAX_IMAGE_DIM (8192) — beyond that the canvas (and
+  // other engines' decoders) start failing silently instead of encoding.
+  const maxSide = Math.max(nextWidth, nextHeight);
+  if (maxSide > MAX_IMAGE_DIM) {
+    const sideFactor = MAX_IMAGE_DIM / maxSide;
+    nextWidth = Math.round(nextWidth * sideFactor);
+    nextHeight = Math.round(nextHeight * sideFactor);
   }
 
   const area = nextWidth * nextHeight;

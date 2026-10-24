@@ -323,6 +323,27 @@ export async function readOutgoingImage(page: Page): Promise<Buffer> {
   return Buffer.from(raw, 'base64');
 }
 
+/**
+ * Force the silent WebP→PNG fallback on **every** encode (M-3 / Pitfall 3):
+ * an `image/webp` request is answered with PNG-typed bytes instead. The SDK
+ * must detect this by sniffing the produced blob's `type` and route the report
+ * as a `.png` part — this host's WebKit encodes real WebP, so no engine
+ * reproduces the fallback naturally (research Pitfall 3, OQ-2).
+ */
+const FORCE_PNG_ENCODE = String.raw`(() => {
+  var original = HTMLCanvasElement.prototype.toBlob;
+  if (typeof original !== 'function') return;
+  HTMLCanvasElement.prototype.toBlob = function (callback, type, quality) {
+    var requested = type === 'image/webp' ? 'image/png' : type;
+    original.call(this, callback, requested, quality);
+  };
+})();`;
+
+/** Install before the fixture navigation (document-start init script). */
+export async function forcePngEncode(page: Page): Promise<void> {
+  await page.addInitScript({ content: FORCE_PNG_ENCODE });
+}
+
 /** Resolve once the widget host exists (the async script tag has run). */
 export async function waitForWidget(page: Page): Promise<void> {
   await page.waitForFunction(() => document.querySelector('watchbug-host') !== null, null, {

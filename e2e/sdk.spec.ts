@@ -13,6 +13,7 @@ import {
   clickLauncher,
   captureStubTier,
   collectHeadlines,
+  forcePngEncode,
   installCaptureStub,
   probeHost,
   probeWidget,
@@ -561,6 +562,139 @@ test('CAP-05: a frame wider than MAX_IMAGE_DIM is scaled to 8192 px before encod
   // … and the total area stays within MAX_IMAGE_PIXELS (16,777,216).
   expect(analysis.width * analysis.height).toBeLessThanOrEqual(16_777_216);
   expect(analysis.sampledDistinct).toBeGreaterThan(4);
+});
+
+test('CAP-05: an oversized 16 MP synthetic frame is delivered inside the 16 MP and 2 MB contract', async ({ page, browserName }) => {
+  test.setTimeout(60_000);
+  // A frame AT the ceiling (4000×4000 = 16,000,000 px, both sides ≤ 4096 so
+  // every engine's canvas can hold it) — the largest capture the pipeline
+  // accepts (P2-D-12 refuses anything over the cap). Seam tier on every
+  // engine: the encode ladder is what this row exercises.
+  await installCaptureStub(page, browserName, {
+    tier: 'seam',
+    frame: { width: 4000, height: 4000 },
+  });
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+
+  const calls = await interceptIncidentPosts(page, async () => ({
+    status: 201,
+    body: JSON.stringify({ id: INTERCEPTED_ID }),
+  }));
+
+  await clickLauncher(page);
+  await waitForHeadline(page, 'Report sent ✓', 45_000);
+  expect(calls).toHaveLength(1);
+
+  const image = await readOutgoingImage(page);
+  // CAP-05 hard ceilings: ≤ MAX_ENCODED_IMAGE_BYTES (2,097,152) on the wire …
+  expect(image.length).toBeLessThanOrEqual(2_097_152);
+  const analysis = await analyzeImagePixels(page, image);
+  // … and the decoded output inside MAX_IMAGE_PIXELS (16,777,216), at the
+  // frame's own dimensions (no clamp was needed at exactly this size).
+  expect(analysis.width).toBe(4000);
+  expect(analysis.height).toBe(4000);
+  expect(analysis.width * analysis.height).toBeLessThanOrEqual(16_777_216);
+  expect(analysis.sampledDistinct).toBeGreaterThan(4);
+});
+
+test.describe('CAP-05 HiDPI (deviceScaleFactor: 2)', () => {
+  test.use({ deviceScaleFactor: 2 });
+
+  test('CAP-05: a deviceScaleFactor: 2 capture decodes non-blank at the expected dimensions', async ({ page, browserName }) => {
+    await installCaptureStub(page, browserName);
+    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+    await waitForWidget(page);
+
+    // Non-vacuity: the context really is HiDPI before anything is asserted.
+    expect(await page.evaluate(() => window.devicePixelRatio)).toBe(2);
+
+    const calls = await interceptIncidentPosts(page, async () => ({
+      status: 201,
+      body: JSON.stringify({ id: INTERCEPTED_ID }),
+    }));
+
+    await clickLauncher(page);
+    await waitForHeadline(page, 'Report sent ✓', 20_000);
+    expect(calls).toHaveLength(1);
+
+    const image = await readOutgoingImage(page);
+    expect(image.length).toBeLessThanOrEqual(2_097_152);
+    const analysis = await analyzeImagePixels(page, image);
+    // The stub frame at DPR 2: still 640×360 (DPR is clamped at 2, not doubled)
+    // and genuinely non-blank — the known HiDPI blank-capture failure is absent.
+    expect(analysis.width).toBe(640);
+    expect(analysis.height).toBe(360);
+    expect(analysis.sampledDistinct).toBeGreaterThan(4);
+  });
+});
+
+test.describe('CAP-05 DPR clamp (deviceScaleFactor: 3)', () => {
+  test.use({ deviceScaleFactor: 3 });
+
+  test('CAP-05: a devicePixelRatio above the clamp of 2 is reduced before encode', async ({ page, browserName }) => {
+    await installCaptureStub(page, browserName);
+    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+    await waitForWidget(page);
+
+    expect(await page.evaluate(() => window.devicePixelRatio)).toBe(3);
+
+    const calls = await interceptIncidentPosts(page, async () => ({
+      status: 201,
+      body: JSON.stringify({ id: INTERCEPTED_ID }),
+    }));
+
+    await clickLauncher(page);
+    await waitForHeadline(page, 'Report sent ✓', 20_000);
+    expect(calls).toHaveLength(1);
+
+    const image = await readOutgoingImage(page);
+    const analysis = await analyzeImagePixels(page, image);
+    // DPR 3 on a 640×360 frame → clamped to 2× → round(640·2/3) × round(360·2/3).
+    expect(analysis.width).toBe(427);
+    expect(analysis.height).toBe(240);
+    expect(analysis.sampledDistinct).toBeGreaterThan(4);
+  });
+});
+
+test('M-3: a forced PNG encode ships as a .png / image/png part and the real API returns 201', async ({ page, browserName }) => {
+  await installCaptureStub(page, browserName);
+  // The silent fallback, provoked deliberately: WebP requests answer PNG.
+  await forcePngEncode(page);
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+
+  let captured: PostCall | null = null;
+  await page.route(INCIDENT_POST_RE, async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.continue();
+      return;
+    }
+    const request = route.request();
+    const buffer = request.postDataBuffer() ?? Buffer.alloc(0);
+    captured = { headers: request.headers(), body: buffer.toString('utf8'), buffer };
+    await route.continue();
+  });
+  const responsePromise = page.waitForResponse(
+    (response) => response.url().endsWith('/api/incidents') && response.request().method() === 'POST',
+  );
+
+  await clickLauncher(page);
+  await waitForHeadline(page, 'Report sent ✓', 15_000);
+
+  const response = await responsePromise;
+  expect(response.status()).toBe(201);
+  expect(captured).not.toBeNull();
+  if (captured === null) return;
+
+  // The sniff — not the requested type — chose the part's name and MIME …
+  expect(captured.body).toContain('filename="screenshot.png"');
+  expect(captured.body).toMatch(/content-type: image\/png/i);
+  expect(captured.body).not.toContain('screenshot.webp');
+
+  // … and those bytes really are PNG (magic, not label).
+  const image = await readOutgoingImage(page);
+  expect(Array.from(image.subarray(0, 8))).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 });
 
 /* ------------------------------------------------------------------------- */
