@@ -64,7 +64,10 @@ const PAINT_FRAME = String(function paintFrame(
   context.fillRect(0, 0, width, height);
 
   // Structured blocks give the blank probe nine genuinely different samples.
-  const palette = ['#1e7a46', '#b3261e', '#2f6feb', '#eef0f4', '#5b6472', '#f2c14e'];
+  // The launcher accent `#2f6feb` is deliberately NOT in this palette: the
+  // CAP-04 row decodes the outgoing image and asserts zero accent-coloured
+  // pixels, so the only way that colour could appear is the widget itself.
+  const palette = ['#1e7a46', '#b3261e', '#0b7285', '#eef0f4', '#5b6472', '#f2c14e'];
   for (let row = 0; row < 6; row += 1) {
     for (let column = 0; column < 10; column += 1) {
       context.fillStyle = palette[(row * 10 + column) % palette.length];
@@ -93,9 +96,71 @@ const PAINT_FRAME = String(function paintFrame(
   context.fillRect(2 + (Date.now() % 4), 2, 2, 2);
 });
 
+/**
+ * Host-state observation (CAP-04): recorded by BOTH tiers at the moment the
+ * stub is invoked, i.e. while the pipeline is between `hideSync()` and the
+ * pixel read. Kept in a host-page attribute (never on `window` — WDG-04), like
+ * the headline recorder.
+ */
+const RECORD_OBSERVATION = String.raw`function recordObservation(tier) {
+  var host = document.querySelector('watchbug-host');
+  if (host === null) return;
+  var inline = host.getAttribute('style') || '';
+  document.documentElement.setAttribute(
+    'data-wb-stub-observation',
+    JSON.stringify({
+      tier: tier,
+      display: window.getComputedStyle(host).display,
+      inline: inline,
+      inlineHidden: inline.indexOf('display: none') !== -1
+    })
+  );
+}`;
+
+/**
+ * Outgoing-image recorder (CAP-01/04/05, M-3).
+ *
+ * **Why this exists:** Playwright's WebKit cannot serialise blob-backed
+ * FormData parts into `request.postDataBuffer()` (02-02 deviation 2) — the
+ * image part arrives as 0 bytes there, so intercepting the request cannot
+ * yield the pixels that left the browser. The SDK calls `fetch` with the
+ * FormData body, so wrapping `window.fetch` reads the **actual outgoing Blob**
+ * on every engine, before Playwright's transport layer ever sees it. The
+ * bytes land in a host-page attribute (never on `window` — WDG-04).
+ */
+const OUTGOING_RECORDER = String.raw`(() => {
+  var original = window.fetch;
+  if (typeof original !== 'function') return;
+  window.fetch = function (input, init) {
+    try {
+      var url = typeof input === 'string' ? input : (input && input.url) || '';
+      var method = (init && init.method) || (input && input.method) || 'GET';
+      var body = init && init.body;
+      if (method === 'POST' && /\/api\/incidents$/.test(url) && body !== null && body !== undefined && typeof body.get === 'function') {
+        var image = body.get('image');
+        if (image !== null && image !== undefined && typeof image.arrayBuffer === 'function') {
+          image.arrayBuffer().then(function (buffer) {
+            var bytes = new Uint8Array(buffer);
+            var chunk = 0x8000;
+            var binary = '';
+            for (var at = 0; at < bytes.length; at += chunk) {
+              binary += String.fromCharCode.apply(null, bytes.subarray(at, at + chunk));
+            }
+            document.documentElement.setAttribute('data-wb-outgoing-image', btoa(binary));
+          }).catch(function () {});
+        }
+      }
+    } catch (error) {
+      // Instrumentation must never break the send it observes.
+    }
+    return original.call(this, input, init);
+  };
+})();`;
+
 /** The media-tier init script (runs at document-start on every navigation). */
 const MEDIA_STUB = String.raw`(() => {
   const paintFrame = ${PAINT_FRAME};
+  ${RECORD_OBSERVATION}
 
   function markerRect() {
     const marker = document.querySelector('[data-capture-marker]');
@@ -103,6 +168,8 @@ const MEDIA_STUB = String.raw`(() => {
   }
 
   function makeStream() {
+    // CAP-04: the host must already be inline-hidden when capture starts.
+    recordObservation('media');
     const canvas = document.createElement('canvas');
     canvas.width = ${STUB_FRAME_WIDTH};
     canvas.height = ${STUB_FRAME_HEIGHT};
@@ -135,6 +202,8 @@ const MEDIA_STUB = String.raw`(() => {
 
 /** The seam-tier init script: installs raw-ImageData capture on the host. */
 const SEAM_STUB = String.raw`(() => {
+  ${RECORD_OBSERVATION}
+
   function install() {
     const host = document.querySelector('watchbug-host');
     if (host === null) return false;
@@ -143,6 +212,9 @@ const SEAM_STUB = String.raw`(() => {
     Object.defineProperty(host, '__watchbugCaptureFrame', {
       configurable: true,
       value: () => {
+        // CAP-04: runs after the pipeline's beforeRead() assertion, so the
+        // host must be inline-hidden at this instant too.
+        recordObservation('seam');
         const width = Math.max(2, Math.floor(window.innerWidth / 2));
         const height = Math.max(2, Math.floor(window.innerHeight / 2));
         const canvas = document.createElement('canvas');
@@ -187,11 +259,33 @@ const SEAM_STUB = String.raw`(() => {
 
 /**
  * Install the engine's capture tier. Must run **before** the fixture
- * navigation: both tiers are document-start init scripts.
+ * navigation: both tiers are document-start init scripts. The outgoing-image
+ * recorder rides every capture stub so any row can decode the bytes that
+ * actually left the browser (WebKit-safe).
  */
 export async function installCaptureStub(page: Page, browserName: string): Promise<void> {
   const content = captureStubTier(browserName) === 'seam' ? SEAM_STUB : MEDIA_STUB;
   await page.addInitScript({ content });
+  await page.addInitScript({ content: OUTGOING_RECORDER });
+}
+
+/**
+ * The exact image bytes the SDK sent on `POST /api/incidents`, as captured in
+ * the page at the `fetch` boundary. Waits for the recorder (the Blob read is
+ * async) — safe to call after the panel reached `Report sent ✓`.
+ */
+export async function readOutgoingImage(page: Page): Promise<Buffer> {
+  await page.waitForFunction(
+    () => {
+      const raw = document.documentElement.getAttribute('data-wb-outgoing-image');
+      return raw !== null && raw.length > 0;
+    },
+    null,
+    { timeout: 15_000 },
+  );
+  const raw = await page.locator('html').getAttribute('data-wb-outgoing-image');
+  if (raw === null) throw new Error('readOutgoingImage: no recorded outgoing image');
+  return Buffer.from(raw, 'base64');
 }
 
 /** Resolve once the widget host exists (the async script tag has run). */

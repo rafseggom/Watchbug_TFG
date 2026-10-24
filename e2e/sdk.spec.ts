@@ -11,11 +11,13 @@ import {
 } from './helpers/host-fixtures';
 import {
   clickLauncher,
+  captureStubTier,
   collectHeadlines,
   installCaptureStub,
   probeHost,
   probeWidget,
   readHeadlines,
+  readOutgoingImage,
   waitForHeadline,
   waitForWidget,
 } from './helpers/capture-stubs';
@@ -408,6 +410,51 @@ test('WDG-01: the launcher is a 48x48 shadow-root button and renders disabled wh
 /* Capture rows — 02-03 Task 1 (CAP-01, CAP-04)                               */
 /* ------------------------------------------------------------------------- */
 
+test('CAP-01: one gesture drives the engine capture tier to a non-blank frame and a real 201', async ({ page, browserName }) => {
+  await installCaptureStub(page, browserName);
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+
+  let captured: PostCall | null = null;
+  await page.route(INCIDENT_POST_RE, async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.continue();
+      return;
+    }
+    const request = route.request();
+    const buffer = request.postDataBuffer() ?? Buffer.alloc(0);
+    captured = { headers: request.headers(), body: buffer.toString('utf8'), buffer };
+    await route.continue();
+  });
+  const responsePromise = page.waitForResponse(
+    (response) => response.url().endsWith('/api/incidents') && response.request().method() === 'POST',
+  );
+
+  await clickLauncher(page);
+  await waitForHeadline(page, 'Report sent ✓', 15_000);
+
+  const response = await responsePromise;
+  expect(response.status()).toBe(201);
+  expect(captured).not.toBeNull();
+  if (captured === null) return;
+
+  // Which tier actually ran: `captureStream` fake on chromium/firefox, the
+  // CaptureSource seam on webkit (Pitfall 2) — observed at invocation, not
+  // assumed from the browser name alone.
+  const observationRaw = await page.locator('html').getAttribute('data-wb-stub-observation');
+  expect(observationRaw, 'the capture tier must have been invoked').not.toBeNull();
+  const observation = JSON.parse(observationRaw ?? '{}') as { tier?: string };
+  expect(observation.tier).toBe(captureStubTier(browserName));
+
+  // The report's image part decodes to a genuinely captured, non-blank frame
+  // (read at the fetch boundary — postDataBuffer() drops blob parts on WebKit).
+  const image = await readOutgoingImage(page);
+  const analysis = await analyzeImagePixels(page, image);
+  expect(analysis.width).toBe(640);
+  expect(analysis.height).toBe(360);
+  expect(analysis.sampledDistinct).toBeGreaterThan(4);
+});
+
 test('CAP-04: the widget host is hidden when the capture runs and its accent pixels are absent from the sent image', async ({ page, browserName }) => {
   await installCaptureStub(page, browserName);
   await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
@@ -447,6 +494,11 @@ test('CAP-04: the widget host is hidden when the capture runs and its accent pix
   expect(captured).not.toBeNull();
   if (captured === null) return;
   const call: PostCall = captured;
+  // Wire shape: the image part header is present on every engine (WebKit
+  // exposes the part's headers but not its payload — hence the
+  // fetch-boundary recorder for the actual bytes).
+  expect(call.headers['content-type']).toContain('multipart/form-data; boundary=');
+  expect(call.body).toContain('name="image"');
 
   // (a) The stub invocation must have OBSERVED the host already hidden — the
   // inline `display: none` (P2-D-05) that keeps the widget out of its own
@@ -460,16 +512,15 @@ test('CAP-04: the widget host is hidden when the capture runs and its accent pix
     inline?: string;
     inlineHidden?: boolean;
   };
-  expect(observation.tier).toBe(browserName === 'webkit' ? 'seam' : 'media');
+  expect(observation.tier).toBe(captureStubTier(browserName));
   expect(observation.display).toBe('none');
   expect(observation.inlineHidden).toBe(true);
   expect(observation.inline).toContain('display: none');
 
   // (b) The bytes that left the browser decode to an image containing zero
   // widget-accent pixels (CAP-04 — the widget is provably not in its own shot).
-  const image = multipartPart(call.buffer, 'image');
-  expect(image).not.toBeNull();
-  if (image === null) return;
+  // Read at the fetch boundary: WebKit's postDataBuffer() omits blob payloads.
+  const image = await readOutgoingImage(page);
   const analysis = await analyzeImagePixels(page, image);
   expect(analysis.accentCount).toBe(0);
   expect(analysis.sampledDistinct).toBeGreaterThan(4);
