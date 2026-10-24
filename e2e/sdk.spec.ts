@@ -29,6 +29,23 @@ const INTERCEPTED_ID = '11111111-1111-4111-8111-111111111111';
 interface PostCall {
   headers: Record<string, string>;
   body: string;
+  /** The raw request bytes — multipart parts are binary, never utf8-safe. */
+  buffer: Buffer;
+}
+
+/**
+ * Extract one multipart part's payload bytes from a raw request body. Used to
+ * prove a retry resends the *same* encoded image (P2-D-03), not a re-encode.
+ */
+function multipartPart(buffer: Buffer, name: string): Buffer | null {
+  const marker = Buffer.from(`name="${name}"`);
+  const at = buffer.indexOf(marker);
+  if (at < 0) return null;
+  const headerEnd = buffer.indexOf('\r\n\r\n', at);
+  if (headerEnd < 0) return null;
+  const nextBoundary = buffer.indexOf('\r\n--', headerEnd + 4);
+  if (nextBoundary < 0) return null;
+  return buffer.subarray(headerEnd + 4, nextBoundary);
 }
 
 /** Intercept SDK reports, letting each row decide the reply per attempt. */
@@ -43,9 +60,11 @@ async function interceptIncidentPosts(
       return;
     }
     const request = route.request();
+    const buffer = request.postDataBuffer() ?? Buffer.alloc(0);
     const call: PostCall = {
       headers: request.headers(),
-      body: (request.postDataBuffer() ?? Buffer.alloc(0)).toString('utf8'),
+      body: buffer.toString('utf8'),
+      buffer,
     };
     calls.push(call);
     const { status, body } = await reply(call, calls.length - 1);
@@ -326,4 +345,165 @@ test('WDG-01: the launcher is a 48x48 shadow-root button and renders disabled wh
   release();
   await waitForHeadline(page, 'Report sent ✓', 10_000);
   expect(calls).toHaveLength(1);
+});
+
+/* ------------------------------------------------------------------------- */
+/* Status-machine rows — 02-02 Task 2 (P2-D-03, UI-SPEC loading/error/a11y)   */
+/* ------------------------------------------------------------------------- */
+
+test('P2-D-03: a transient 500 retries with the same Idempotency-Key and the same encoded bytes', async ({ page, browserName }) => {
+  await installCaptureStub(page, browserName);
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+  // Record every distinct headline: `Capturing…` and `Sending…` can be shorter
+  // than a poll interval, and the locked copy progression is an assertion.
+  await collectHeadlines(page);
+
+  const calls = await interceptIncidentPosts(page, async (_call, index) =>
+    index === 0
+      ? {
+          status: 500,
+          body: JSON.stringify({ statusCode: 500, error: 'Internal Server Error', message: 'boom' }),
+        }
+      : { status: 201, body: JSON.stringify({ id: INTERCEPTED_ID }) },
+  );
+
+  await clickLauncher(page);
+
+  // The retry window is the observable in-flight state for both the retry copy
+  // and the launcher's disabled rendering (UI-SPEC loading lift, WDG-01).
+  await waitForHeadline(page, 'Retrying (1 of 3)…', 10_000);
+  const duringRetry = await probeWidget(page);
+  expect(duringRetry.panelHidden).toBe('false');
+  expect(duringRetry.launcherDisabled).toBe(true);
+  expect(duringRetry.actionsVisible).toBe(false);
+
+  await waitForHeadline(page, 'Report sent ✓', 15_000);
+  expect(calls).toHaveLength(2);
+
+  const firstKey = calls[0].headers['idempotency-key'];
+  expect(firstKey).toMatch(/^[0-9a-f-]{36}$/);
+  expect(calls[1].headers['idempotency-key']).toBe(firstKey);
+
+  // Same logical submission: the encoded image and the meta part are byte-equal
+  // across attempts (only the multipart boundary is regenerated).
+  const image0 = multipartPart(calls[0].buffer, 'image');
+  const image1 = multipartPart(calls[1].buffer, 'image');
+  expect(image0).not.toBeNull();
+  expect(image1).not.toBeNull();
+  expect(image1).toEqual(image0);
+  expect(multipartPart(calls[1].buffer, 'meta')).toEqual(multipartPart(calls[0].buffer, 'meta'));
+
+  const headlines = await readHeadlines(page);
+  const sequence = ['Capturing…', 'Sending…', 'Retrying (1 of 3)…', 'Report sent ✓'];
+  const positions = sequence.map((headline) => headlines.indexOf(headline));
+  expect(positions.every((at) => at >= 0)).toBe(true);
+  expect([...positions].sort((a, b) => a - b)).toEqual(positions);
+});
+
+test('P2-D-03: a contract 400 fails immediately, renders the server message and never retries', async ({ page, browserName }) => {
+  await installCaptureStub(page, browserName);
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+
+  const reason = 'Project key not recognised';
+  const calls = await interceptIncidentPosts(page, async () => ({
+    status: 400,
+    body: JSON.stringify({ statusCode: 400, error: 'Bad Request', message: reason }),
+  }));
+
+  await clickLauncher(page);
+  await waitForHeadline(page, 'The server rejected the report.', 15_000);
+
+  const failed = await probeWidget(page);
+  expect(failed.reason).toBe(reason);
+  expect(failed.headlineRole).toBe('alert');
+  expect(failed.textRole).toBe('status');
+  expect(failed.textLive).toBe('polite');
+  expect(failed.actionsVisible).toBe(true);
+  expect(failed.retryVisible).toBe(true);
+  expect(failed.dismissVisible).toBe(true);
+  expect(failed.launcherDisabled).toBe(true);
+
+  // No automatic retry for a contract 4xx: one attempt, and still one after a
+  // window longer than the first scheduled retry (1 s ±25 %).
+  await page.waitForTimeout(1_500);
+  expect(calls).toHaveLength(1);
+});
+
+test('UI-SPEC backstop: a long server reason renders truncated to 240 chars with an ellipsis inside the 320 px panel', async ({ page, browserName }) => {
+  await installCaptureStub(page, browserName);
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+
+  const longReason =
+    'The report was rejected because the project key does not match any active project on this server. ' +
+    'Check the key configured in your deployment, then try again once it has been corrected. ' +
+    'Nothing has been stored and no attachment was written to disk.';
+
+  await interceptIncidentPosts(page, async () => ({
+    status: 403,
+    body: JSON.stringify({ statusCode: 403, error: 'Forbidden', message: longReason }),
+  }));
+
+  await clickLauncher(page);
+  await waitForHeadline(page, 'The server rejected the report.', 15_000);
+
+  const failed = await probeWidget(page);
+  expect(longReason.length).toBeGreaterThan(240);
+  expect(failed.reasonLength).toBeLessThanOrEqual(240);
+  expect(failed.reason.endsWith('…')).toBe(true);
+  // Wrapped at a word boundary: no word is cut in half at the truncation.
+  expect(failed.reason.startsWith('The report was rejected')).toBe(true);
+  expect(failed.reason).not.toContain('…'.repeat(2));
+  expect(failed.panelWidth).toBeLessThanOrEqual(320);
+});
+
+test('UI-SPEC A-5/A-7: sent auto-dismisses after 5 s and Escape dismisses a terminal failure', async ({ page, browserName }) => {
+  await installCaptureStub(page, browserName);
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+
+  await interceptIncidentPosts(page, async () => ({
+    status: 201,
+    body: JSON.stringify({ id: INTERCEPTED_ID }),
+  }));
+
+  await clickLauncher(page);
+  await waitForHeadline(page, 'Report sent ✓', 15_000);
+  const sentAt = Date.now();
+
+  await page.waitForFunction(
+    () => {
+      const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
+      return root?.querySelector('.panel')?.getAttribute('data-hidden') === 'true';
+    },
+    null,
+    { timeout: 9_000 },
+  );
+  // A-5: the success panel waits the full 5 s before returning to idle.
+  expect(Date.now() - sentAt).toBeGreaterThanOrEqual(4_000);
+  const idle = await probeWidget(page);
+  expect(idle.launcherDisabled).toBe(false);
+
+  // A-7: Escape dismisses a terminal failure panel and re-arms the launcher.
+  await page.unroute(INCIDENT_POST_RE);
+  await interceptIncidentPosts(page, async () => ({
+    status: 401,
+    body: JSON.stringify({ statusCode: 401, error: 'Unauthorized', message: 'Missing project key' }),
+  }));
+
+  await clickLauncher(page);
+  await waitForHeadline(page, 'The server rejected the report.', 15_000);
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(
+    () => {
+      const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
+      return root?.querySelector('.panel')?.getAttribute('data-hidden') === 'true';
+    },
+    null,
+    { timeout: 5_000 },
+  );
+  const dismissed = await probeWidget(page);
+  expect(dismissed.launcherDisabled).toBe(false);
 });

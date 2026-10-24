@@ -21,6 +21,9 @@ export const MAX_REASON_CHARS = 240;
 /** Automatic retry budget (P2-D-03) — the `{max}` in `Retrying ({n} of {max})…`. */
 export const RETRY_MAX_ATTEMPTS = 3;
 
+/** `Report sent ✓` returns to the idle launcher after this pause (UI-SPEC A-5). */
+export const SENT_AUTO_DISMISS_MS = 5_000;
+
 /** The terminal failure classes of the state machine. */
 export type StatusFailure = 'capture' | 'blank' | 'network' | 'rejected';
 
@@ -222,6 +225,35 @@ export function createStatusPanel(handlers: StatusPanelHandlers): StatusPanel {
   retryButton.addEventListener('click', onRetry);
   dismissButton.addEventListener('click', onDismiss);
 
+  /**
+   * Terminal-panel affordances (UI-SPEC A-5/A-7):
+   *  - `sent` auto-dismisses after `SENT_AUTO_DISMISS_MS`;
+   *  - `Escape` dismisses any terminal panel, and the document listener exists
+   *    only while a terminal panel is visible — an in-flight panel has no
+   *    dismiss path, and teardown removes the listener (A-7).
+   */
+  let dismissTimer: ReturnType<typeof setTimeout> | null = null;
+  let escapeListening = false;
+
+  const clearDismissTimer = (): void => {
+    if (dismissTimer === null) return;
+    clearTimeout(dismissTimer);
+    dismissTimer = null;
+  };
+
+  const onKeyDown = (event: KeyboardEvent): void => {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    handlers.onDismiss();
+  };
+
+  const setEscapeListening = (listening: boolean): void => {
+    if (listening === escapeListening) return;
+    escapeListening = listening;
+    if (listening) document.addEventListener('keydown', onKeyDown);
+    else document.removeEventListener('keydown', onKeyDown);
+  };
+
   const show = (node: HTMLElement, visible: boolean): void => {
     node.style.display = visible ? '' : 'none';
   };
@@ -250,6 +282,11 @@ export function createStatusPanel(handlers: StatusPanelHandlers): StatusPanel {
     const inFlight = view.kind === 'capturing' || view.kind === 'sending' || view.kind === 'retrying';
     const terminal = view.kind === 'sent' || view.kind === 'failed';
     const failed = view.kind === 'failed';
+
+    // A re-render replaces the previous panel state, including its auto-dismiss
+    // timer and its Escape affordance.
+    clearDismissTimer();
+    setEscapeListening(terminal);
 
     panel.setAttribute('data-hidden', view.kind === 'idle' ? 'true' : 'false');
     panel.classList.toggle('panel--terminal', terminal);
@@ -323,12 +360,21 @@ export function createStatusPanel(handlers: StatusPanelHandlers): StatusPanel {
 
     show(hint, (hint.textContent ?? '').length > 0);
     show(reason, (reason.textContent ?? '').length > 0);
+
+    if (view.kind === 'sent') {
+      dismissTimer = setTimeout(() => {
+        dismissTimer = null;
+        handlers.onDismiss();
+      }, SENT_AUTO_DISMISS_MS);
+    }
   };
 
   return {
     element: panel,
     render,
     destroy(): void {
+      clearDismissTimer();
+      setEscapeListening(false);
       retryButton.removeEventListener('click', onRetry);
       dismissButton.removeEventListener('click', onDismiss);
       panel.remove();

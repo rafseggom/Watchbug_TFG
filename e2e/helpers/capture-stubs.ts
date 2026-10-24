@@ -226,6 +226,8 @@ export interface WidgetProbe {
   headlineRole: string | null;
   textRole: string | null;
   textLive: string | null;
+  /** The whole `.actions` row — hidden for every non-terminal state. */
+  actionsVisible: boolean;
   retryVisible: boolean;
   dismissVisible: boolean;
   launcherWidth: number;
@@ -247,6 +249,8 @@ export async function probeWidget(page: Page): Promise<WidgetProbe> {
     const hint = root?.querySelector('.hint') as HTMLElement | null;
     const reason = root?.querySelector('.reason') as HTMLElement | null;
     const text = root?.querySelector('.text') as HTMLElement | null;
+    const actions = root?.querySelector('.actions') as HTMLElement | null;
+    const actionsVisible = actions !== null && actions.style.display !== 'none';
     const retry = root?.querySelector('.action--primary') as HTMLElement | null;
     const dismiss = root?.querySelector('.action:not(.action--primary)') as HTMLElement | null;
     const launcher = root?.querySelector('button.launcher') as HTMLButtonElement | null;
@@ -266,6 +270,7 @@ export async function probeWidget(page: Page): Promise<WidgetProbe> {
       headlineRole: headline?.getAttribute('role') ?? null,
       textRole: text?.getAttribute('role') ?? null,
       textLive: text?.getAttribute('aria-live') ?? null,
+      actionsVisible,
       retryVisible: retry !== null && retry.style.display !== 'none',
       dismissVisible: dismiss !== null && dismiss.style.display !== 'none',
       launcherWidth: launcherRect === null ? 0 : Math.round(launcherRect.width),
