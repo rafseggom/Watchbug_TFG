@@ -1808,11 +1808,18 @@ async function runHidpiMaskRow(
   expectMaskedAndTargeted(report, minInteriorBlack);
 }
 
-test('H-1: devicePixelRatio 1 masks in bitmap space — zero original pixels in the rect and its 1-px boundary ring', async ({
-  page,
-  browserName,
-}) => {
-  await runHidpiMaskRow(page, browserName, 1, { width: 1280, height: 720 }, 1280);
+// Explicit DSF: the `Desktop Safari` project descriptor defaults to
+// deviceScaleFactor 2, so "dpr 1" must be pinned per-row rather than assumed
+// from the project default (webkit failed exactly that assumption first).
+test.describe('H-1 baseline (deviceScaleFactor: 1)', () => {
+  test.use({ deviceScaleFactor: 1 });
+
+  test('H-1: devicePixelRatio 1 masks in bitmap space — zero original pixels in the rect and its 1-px boundary ring', async ({
+    page,
+    browserName,
+  }) => {
+    await runHidpiMaskRow(page, browserName, 1, { width: 1280, height: 720 }, 1280);
+  });
 });
 
 test.describe('H-1 HiDPI (deviceScaleFactor: 1.25)', () => {

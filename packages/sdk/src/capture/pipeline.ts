@@ -214,7 +214,20 @@ export function createCaptureFlow(deps: CaptureFlowDeps): CaptureFlow {
       }
 
       // SEC-02/T-02-03: destructive fill on the raw pixels, before any encode.
-      redactor.redact(image);
+      // FAIL CLOSED (T-02-10): a redaction error — DOM scan failure, geometry
+      // mapping failure — must never fall open to unredacted bytes. It
+      // short-circuits HERE, before the encode and send steps, into the loud
+      // terminal failure state (M-6): nothing is encoded, nothing is sent,
+      // and the panel tells the user. The locked UI-SPEC copy set has no
+      // dedicated redaction headline, so the capture-failure state carries it
+      // (its load-bearing sentence is "Nothing was sent." — dedicated copy,
+      // if wanted, belongs with the Phase 3 composer).
+      try {
+        redactor.redact(image);
+      } catch {
+        onView({ kind: 'failed', failure: 'capture' });
+        return;
+      }
 
       let encoded: EncodedImage;
       try {
