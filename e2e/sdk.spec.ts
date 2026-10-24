@@ -1,7 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
+import { MAX_TITLE_CHARS } from '@watchbug/contracts/constants';
+import { reportSchema } from '@watchbug/contracts/schema';
 import {
   addedNames,
   FIXTURE_ORIGIN,
+  HOSTILE_URL,
   openHostFixture,
   openHostileFixture,
   projectKey,
@@ -2129,4 +2132,118 @@ test('PRV-05: the intercepted report carries no host cookie, storage or auth mat
       `the ${surface} sentinel must not appear in the outgoing image bytes`,
     ).toBe(false);
   }
+});
+
+/* ------------------------------------------------------------------ */
+/* PRV-06 / P2-D-01 — path-only URL and the capped auto-title on the wire */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The `meta` JSON part exactly as it left the browser, parsed from the raw
+ * intercepted bytes (the meta part survives on every engine — WebKit drops
+ * only the blob-backed image part). Assertions target the RAW value, before
+ * the contract's own `stripQueryFragment` transform, so the row proves the SDK
+ * sends path-only rather than relying on defence in depth.
+ */
+function interceptedMeta(call: PostCall): Record<string, unknown> {
+  const part = multipartPart(call.buffer, 'meta');
+  if (part === null) throw new Error('intercepted request has no meta part');
+  return JSON.parse(part.toString('utf8')) as Record<string, unknown>;
+}
+
+test('PRV-06: meta.url is path-only — the query string and fragment never enter the report', async ({
+  page,
+  browserName,
+}) => {
+  await installCaptureStub(page, browserName);
+  await openHostileFixture(page, { variant: 'clean', bundle: 'watchbug.e2e.js', mode: 'iife' });
+  // Navigate to a URL carrying a query secret and a fragment. The hostile
+  // fixture's route regex is unanchored (host-fixtures.ts), so the same
+  // document serves this URL — unlike the plain fixture route, which is
+  // anchored to the bare path and would fall through to nginx's 404.
+  await page.goto(`${HOSTILE_URL}?variant=clean&token=secret#frag`, { waitUntil: 'load' });
+  await waitForWidget(page);
+
+  // Non-vacuity: the document really is addressed with a query and a fragment.
+  const location = await page.evaluate(() => ({
+    href: location.href,
+    pathname: location.pathname,
+    search: location.search,
+    hash: location.hash,
+  }));
+  expect(location.pathname).toBe('/__e2e/hostile-host.html');
+  expect(location.search).toBe('?variant=clean&token=secret');
+  expect(location.hash).toBe('#frag');
+  expect(location.href).toContain('token=secret');
+
+  // A short title passes through unchanged (the truncation row owns the cap).
+  await page.evaluate(() => {
+    document.title = 'PRV-06 path-only report';
+  });
+
+  const calls = await interceptIncidentPosts(page, async () => ({
+    status: 201,
+    body: JSON.stringify({ id: INTERCEPTED_ID }),
+  }));
+
+  await clickLauncher(page);
+  await waitForHeadline(page, 'Report sent ✓', 15_000);
+  expect(calls, 'the gesture must send exactly one report').toHaveLength(1);
+
+  const meta = interceptedMeta(calls[0]);
+  // The raw wire value: path only — no query, no fragment, no origin.
+  expect(meta.url).toBe('/__e2e/hostile-host.html');
+  expect(String(meta.url)).not.toContain('?');
+  expect(String(meta.url)).not.toContain('#');
+  expect(String(meta.url)).not.toContain('://');
+  expect(String(meta.url)).not.toContain('token=secret');
+  // Short title untouched.
+  expect(meta.title).toBe('PRV-06 path-only report');
+  expect(meta.type).toBe('bug');
+  // And the meta as sent satisfies the published closed contract.
+  const parsed = reportSchema.parse(meta);
+  expect(parsed.url).toBe('/__e2e/hostile-host.html');
+});
+
+test('P2-D-01: the auto-title is document.title truncated to the first 200 code points and type is bug', async ({
+  page,
+  browserName,
+}) => {
+  await installCaptureStub(page, browserName);
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+
+  // 300 characters = 300 code points but 500 UTF-16 units: the cap must count
+  // code points, matching the Zod `.max(MAX_TITLE_CHARS)` semantics the server
+  // validates against (100 ASCII + 200 non-BMP emoji).
+  const longTitle = `${'A'.repeat(100)}${'\u{1F600}'.repeat(200)}`;
+  expect([...longTitle].length).toBe(300);
+  await page.evaluate((title) => {
+    document.title = title;
+  }, longTitle);
+
+  const calls = await interceptIncidentPosts(page, async () => ({
+    status: 201,
+    body: JSON.stringify({ id: INTERCEPTED_ID }),
+  }));
+
+  await clickLauncher(page);
+  await waitForHeadline(page, 'Report sent ✓', 15_000);
+  expect(calls, 'the gesture must send exactly one report').toHaveLength(1);
+
+  const meta = interceptedMeta(calls[0]);
+  expect(meta.type).toBe('bug');
+
+  const expectedTitle = [...longTitle].slice(0, MAX_TITLE_CHARS).join('');
+  expect([...expectedTitle].length, 'expected title spans 200 code points').toBe(200);
+  expect(typeof meta.title).toBe('string');
+  expect(
+    [...String(meta.title)].length,
+    'the sent title must be exactly MAX_TITLE_CHARS code points',
+  ).toBe(MAX_TITLE_CHARS);
+  expect(meta.title, 'the sent title must be the first 200 code points of document.title').toBe(
+    expectedTitle,
+  );
+  // The truncated title satisfies the published contract's cap.
+  expect(() => reportSchema.parse(meta)).not.toThrow();
 });
