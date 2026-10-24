@@ -60,11 +60,11 @@ A requirement is **Complete** when:
 
 ### Capture
 
-- [ ] **CAP-01**: An end user can capture a screenshot of the current tab via the browser's capture prompt
+- [x] **CAP-01**: An end user can capture a screenshot of the current tab via the browser's capture prompt
 - [ ] **CAP-02**: An end user can attach an image from their device instead of capturing
 - [ ] **CAP-03**: An end user sees a clear failure state when capture is unavailable and can still file text-only feedback
-- [ ] **CAP-04**: A capture never contains the Watchbug widget itself
-- [ ] **CAP-05**: Captures are downscaled to fit ≤ 16 MP and ≤ 2 MB without going blank on HiDPI displays
+- [x] **CAP-04**: A capture never contains the Watchbug widget itself
+- [x] **CAP-05**: Captures are downscaled to fit ≤ 16 MP and ≤ 2 MB without going blank on HiDPI displays
 
 ### Annotation
 
@@ -223,11 +223,11 @@ Which phases cover which requirements. **Updated during roadmap creation** — e
 | WDG-04 | Phase 2 | Complete |
 | WDG-05 | Phase 2 | Complete |
 | WDG-06 | Phase 3 | Pending |
-| CAP-01 | Phase 2 | Pending |
+| CAP-01 | Phase 2 | Complete |
 | CAP-02 | Phase 3 | Pending |
 | CAP-03 | Phase 3 | Pending |
-| CAP-04 | Phase 2 | Pending |
-| CAP-05 | Phase 2 | Pending |
+| CAP-04 | Phase 2 | Complete |
+| CAP-05 | Phase 2 | Complete |
 | ANN-01 | Phase 3 | Pending |
 | ANN-02 | Phase 3 | Pending |
 | ANN-03 | Phase 3 | Pending |

@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 02
 current_phase_name: "SDK Tracer Bullet: Widget, Capture & Auto-Redaction"
 status: executing
-stopped_at: Completed 02-02-PLAN.md
-last_updated: "2026-10-24T11:36:08.798Z"
+stopped_at: Completed 02-03-PLAN.md
+last_updated: "2026-10-24T12:36:07.733Z"
 last_activity: 2026-10-24
 last_activity_desc: Phase 02 execution started
-state_head: 76247b4fa41bafda174a7c2486a98cf62db24fc0
+state_head: c1a86f8eb58e0a1e457f1e66a254617d41a4b672
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 9
-  completed_plans: 6
+  completed_plans: 7
   percent: 14
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-13)
 ## Current Position
 
 Phase: 02 (SDK Tracer Bullet: Widget, Capture & Auto-Redaction) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
 Last activity: 2026-10-24 — Phase 02 execution started
 
@@ -62,6 +62,7 @@ Progress: [█░░░░░░░░░] 14%
 | Phase 01 P04 | 45min | 3 tasks | 15 files |
 | Phase 02 P01 | 45min | 3 tasks | 9 files |
 | Phase 02 P02 | 6h00m | 3 tasks | 13 files |
+| Phase 02 P03 | 40min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -100,6 +101,10 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-02: the WebP capability probe validates RIFF/WEBP magic bytes (not blob.type alone) and encodeLadder rejects any zero-byte encode - WebKit answers a WebP request with a zero-byte blob still labelled image/webp
 - [Phase 02]: 02-02: WDG-03 leak scan enumerates every --wb- custom property in computed style across all host-document elements incl. watchbug-host (custom props enumerable on all 3 engines); WDG-05 elementFromPoint asserted as launcher containment because the centre point is the SVG glyph
 - [Phase 02]: 02-02: hostile-CSS matrix is one template variant per fixture document lifted by openHostileFixture with a paired control element per rule (CA-04 non-vacuous), served only by page.route fulfilment at the panel origin (Pitfall 4); isolation rows run on the closed production bundle where observable, copy/geometry on the open-mode build (Pitfall 10)
+- [Phase 02]: 02-03: outgoing image bytes are read at the fetch boundary via a window.fetch wrapper in the e2e stub (readOutgoingImage), never from request.postDataBuffer - Playwright WebKit drops blob-backed FormData payloads
+- [Phase 02]: 02-03: CAP-05 oversized frame sits at the 16 MP ceiling (4000x4000): frames above MAX_IMAGE_PIXELS are rejected by the P2-D-12 probe before encode, so the area clamp is source-asserted while the at-ceiling row proves the 16 MP / 2 MB contract
+- [Phase 02]: 02-03: added the plan-mandated MAX_IMAGE_DIM (8192) per-side clamp to initialDimensions, RED-proven by the 9000px wide-frame row (RED_EVIDENCE_OK)
+- [Phase 02]: 02-03: refusal rows are non-vacuous via a data-wb-stub-invoked attribute so a policy refusal cannot pass because the capture API was missing; uniform runs on the default tier, beyond-cap as a canvas-free ImageData at the seam
 
 ### Pending Todos
 
@@ -144,6 +149,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-24T11:35:53.598Z
-Stopped at: Completed 02-02-PLAN.md
+Last session: 2026-10-24T12:36:07.628Z
+Stopped at: Completed 02-03-PLAN.md
 Resume file: None
