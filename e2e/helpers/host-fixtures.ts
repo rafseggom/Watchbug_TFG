@@ -29,6 +29,10 @@ export const FIXTURE_URL = `${FIXTURE_ORIGIN}/__e2e/host-fixture.html`;
 /** One shared RegExp per intercepted route (e2e/ingest.spec.ts convention). */
 const BUNDLE_ROUTE = /\/__e2e\/bundles\//;
 const FIXTURE_ROUTE = /\/__e2e\/host-fixture\.html$/;
+/** The hostile-CSS matrix (WDG-02/03/05, CA-04) — a separate document. */
+const HOSTILE_ROUTE = /\/__e2e\/hostile-host\.html/;
+
+export const HOSTILE_URL = `${FIXTURE_ORIGIN}/__e2e/hostile-host.html`;
 
 export type BundleName = 'watchbug.js' | 'watchbug.mjs' | 'watchbug.e2e.js' | 'watchbug.e2e.mjs';
 
@@ -115,8 +119,19 @@ export interface GlobalSnapshot {
  */
 export async function openHostFixture(page: Page, options: HostFixtureOptions): Promise<void> {
   const key = options.projectKey ?? projectKey();
-  const bundlePath = resolve(distDir, options.bundle);
+  await serveBundle(page, options.bundle);
 
+  const html = fixtureMarkup(options.mode, options.bundle, key);
+  await page.route(FIXTURE_ROUTE, async (route) => {
+    await route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: html });
+  });
+
+  await page.goto(FIXTURE_URL, { waitUntil: 'load' });
+}
+
+/** Serve one dist bundle from the panel origin under `/__e2e/bundles/`. */
+async function serveBundle(page: Page, bundle: BundleName): Promise<Buffer> {
+  const bundlePath = resolve(distDir, bundle);
   let bundleBytes: Buffer;
   try {
     bundleBytes = readFileSync(bundlePath);
@@ -126,7 +141,7 @@ export async function openHostFixture(page: Page, options: HostFixtureOptions): 
 
   await page.route(BUNDLE_ROUTE, async (route) => {
     const requested = new URL(route.request().url()).pathname.split('/').pop();
-    if (requested !== options.bundle) {
+    if (requested !== bundle) {
       await route.fulfill({ status: 404, contentType: 'text/plain', body: 'unknown fixture bundle' });
       return;
     }
@@ -137,12 +152,80 @@ export async function openHostFixture(page: Page, options: HostFixtureOptions): 
     });
   });
 
-  const html = fixtureMarkup(options.mode, options.bundle, key);
-  await page.route(FIXTURE_ROUTE, async (route) => {
+  return bundleBytes;
+}
+
+/* ------------------------------------------------------------------------- */
+/* Hostile-CSS matrix (WDG-02 / WDG-03 / WDG-05, CA-04)                       */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * One hostile rule per variant. `clean` is the unhostile control, `empty` is a
+ * host page whose body carries no content at all.
+ */
+export type HostileVariant =
+  | 'clean'
+  | 'display'
+  | 'fontsize'
+  | 'unset'
+  | 'transform'
+  | 'zindex'
+  | 'adjacent'
+  | 'empty';
+
+export interface HostileFixtureOptions extends HostFixtureOptions {
+  variant: HostileVariant;
+  /**
+   * Defaults to `true`: the loader calls `init()` on script load. Set `false`
+   * to measure the host document before the widget exists (WDG-03) and call
+   * `window.Watchbug.init({ projectKey })` from the test instead.
+   */
+  autoInit?: boolean;
+}
+
+const HOSTILE_FIXTURE_PATH = resolve(repoRoot, 'e2e', 'fixtures', 'hostile-host.html');
+
+/**
+ * Serve `e2e/fixtures/hostile-host.html` with exactly one matrix variant
+ * lifted into the document. Route fulfilment keeps the page at the panel origin
+ * (so `/api/incidents` stays same-origin) without nginx's CSP (Pitfall 4).
+ */
+export async function openHostileFixture(page: Page, options: HostileFixtureOptions): Promise<void> {
+  const key = options.projectKey ?? projectKey();
+  const template = readFileSync(HOSTILE_FIXTURE_PATH, 'utf8');
+
+  const variantMatch = new RegExp(
+    `<template data-variant="${options.variant}">([\\s\\S]*?)</template>`,
+  ).exec(template);
+  if (options.variant !== 'clean' && options.variant !== 'empty' && variantMatch === null) {
+    throw new Error(`hostile-host.html has no variant "${options.variant}"`);
+  }
+  const variantContent = variantMatch?.[1] ?? '';
+
+  let html = template
+    // Anchor to the marker's own line: the fixture's head comment *names* the
+    // marker, and a bare `String.replace` would substitute that mention first.
+    .replace(/^<!--__VARIANT_SLOT__-->$/m, variantContent)
+    .replaceAll('__BUNDLE__', options.bundle)
+    .replaceAll('__PROJECT_KEY__', key);
+
+  if (options.variant === 'empty') {
+    // A genuinely empty body: no content for the widget to depend on.
+    html = html.replace(
+      /<!--__HOST_CONTENT_START__-->[\s\S]*?<!--__HOST_CONTENT_END__-->/,
+      '',
+    );
+  }
+  if (options.autoInit === false) {
+    html = html.replace(/\s+onload="[^"]*"/, '');
+  }
+
+  await serveBundle(page, options.bundle);
+  await page.route(HOSTILE_ROUTE, async (route) => {
     await route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: html });
   });
 
-  await page.goto(FIXTURE_URL, { waitUntil: 'load' });
+  await page.goto(`${HOSTILE_URL}?variant=${options.variant}`, { waitUntil: 'load' });
 }
 
 /** Wait until the page's `load` handler has written the post-load snapshot. */

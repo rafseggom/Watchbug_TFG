@@ -326,3 +326,74 @@ export async function readHeadlines(page: Page): Promise<string[]> {
   const raw = await page.locator('html').getAttribute('data-wb-headlines');
   return raw === null ? [] : (JSON.parse(raw) as string[]);
 }
+
+/* ------------------------------------------------------------------------- */
+/* Host/stacking probe — WDG-02 / WDG-05                                      */
+/* ------------------------------------------------------------------------- */
+
+export interface HostProbe {
+  hostPresent: boolean;
+  /** The UI-SPEC ordering contract: host is the last child of documentElement. */
+  hostLastChild: boolean;
+  shadowRootOpen: boolean;
+  hostStyle: string;
+  display: string;
+  position: string;
+  zIndex: string;
+  pointerEvents: string;
+  launcherFound: boolean;
+  launcherWidth: number;
+  launcherHeight: number;
+  rightInset: number;
+  bottomInset: number;
+  launcherDisabled: boolean;
+  /** `document.elementFromPoint` at the launcher centre → the widget host? */
+  documentHitsHost: boolean;
+  /** `shadowRoot.elementFromPoint` at the launcher centre → inside `button.launcher`? */
+  rootHitsLauncher: boolean;
+  /** The element the shadow root actually hit, for failure messages. */
+  rootHitTag: string;
+  /** The element the document actually hit, for failure messages. */
+  documentHitTag: string;
+}
+
+/** Read the host element's geometry, inline contract and stacking result. */
+export async function probeHost(page: Page): Promise<HostProbe> {
+  const viewport = page.viewportSize() ?? { width: 1280, height: 720 };
+  return page.evaluate(
+    ({ x, y }) => {
+      const host = document.querySelector('watchbug-host');
+      const root = host?.shadowRoot ?? null;
+      const launcher = root?.querySelector('button.launcher') as HTMLButtonElement | null;
+      const rect = launcher?.getBoundingClientRect() ?? null;
+      const computed = host === null ? null : getComputedStyle(host);
+      const documentHit = document.elementFromPoint(x, y);
+      const rootHit = root?.elementFromPoint(x, y) ?? null;
+      return {
+        hostPresent: host !== null,
+        hostLastChild: host !== null && document.documentElement.lastElementChild === host,
+        shadowRootOpen: root !== null,
+        hostStyle: host?.getAttribute('style') ?? '',
+        display: computed?.display ?? '',
+        position: computed?.position ?? '',
+        zIndex: computed?.zIndex ?? '',
+        pointerEvents: computed?.pointerEvents ?? '',
+        launcherFound: launcher !== null,
+        launcherWidth: rect === null ? 0 : Math.round(rect.width),
+        launcherHeight: rect === null ? 0 : Math.round(rect.height),
+        rightInset: rect === null ? -1 : Math.round(window.innerWidth - rect.right),
+        bottomInset: rect === null ? -1 : Math.round(window.innerHeight - rect.bottom),
+        launcherDisabled: launcher?.disabled ?? false,
+        documentHitsHost: documentHit === host,
+        // The launcher's centre is covered by its own SVG glyph, so a strict
+        // identity check would fail on a correctly stacked widget. Containment
+        // is the real contract: the hit lands inside the launcher button and
+        // nowhere else in the shadow tree.
+        rootHitsLauncher: launcher !== null && rootHit !== null && launcher.contains(rootHit),
+        rootHitTag: rootHit?.tagName.toLowerCase() ?? '',
+        documentHitTag: documentHit?.tagName.toLowerCase() ?? '',
+      };
+    },
+    { x: viewport.width - 48, y: viewport.height - 48 },
+  );
+}

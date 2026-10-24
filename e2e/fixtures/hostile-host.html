@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Watchbug hostile host fixture</title>
+<!--
+  The hostile-CSS matrix for WDG-02 / WDG-03 / WDG-05 and CA-04.
+
+  Served by `e2e/helpers/host-fixtures.ts::openHostileFixture` via `page.route`
+  fulfilment at the panel origin — never from the nginx root (Pitfall 4: that
+  location's CSP would block the fixture's own inline styles and the rows would
+  pass on nothing).
+
+  Each `<template data-variant="…">` below is a self-contained hostile rule plus
+  the control element that proves the rule actually applied. The helper lifts
+  exactly one template into the VARIANT_SLOT marker line before serving, so:
+    - the control assertion can never pass vacuously (CA-04), and
+    - the widget is exercised under one hostile rule at a time.
+
+  The contract every variant must not break is UI-SPEC § Widget Geometry &
+  Isolation Contract: inline `!important` on `watchbug-host`, fixed geometry,
+  max z-index, `pointer-events: none` on the host box, px-only shadow styles.
+-->
+<style>
+  /* Baseline host page styles — deliberately plain so each variant's rule is
+     the only hostile input under test. */
+  body { margin: 0; padding: 24px; font-family: system-ui, sans-serif; }
+  #host-action {
+    position: fixed;
+    left: 40px;
+    top: 40px;
+    width: 160px;
+    height: 48px;
+    z-index: 1;
+  }
+  #host-marker {
+    position: fixed;
+    left: 240px;
+    top: 240px;
+    width: 32px;
+    height: 32px;
+    background: rgb(0 190 90);
+  }
+</style>
+</head>
+<body>
+<!--__HOST_CONTENT_START__-->
+<div id="host-content">
+  <h1 id="host-heading">Watchbug hostile host</h1>
+  <button id="host-action" type="button">Host action</button>
+  <div id="host-marker" data-capture-marker></div>
+  <!-- Only the `transform` variant styles this: it proves a transformed
+       ancestor becomes the containing block for fixed descendants (A-5), a
+       trap the widget escapes by living on `documentElement`. -->
+  <div id="control-fixed"></div>
+</div>
+<!--__HOST_CONTENT_END__-->
+
+<!--__VARIANT_SLOT__-->
+
+<script>
+  // Adjacency probe: a real click on the host page must still reach a host
+  // element (the widget host box is `pointer-events: none`).
+  var action = document.getElementById('host-action');
+  if (action !== null) {
+    action.addEventListener('click', function () {
+      document.documentElement.setAttribute('data-host-click', 'yes');
+    });
+  }
+</script>
+<script async src="/__e2e/bundles/__BUNDLE__" onload="Watchbug.init({ projectKey: '__PROJECT_KEY__' })"></script>
+
+<!-- ============================ matrix ============================ -->
+
+<template data-variant="display">
+<style>
+  /* The canonical hostile rule: author-origin `!important` on every element.
+     Only the host's inline `!important` can beat it.
+
+     `html` and `body` are excluded deliberately, and not to spare the widget.
+     `display: none` on the rendering root removes the document's principal
+     box, so no element has layout and nothing — widget included — can paint.
+     There is no CSS a widget can write that beats that, so including the roots
+     would make the control assertion pass while proving nothing about the SDK.
+     Every other element, `watchbug-host` included, is matched. */
+  *:not(html):not(body) { display: none !important; }
+</style>
+<div id="control-display">control display</div>
+</template>
+
+<template data-variant="fontsize">
+<style>
+  /* Host `rem` sizing must not reach the widget: the shadow CSS is px-only. */
+  html { font-size: 4px; }
+  #control-fontsize { font-size: 1rem; }
+</style>
+<div id="control-fontsize">control font size</div>
+</template>
+
+<template data-variant="unset">
+<style>
+  /* `all: unset` strips every UA default from every host element. The host's
+     inline `!important` is the only reason the widget still paints. */
+  * { all: unset; }
+</style>
+<strong id="control-unset">control unset</strong>
+</template>
+
+<template data-variant="transform">
+<style>
+  /* Fixed-position trap: once an ancestor has a transform/filter it becomes the
+     containing block for `position: fixed` descendants. */
+  #host-content {
+    position: absolute;
+    left: 120px;
+    top: 90px;
+    width: 480px;
+    height: 360px;
+    transform: translateZ(0);
+    filter: opacity(1);
+    background: #e8e8e8;
+  }
+  #control-fixed {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 12px;
+    height: 12px;
+    background: #0044ff;
+  }
+</style>
+</template>
+
+<template data-variant="zindex">
+<style>
+  /* z-index war: an overlay at the largest possible z-index, earlier in DOM
+     order than the widget host. The tie is resolved by DOM order — the host is
+     the last child of `documentElement`. */
+  #hostile-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 2147483647;
+    background: rgba(24, 26, 30, 0.9);
+  }
+</style>
+<div id="hostile-modal"></div>
+</template>
+
+<template data-variant="adjacent">
+<style>
+  /* Painted exactly at the widget's coordinates, one z-index below it. */
+  #hostile-box {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    width: 48px;
+    height: 48px;
+    z-index: 2147483646;
+    background: rgb(220, 20, 20);
+  }
+</style>
+<div id="hostile-box"></div>
+</template>
+
+</body>
+</html>
