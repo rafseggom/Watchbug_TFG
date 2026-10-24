@@ -13,34 +13,34 @@ findings:
     title: "Card pattern silently skips a valid card once the digit run is glued to neighbouring digits - two adjacent valid cards mask nothing (external: card-glue-fn)"
   - id: CR-03
     severity: critical
-    disposition: open
+    disposition: fixed
     title: "The DOM scan stops at the top document's light DOM - shadow roots and same-origin iframes are never redacted (external: scanner-coverage)"
   - id: WR-01
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "Mask geometry is collected after the frame is captured, not with it"
   - id: WR-02
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "The ESM build's default endpoint is the *page* origin, not the loading script's"
   - id: WR-03
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "Idempotency key falls back to `Date.now()` + `Math.random()` on every non-secure context"
   - id: IN-01
     severity: info
-    disposition: open
+    disposition: fixed
     title: "The `beyond-cap` seam stub allocates the canvas before its own \"canvas-free\" return"
   - id: IN-02
     severity: info
-    disposition: open
+    disposition: fixed
     title: "`truncateReason` cuts UTF-16 units and can split a surrogate pair"
   - id: IN-03
     severity: info
-    disposition: open
+    disposition: fixed
     title: "The P2-D-03 byte-equality assertion is vacuous on WebKit"
-open: 7
-fixed: 2
+open: 0
+fixed: 9
 total: 9
 recorded: 2026-10-24T18:30:00.000Z
 ---
@@ -49,20 +49,50 @@ recorded: 2026-10-24T18:30:00.000Z
 
 | Finding | Severity | Disposition | Source |
 |---------|----------|-------------|--------|
-| CR-01 | critical | fixed | c2d7a50 fix(02): send report with referrerPolicy no-referrer (review CR-01) |
-| CR-02 | critical | fixed | 7c9b299 fix(02): validate card digit groups so glued runs mask (review CR-02) |
-| CR-03 | critical | open | deferred by user decision 2026-10-24 |
-| WR-01 | warning | open | - |
-| WR-02 | warning | open | - |
-| WR-03 | warning | open | - |
-| IN-01 | info | open | - |
-| IN-02 | info | open | - |
-| IN-03 | info | open | - |
+| CR-01 | critical | fixed | `c2d7a50` fix(02): send report with referrerPolicy no-referrer (review CR-01) |
+| CR-02 | critical | fixed | `7c9b299` fix(02): validate card digit groups so glued runs mask (review CR-02) |
+| CR-03 | critical | fixed | `0c6565f` fix(02): close the code-review findings and the analysis backlog — was `deferred` 2026-10-24 and taken up again in the same day's remediation run |
+| WR-01 | warning | fixed | `0c6565f` — `Redactor.collect()` / `redact(image, rects)`, rects measured inside `beforeRead` |
+| WR-02 | warning | fixed | `0c6565f` — default endpoint is the document origin; cross-origin script requires `endpoint` |
+| WR-03 | warning | fixed | `0c6565f` — v4 UUID from `crypto.getRandomValues`, no CSPRNG is a visible failure |
+| IN-01 | info | fixed | `0c6565f` — beyond-cap return hoisted above the canvas allocation |
+| IN-02 | info | fixed | `0c6565f` — `truncateReason` cuts by code points inside the same UTF-16 cap |
+| IN-03 | info | fixed | `0c6565f` — non-vacuity guard where the payload is observable; engine conditionality stated in-row |
 
 Dispositions: `open` (recorded, not yet triaged), `fixed`, `skipped`, `deferred`.
 Set `deferred` by hand and put the reason in the Source cell; both are preserved.
 
-Note: REVIEW.md authored these findings as `#### <ID>:` (h4) headings, one level deeper than the
+**Status: 9 / 9 resolved.** Nothing is open, skipped or deferred.
+
+## Verification of the fixes (2026-10-24, HEAD `0c6565f`)
+
+| Check | Result |
+|---|---|
+| `npm run verify` | **303/303** on chromium + firefox + webkit (was 297; +2 new rows, +4 from the 3-engine matrix) |
+| `npm run lint` | clean (tsc per workspace) |
+| `npm run check:size` | `9.8 KB gz / 80 KB` runtime; per-lane tiers 45/25/14 held |
+| `node scripts/gate.mjs` | 3 passed, 0 failed, 0 skipped |
+| `npm run check:compose` | exactly three services |
+| `stopthatslop check --pack ts` | `gate_finding_count: 0`, `exit 0` |
+
+New evidence rows added by this remediation:
+
+- **`S-7 / PRV-02`** — a secret inside an OPEN shadow root and a secret inside a
+  same-origin iframe both mask in the decoded bytes. Each carries a light-DOM
+  marker sized at the secret's *browser-measured* laid-out rect, so a wrong mask
+  rect shows up as surviving marker pixels rather than passing vacuously.
+- **`S-8`** — a cross-origin loading script without `endpoint` refuses to init
+  and mounts nothing; the same bundle with an explicit endpoint mounts and posts
+  to exactly that base.
+
+## Notes
+
+Note 1: REVIEW.md authored these findings as `#### <ID>:` (h4) headings, one level deeper than the
 gate's expected `### <ID>:` shape, so the automated row builder matched none of them and reported
 a 9-finding shortfall. Rows were recorded by hand from the review's own headings and section
 severities on 2026-10-24; counts match REVIEW.md frontmatter (3/3/3, total 9).
+
+Note 2: REVIEW.md is the **immutable review of record** — it is not rewritten when findings are
+fixed. Resolution is tracked here and, with the full narrative of what changed and why, in
+`documentation/phase2/02-INFORME-ANALISIS.md` section 8. The first-pass narratives stay in
+REVIEW.md and in git history (`4325046`).
