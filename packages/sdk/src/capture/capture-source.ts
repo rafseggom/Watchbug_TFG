@@ -133,6 +133,9 @@ export function createDisplayMediaCapture(hostElement: HTMLElement): CaptureSour
           preferCurrentTab: true,
         } as DisplayMediaStreamOptions);
       } catch {
+        // Prompt rejection (`NotAllowedError`), dismissal, or no API — all map
+        // to the same loud `status.captureFailed` state downstream (M-6):
+        // never a silent no-op.
         throw new CaptureUnavailableError('screen capture was not granted');
       }
 
@@ -142,8 +145,28 @@ export function createDisplayMediaCapture(hostElement: HTMLElement): CaptureSour
           throw new CaptureUnavailableError('the capture stream carries no video track');
         }
 
+        // OQ-1 / Pitfall 7 — the displaySurface policy. Only a TAB frame maps
+        // to this page's DOM, so only a tab frame can be redacted
+        // automatically:
+        //   'browser'  → the current tab: accepted.
+        //   'window'   → a single window: DOM→bitmap mapping unverifiable —
+        //                refused (nothing is sent; never "send anyway").
+        //   'screen'   → the whole monitor: same reason — refused.
+        //   undefined  → older engines report no surface at all: ACCEPTED
+        //                with the documented caveat (flagged assumption) that
+        //                `preferCurrentTab` plus the picker choice are the
+        //                only signals there; refusing would break browsers
+        //                that never report the surface.
+        // Any other reported surface ('monitor', 'application') is refused
+        // with the same loud failure — conservative per P2-D-09 (T-02-05).
         const surface = track.getSettings().displaySurface;
-        if (surface !== undefined && surface !== 'browser') {
+        if (surface === undefined) {
+          // Caveat accepted (OQ-1): no surface reported → proceed.
+        } else if (surface === 'window' || surface === 'screen') {
+          throw new CaptureUnavailableError(
+            `only tab captures can be redacted automatically (surface: ${surface})`,
+          );
+        } else if (surface !== 'browser') {
           throw new CaptureUnavailableError(
             `only tab captures can be redacted automatically (surface: ${surface})`,
           );

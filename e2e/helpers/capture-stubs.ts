@@ -48,11 +48,21 @@ const PAINT_FRAME = String(function paintFrame(
   this: void,
   canvas: HTMLCanvasElement,
   marker: { left: number; top: number; right: number; bottom: number } | null,
+  uniform: boolean,
 ): void {
   const context = canvas.getContext('2d');
   if (context === null) throw new Error('capture stub: a 2D canvas is unavailable');
   const width = canvas.width;
   const height = canvas.height;
+
+  if (uniform) {
+    // P2-D-12: one colour everywhere — the 9-sample probe must abort this
+    // frame before any encode or request. No dot, no marker, no gradient.
+    context.fillStyle = '#808080';
+    context.fillRect(0, 0, width, height);
+    return;
+  }
+
   const scaleX = width / Math.max(1, window.innerWidth);
   const scaleY = height / Math.max(1, window.innerHeight);
 
@@ -168,13 +178,87 @@ export interface CaptureStubOptions {
   tier?: CaptureStubTier;
   /** Fixed frame geometry instead of the default tracer frame. */
   frame?: CaptureStubFrame;
+  /** Paint one solid colour: the uniform frame P2-D-12 must reject. */
+  uniform?: boolean;
+  /**
+   * Provocation instead of a frame:
+   *  - `prompt-rejected` — `getDisplayMedia` rejects with `NotAllowedError`
+   *  - `non-tab-surface` — a track reporting `displaySurface: 'window'`
+   *  - `beyond-cap` — an ImageData over MAX_IMAGE_PIXELS (seam: canvas-free)
+   */
+  failure?: 'prompt-rejected' | 'non-tab-surface' | 'beyond-cap';
+}
+
+/** 4700×3600 = 16,920,000 px — above MAX_IMAGE_PIXELS (16,777,216). */
+const BEYOND_CAP_FRAME: CaptureStubFrame = { width: 4700, height: 3600 };
+
+/** GetDisplayMedia that always refuses — the user dismissing the picker. */
+function promptRejectedStub(): string {
+  return String.raw`(() => {
+  var media = navigator.mediaDevices;
+  if (media === undefined || media === null) {
+    var stub = {};
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: stub });
+    media = stub;
+  }
+  Object.defineProperty(media, 'getDisplayMedia', {
+    configurable: true,
+    value: function () {
+      document.documentElement.setAttribute('data-wb-stub-invoked', 'prompt-rejected');
+      return Promise.reject(new DOMException('Permission denied', 'NotAllowedError'));
+    }
+  });
+})();`;
+}
+
+/**
+ * GetDisplayMedia resolving a stream whose track reports a `window` surface —
+ * exactly what the OQ-1 policy must refuse (Pitfall 7: DOM→bitmap mapping is
+ * meaningless outside the tab). Only the surface check runs: the adapter
+ * throws before any `<video>` is attached, so a plain object stands in for
+ * the MediaStream.
+ */
+function nonTabSurfaceStub(): string {
+  return String.raw`(() => {
+  var track = {
+    getSettings: function () { return { displaySurface: 'window' }; },
+    stop: function () {}
+  };
+  var stream = {
+    getVideoTracks: function () { return [track]; },
+    getTracks: function () { return [track]; }
+  };
+  var media = navigator.mediaDevices;
+  if (media === undefined || media === null) {
+    var stub = {};
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: stub });
+    media = stub;
+  }
+  Object.defineProperty(media, 'getDisplayMedia', {
+    configurable: true,
+    value: function () {
+      document.documentElement.setAttribute('data-wb-stub-invoked', 'non-tab-surface');
+      return Promise.resolve(stream);
+    }
+  });
+})();`;
+}
+
+/** Frame/paint configuration shared by both tier builders. */
+interface FrameStubConfig {
+  frame?: CaptureStubFrame;
+  /** Paint a single solid colour (P2-D-12 uniform probe). */
+  uniform: boolean;
+  /** Return an ImageData straight over MAX_IMAGE_PIXELS (P2-D-12 oversize). */
+  beyondCap: boolean;
 }
 
 /**
  * Build the media-tier init script: a faked `getDisplayMedia` returning a
  * `canvas.captureStream()` stream — the real `<video>` → `drawImage` path.
  */
-function mediaStub(frame: CaptureStubFrame): string {
+function mediaStub(config: FrameStubConfig): string {
+  const frame = config.frame ?? { width: STUB_FRAME_WIDTH, height: STUB_FRAME_HEIGHT };
   return String.raw`(() => {
   const paintFrame = ${PAINT_FRAME};
   ${RECORD_OBSERVATION}
@@ -190,14 +274,14 @@ function mediaStub(frame: CaptureStubFrame): string {
     const canvas = document.createElement('canvas');
     canvas.width = ${frame.width};
     canvas.height = ${frame.height};
-    paintFrame(canvas, markerRect());
+    paintFrame(canvas, markerRect(), ${config.uniform});
 
     const stream = canvas.captureStream(30);
     const track = stream.getVideoTracks()[0];
 
     // Repaint on a short interval: the frame stays current, and the stream
     // keeps producing decoded frames for the <video> the adapter creates.
-    const timer = window.setInterval(() => paintFrame(canvas, markerRect()), 80);
+    const timer = window.setInterval(() => paintFrame(canvas, markerRect(), ${config.uniform}), 80);
     if (track !== undefined && track !== null) {
       track.addEventListener('ended', () => window.clearInterval(timer));
     }
@@ -222,11 +306,22 @@ function mediaStub(frame: CaptureStubFrame): string {
  * Build the seam-tier init script: raw `ImageData` at the `CaptureSource`
  * seam (Pitfall 2) — probe → redact → encode → transport run fully real.
  */
-function seamStub(frame?: CaptureStubFrame): string {
+function seamStub(config: FrameStubConfig): string {
+  const frame = config.frame;
   const widthExpr =
     frame === undefined ? 'Math.max(2, Math.floor(window.innerWidth / 2))' : String(frame.width);
   const heightExpr =
     frame === undefined ? 'Math.max(2, Math.floor(window.innerHeight / 2))' : String(frame.height);
+  const beyondCapReturn = config.beyondCap
+    ? '// P2-D-12: area above MAX_IMAGE_PIXELS — allocated without a canvas so\n' +
+      '  // no engine-side canvas cap can preempt the probe that must reject it.\n' +
+      '        return new ImageData(width, height);'
+    : '';
+  const uniformPaint = config.uniform
+    ? "context.fillStyle = '#808080';\n" +
+      '        context.fillRect(0, 0, width, height);\n' +
+      '        return context.getImageData(0, 0, width, height);'
+    : '';
   return String.raw`(() => {
   ${RECORD_OBSERVATION}
 
@@ -248,6 +343,9 @@ function seamStub(frame?: CaptureStubFrame): string {
         canvas.height = height;
         const context = canvas.getContext('2d');
         if (context === null) throw new Error('capture seam: a 2D canvas is unavailable');
+
+        ${beyondCapReturn}
+        ${uniformPaint}
 
         const scaleX = width / Math.max(1, window.innerWidth);
         const scaleY = height / Math.max(1, window.innerHeight);
@@ -295,11 +393,25 @@ export async function installCaptureStub(
   browserName: string,
   options: CaptureStubOptions = {},
 ): Promise<void> {
+  // Provocations that replace getDisplayMedia entirely: no seam, no recorder
+  // — these flows must never send, and the row asserts exactly that.
+  if (options.failure === 'prompt-rejected') {
+    await page.addInitScript({ content: promptRejectedStub() });
+    return;
+  }
+  if (options.failure === 'non-tab-surface') {
+    await page.addInitScript({ content: nonTabSurfaceStub() });
+    return;
+  }
+
+  const beyondCap = options.failure === 'beyond-cap';
+  const config: FrameStubConfig = {
+    frame: options.frame ?? (beyondCap ? BEYOND_CAP_FRAME : undefined),
+    uniform: options.uniform === true,
+    beyondCap,
+  };
   const tier = options.tier ?? captureStubTier(browserName);
-  const content =
-    tier === 'seam'
-      ? seamStub(options.frame)
-      : mediaStub(options.frame ?? { width: STUB_FRAME_WIDTH, height: STUB_FRAME_HEIGHT });
+  const content = tier === 'seam' ? seamStub(config) : mediaStub(config);
   await page.addInitScript({ content });
   await page.addInitScript({ content: OUTGOING_RECORDER });
 }

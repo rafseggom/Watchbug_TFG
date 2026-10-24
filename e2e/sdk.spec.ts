@@ -698,6 +698,115 @@ test('M-3: a forced PNG encode ships as a .png / image/png part and the real API
 });
 
 /* ------------------------------------------------------------------------- */
+/* Failure-state rows — 02-03 Task 3 (P2-D-12, OQ-1, M-6)                     */
+/* ------------------------------------------------------------------------- */
+
+const BLANK_HINT =
+  'Nothing was sent. Try again — if it keeps failing, the page may be too large to capture.';
+const CAPTURE_HINT = 'Nothing was sent. Allow screen sharing, then try again.';
+
+/** One shared shape for every loud-failure row: copy first, zero POSTs after. */
+async function expectNoRequest(page: Page, calls: PostCall[]): Promise<void> {
+  // Give a would-be request time to land before counting attempts — "nothing
+  // was sent" is an assertion, not a race we hope to win.
+  await page.waitForTimeout(600);
+  expect(calls, 'no POST /api/incidents attempt may be made').toHaveLength(0);
+}
+
+test('P2-D-12: a uniform capture aborts to the blank state before any request', async ({ page, browserName }) => {
+  // Default tier per engine: chromium/firefox probe a solid frame straight
+  // out of the real <video> path, webkit out of the seam.
+  await installCaptureStub(page, browserName, { uniform: true });
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+
+  const calls = await interceptIncidentPosts(page, async () => ({
+    status: 201,
+    body: JSON.stringify({ id: INTERCEPTED_ID }),
+  }));
+
+  await clickLauncher(page);
+  await waitForHeadline(page, 'The capture came back blank.', 10_000);
+
+  const failed = await probeWidget(page);
+  expect(failed.hint).toBe(BLANK_HINT);
+  expect(failed.headlineRole).toBe('alert');
+  expect(failed.actionsVisible).toBe(true);
+  expect(failed.retryVisible).toBe(true);
+  expect(failed.dismissVisible).toBe(true);
+  await expectNoRequest(page, calls);
+});
+
+test('P2-D-12: a frame beyond the supported canvas cap aborts to the blank state', async ({ page, browserName }) => {
+  // Seam tier on every engine: the 16,920,000 px frame is allocated
+  // canvas-free, so the pipeline's area probe — not an engine canvas limit —
+  // is what rejects it.
+  await installCaptureStub(page, browserName, { tier: 'seam', failure: 'beyond-cap' });
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+
+  const calls = await interceptIncidentPosts(page, async () => ({
+    status: 201,
+    body: JSON.stringify({ id: INTERCEPTED_ID }),
+  }));
+
+  await clickLauncher(page);
+  await waitForHeadline(page, 'The capture came back blank.', 10_000);
+
+  const failed = await probeWidget(page);
+  expect(failed.hint).toBe(BLANK_HINT);
+  expect(failed.headlineRole).toBe('alert');
+  await expectNoRequest(page, calls);
+});
+
+test('OQ-1: a non-tab capture surface is refused loudly and nothing is sent', async ({ page, browserName }) => {
+  await installCaptureStub(page, browserName, { failure: 'non-tab-surface' });
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+
+  const calls = await interceptIncidentPosts(page, async () => ({
+    status: 201,
+    body: JSON.stringify({ id: INTERCEPTED_ID }),
+  }));
+
+  await clickLauncher(page);
+  await waitForHeadline(page, "Couldn't capture the screen.", 10_000);
+
+  // The fake ran and the SDK refused IT — not a missing-API shortcut — so the
+  // refusal is the surface policy (browser/window/screen comparison) itself.
+  expect(await page.locator('html').getAttribute('data-wb-stub-invoked')).toBe('non-tab-surface');
+
+  const failed = await probeWidget(page);
+  expect(failed.hint).toBe(CAPTURE_HINT);
+  expect(failed.headlineRole).toBe('alert');
+  await expectNoRequest(page, calls);
+});
+
+test('CAP-01: a rejected capture prompt renders the capture-failed state with its hint and both actions', async ({ page, browserName }) => {
+  await installCaptureStub(page, browserName, { failure: 'prompt-rejected' });
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+
+  const calls = await interceptIncidentPosts(page, async () => ({
+    status: 201,
+    body: JSON.stringify({ id: INTERCEPTED_ID }),
+  }));
+
+  await clickLauncher(page);
+  await waitForHeadline(page, "Couldn't capture the screen.", 10_000);
+
+  expect(await page.locator('html').getAttribute('data-wb-stub-invoked')).toBe('prompt-rejected');
+
+  const failed = await probeWidget(page);
+  // The locked copy (strings.ts) — hint present, never a silent no-op (M-6).
+  expect(failed.hint).toBe(CAPTURE_HINT);
+  expect(failed.actionsVisible).toBe(true);
+  expect(failed.retryVisible).toBe(true);
+  expect(failed.dismissVisible).toBe(true);
+  await expectNoRequest(page, calls);
+});
+
+/* ------------------------------------------------------------------------- */
 /* Status-machine rows — 02-02 Task 2 (P2-D-03, UI-SPEC loading/error/a11y)   */
 /* ------------------------------------------------------------------------- */
 
