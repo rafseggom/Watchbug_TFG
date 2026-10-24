@@ -2247,3 +2247,50 @@ test('P2-D-01: the auto-title is document.title truncated to the first 200 code 
   // The truncated title satisfies the published contract's cap.
   expect(() => reportSchema.parse(meta)).not.toThrow();
 });
+
+/* ------------------------------------------------------------------ */
+/* Self-hosted promise — the widget opens no third-party destination    */
+/* ------------------------------------------------------------------ */
+
+test('self-hosted: the widget makes zero third-party network requests — only the configured Watchbug API base', async ({
+  page,
+  browserName,
+}) => {
+  await installCaptureStub(page, browserName);
+
+  // Every request the page makes from the very first navigation, including
+  // the fixture document, the bundle and the report POST.
+  const destinations: string[] = [];
+  page.on('request', (request) => destinations.push(request.url()));
+
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+
+  const calls = await interceptIncidentPosts(page, async () => ({
+    status: 201,
+    body: JSON.stringify({ id: INTERCEPTED_ID }),
+  }));
+
+  await clickLauncher(page);
+  await waitForHeadline(page, 'Report sent ✓', 15_000);
+
+  // Non-vacuity: the flow really did reach the API on this origin.
+  expect(calls, 'the gesture must send exactly one report').toHaveLength(1);
+  expect(
+    destinations,
+    'the report must target the configured API base',
+  ).toContain(`${FIXTURE_ORIGIN}/api/incidents`);
+
+  const external = destinations.filter((url) => {
+    if (url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('about:')) return false;
+    try {
+      return new URL(url).origin !== FIXTURE_ORIGIN;
+    } catch {
+      return true;
+    }
+  });
+  expect(
+    external,
+    `no request may leave the Watchbug origin — destinations seen: ${destinations.join(', ')}`,
+  ).toEqual([]);
+});
