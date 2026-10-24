@@ -157,8 +157,25 @@ const OUTGOING_RECORDER = String.raw`(() => {
   };
 })();`;
 
-/** The media-tier init script (runs at document-start on every navigation). */
-const MEDIA_STUB = String.raw`(() => {
+/** Fixed frame geometry a row can request; default = the 640×360 tracer frame. */
+export interface CaptureStubFrame {
+  width: number;
+  height: number;
+}
+
+export interface CaptureStubOptions {
+  /** Force a tier (rows that need the same tier on every engine). */
+  tier?: CaptureStubTier;
+  /** Fixed frame geometry instead of the default tracer frame. */
+  frame?: CaptureStubFrame;
+}
+
+/**
+ * Build the media-tier init script: a faked `getDisplayMedia` returning a
+ * `canvas.captureStream()` stream — the real `<video>` → `drawImage` path.
+ */
+function mediaStub(frame: CaptureStubFrame): string {
+  return String.raw`(() => {
   const paintFrame = ${PAINT_FRAME};
   ${RECORD_OBSERVATION}
 
@@ -171,8 +188,8 @@ const MEDIA_STUB = String.raw`(() => {
     // CAP-04: the host must already be inline-hidden when capture starts.
     recordObservation('media');
     const canvas = document.createElement('canvas');
-    canvas.width = ${STUB_FRAME_WIDTH};
-    canvas.height = ${STUB_FRAME_HEIGHT};
+    canvas.width = ${frame.width};
+    canvas.height = ${frame.height};
     paintFrame(canvas, markerRect());
 
     const stream = canvas.captureStream(30);
@@ -199,9 +216,18 @@ const MEDIA_STUB = String.raw`(() => {
     value: async () => makeStream(),
   });
 })();`;
+}
 
-/** The seam-tier init script: installs raw-ImageData capture on the host. */
-const SEAM_STUB = String.raw`(() => {
+/**
+ * Build the seam-tier init script: raw `ImageData` at the `CaptureSource`
+ * seam (Pitfall 2) — probe → redact → encode → transport run fully real.
+ */
+function seamStub(frame?: CaptureStubFrame): string {
+  const widthExpr =
+    frame === undefined ? 'Math.max(2, Math.floor(window.innerWidth / 2))' : String(frame.width);
+  const heightExpr =
+    frame === undefined ? 'Math.max(2, Math.floor(window.innerHeight / 2))' : String(frame.height);
+  return String.raw`(() => {
   ${RECORD_OBSERVATION}
 
   function install() {
@@ -215,8 +241,8 @@ const SEAM_STUB = String.raw`(() => {
         // CAP-04: runs after the pipeline's beforeRead() assertion, so the
         // host must be inline-hidden at this instant too.
         recordObservation('seam');
-        const width = Math.max(2, Math.floor(window.innerWidth / 2));
-        const height = Math.max(2, Math.floor(window.innerHeight / 2));
+        const width = ${widthExpr};
+        const height = ${heightExpr};
         const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
@@ -256,6 +282,7 @@ const SEAM_STUB = String.raw`(() => {
   });
   observer.observe(document, { childList: true, subtree: true });
 })();`;
+}
 
 /**
  * Install the engine's capture tier. Must run **before** the fixture
@@ -263,8 +290,16 @@ const SEAM_STUB = String.raw`(() => {
  * recorder rides every capture stub so any row can decode the bytes that
  * actually left the browser (WebKit-safe).
  */
-export async function installCaptureStub(page: Page, browserName: string): Promise<void> {
-  const content = captureStubTier(browserName) === 'seam' ? SEAM_STUB : MEDIA_STUB;
+export async function installCaptureStub(
+  page: Page,
+  browserName: string,
+  options: CaptureStubOptions = {},
+): Promise<void> {
+  const tier = options.tier ?? captureStubTier(browserName);
+  const content =
+    tier === 'seam'
+      ? seamStub(options.frame)
+      : mediaStub(options.frame ?? { width: STUB_FRAME_WIDTH, height: STUB_FRAME_HEIGHT });
   await page.addInitScript({ content });
   await page.addInitScript({ content: OUTGOING_RECORDER });
 }

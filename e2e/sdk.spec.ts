@@ -527,6 +527,43 @@ test('CAP-04: the widget host is hidden when the capture runs and its accent pix
 });
 
 /* ------------------------------------------------------------------------- */
+/* Capture-fidelity rows — 02-03 Task 2 (CAP-05, M-3)                         */
+/* ------------------------------------------------------------------------- */
+
+test('CAP-05: a frame wider than MAX_IMAGE_DIM is scaled to 8192 px before encode', async ({ page, browserName }) => {
+  test.setTimeout(60_000);
+  // The seam tier on every engine: the frame width is the variable under test,
+  // not which tier delivers it (CAP-01 already covers the media tier end to
+  // end on chromium/firefox). 9000 px wide × 1000 px = 9 MP — inside
+  // MAX_IMAGE_PIXELS, but over MAX_IMAGE_DIM (8192), so only the per-side
+  // clamp can bring it into contract.
+  await installCaptureStub(page, browserName, {
+    tier: 'seam',
+    frame: { width: 9000, height: 1000 },
+  });
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+
+  const calls = await interceptIncidentPosts(page, async () => ({
+    status: 201,
+    body: JSON.stringify({ id: INTERCEPTED_ID }),
+  }));
+
+  await clickLauncher(page);
+  await waitForHeadline(page, 'Report sent ✓', 45_000);
+  expect(calls).toHaveLength(1);
+
+  const image = await readOutgoingImage(page);
+  expect(image.length).toBeLessThanOrEqual(2_097_152);
+  const analysis = await analyzeImagePixels(page, image);
+  // CAP-05: no side may exceed MAX_IMAGE_DIM (8192) …
+  expect(analysis.width).toBeLessThanOrEqual(8192);
+  // … and the total area stays within MAX_IMAGE_PIXELS (16,777,216).
+  expect(analysis.width * analysis.height).toBeLessThanOrEqual(16_777_216);
+  expect(analysis.sampledDistinct).toBeGreaterThan(4);
+});
+
+/* ------------------------------------------------------------------------- */
 /* Status-machine rows — 02-02 Task 2 (P2-D-03, UI-SPEC loading/error/a11y)   */
 /* ------------------------------------------------------------------------- */
 
