@@ -91,9 +91,27 @@ export function luhnValid(digits: string): boolean {
   return sum % 10 === 0;
 }
 
-/** Luhn on the digit core of a matched run (`4111 1111 1111 1111` → 16 digits). */
+/**
+ * Luhn each separator-delimited digit group of a match, plus adjacent-group
+ * joins of 13–19 digits — a greedy `CARD_SHAPE` match may glue a card to
+ * trailing digits or to a neighbouring card, and validating the whole glued
+ * core as one run would fail the checksum for every such spelling (review
+ * CR-02). Deliberately NOT an arbitrary sub-window walk: the locked
+ * Luhn-invalid lookalike of P2-D-07 has Luhn-valid 14/15-digit prefixes, so
+ * enumerating windows would break the negative control the e2e pins — only
+ * whole groups and contiguous group joins qualify.
+ */
 function luhnValidCardRun(match: string): boolean {
-  return luhnValid(match.replace(/[^0-9]/g, ''));
+  const groups = match.split(/[^0-9]+/).filter((group) => group.length > 0);
+  const candidates: string[] = [...groups];
+  for (let start = 0; start < groups.length; start += 1) {
+    let joined = '';
+    for (let at = start; at < groups.length && joined.length + groups[at].length <= 19; at += 1) {
+      joined += groups[at];
+      if (joined.length >= 13) candidates.push(joined);
+    }
+  }
+  return candidates.some((run) => luhnValid(run));
 }
 
 /**

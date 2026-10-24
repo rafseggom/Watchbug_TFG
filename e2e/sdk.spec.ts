@@ -1741,6 +1741,34 @@ test('PRV-02: a Luhn-valid card sequence masks while its Luhn-invalid lookalike 
   expectStillVisible(controlReport);
 });
 
+test('PRV-02: two Luhn-valid cards glued in one text node mask the whole node — zero original pixels in the rect on the decoded bytes', async ({
+  page,
+  browserName,
+}) => {
+  const { report } = await runRedactionRow(
+    page,
+    browserName,
+    [
+      {
+        id: 'wb-cards-glued',
+        // Review CR-02: the greedy CARD_SHAPE match glues both cards into one
+        // run, and validating that glued core as a single Luhn run failed —
+        // so nothing was masked. The group/adjacent-join validation accepts
+        // the first card's digit group and the whole text node masks (P2-D-08).
+        text: '4111111111111111 4242424242424242',
+        left: 80,
+        top: 140,
+        marker: true,
+      },
+    ],
+  );
+  expect(report.width).toBe(640);
+  // The stub painted #ff00ff over the element's rect; expectMaskedAndTargeted
+  // requires zero marker pixels inside the rect and its 1-px ring, so this
+  // fails whenever the glued run is left unmasked.
+  expectMaskedAndTargeted(report);
+});
+
 test('PRV-03: a data-watchbug-sensitive element masks at the full element rect in the decoded bytes', async ({
   page,
   browserName,
