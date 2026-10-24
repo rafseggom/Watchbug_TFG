@@ -1751,3 +1751,180 @@ test('PRV-03: a data-watchbug-sensitive element masks at the full element rect i
   expect(report.width).toBe(640);
   expectMaskedAndTargeted(report);
 });
+
+/* ------------------------------------------------------------------------- */
+/* H-1 / P2-D-08 geometry rows — 02-04 Task 3                                   */
+/* ------------------------------------------------------------------------- */
+
+/** The same known secret, so every DPR row masks the identical DOM rect. */
+const HIDPI_SECRET_TEXT =
+  'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI0MiJ9.Um9ja2V0U2lnbmF0dXJlMTIzNDU2Nzg5';
+
+/**
+ * One H-1 row body: capture at an explicit frame of `viewport × dpr` (what a
+ * real tab capture of a HiDPI display produces), then assert the masked
+ * region — computed from the *decoded output's* own scale — carries zero
+ * original pixels inside the rect and on its 1-px boundary ring.
+ *
+ * At `dpr: 3` the encode ladder clamps the frame to 2× before encoding (the
+ * same resample a real 3× display produces), so the interior-fill floor drops
+ * to 0.9 for the resampled boundary; the magenta/leak assertions stay
+ * identical at every scale.
+ */
+async function runHidpiMaskRow(
+  page: Page,
+  browserName: string,
+  expectedDpr: number,
+  frame: { width: number; height: number },
+  expectedWidth: number,
+  minInteriorBlack = 0.98,
+): Promise<void> {
+  // Non-vacuity: the context really runs at this device pixel ratio first.
+  expect(await page.evaluate(() => window.devicePixelRatio)).toBe(expectedDpr);
+
+  await installCaptureStub(page, browserName, { frame });
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+  await installSecrets(page, [
+    { id: 'wb-hidpi-secret', text: HIDPI_SECRET_TEXT, left: 80, top: 140, marker: true },
+  ]);
+  const masked = await readMaskRect(page, 'wb-hidpi-secret', 'text-node');
+  const size = page.viewportSize();
+  if (size === null) throw new Error('H-1 row: no viewport');
+  const viewport: CssRect = { left: 0, top: 0, right: size.width, bottom: size.height };
+
+  const calls = await interceptIncidentPosts(page, async () => ({
+    status: 201,
+    body: JSON.stringify({ id: INTERCEPTED_ID }),
+  }));
+  await clickLauncher(page);
+  await waitForHeadline(page, 'Report sent ✓', 30_000);
+  expect(calls, 'the gesture must send exactly one report').toHaveLength(1);
+
+  const image = await readOutgoingImage(page);
+  const report = await analyzeRedaction(page, image, { viewport, masked });
+  // The output scale pins which frame geometry was actually exercised.
+  expect(report.width).toBe(expectedWidth);
+  expectMaskedAndTargeted(report, minInteriorBlack);
+}
+
+test('H-1: devicePixelRatio 1 masks in bitmap space — zero original pixels in the rect and its 1-px boundary ring', async ({
+  page,
+  browserName,
+}) => {
+  await runHidpiMaskRow(page, browserName, 1, { width: 1280, height: 720 }, 1280);
+});
+
+test.describe('H-1 HiDPI (deviceScaleFactor: 1.25)', () => {
+  test.use({ deviceScaleFactor: 1.25 });
+
+  test('H-1: devicePixelRatio 1.25 (non-integer scale) masks in bitmap space — zero original pixels in the rect and its 1-px boundary ring', async ({
+    page,
+    browserName,
+  }) => {
+    await runHidpiMaskRow(page, browserName, 1.25, { width: 1600, height: 900 }, 1600);
+  });
+});
+
+test.describe('H-1 HiDPI (deviceScaleFactor: 2)', () => {
+  test.use({ deviceScaleFactor: 2 });
+
+  test('H-1: devicePixelRatio 2 masks in bitmap space — zero original pixels in the rect and its 1-px boundary ring', async ({
+    page,
+    browserName,
+  }) => {
+    await runHidpiMaskRow(page, browserName, 2, { width: 2560, height: 1440 }, 2560);
+  });
+});
+
+test.describe('H-1 HiDPI (deviceScaleFactor: 3)', () => {
+  test.use({ deviceScaleFactor: 3 });
+
+  test('H-1: devicePixelRatio 3 masks before the DPR-2 encode clamp — zero original pixels in the rect and its 1-px boundary ring', async ({
+    page,
+    browserName,
+  }) => {
+    // Frame at 3× (3840×2160), clamped to 2560×1440 by initialDimensions —
+    // the mask is burned in BEFORE that resample, which is what makes the
+    // leak assertion meaningful at a clamped DPR.
+    await runHidpiMaskRow(page, browserName, 3, { width: 3840, height: 2160 }, 2560, 0.9);
+  });
+});
+
+test('P2-D-08: a partially-matching text node masks its whole rect — the unmatched substring pixels are gone too', async ({
+  page,
+  browserName,
+}) => {
+  // One text node: prose before and after the matched token. The stub paints
+  // the marker across the WHOLE element, so "zero original pixels inside the
+  // text-node rect" can only hold if the mask covered the unmatched
+  // substrings as well (whole-node granularity — never the token alone).
+  const { report } = await runRedactionRow(
+    page,
+    browserName,
+    [
+      {
+        id: 'wb-granularity-node',
+        text: `deploy notes ${HIDPI_SECRET_TEXT} trailing prose stays in the node`,
+        left: 80,
+        top: 140,
+        marker: true,
+      },
+    ],
+  );
+  expect(report.width).toBe(640);
+  expectMaskedAndTargeted(report);
+});
+
+/* ------------------------------------------------------------------------- */
+/* Fail-closed redaction — 02-04 Task 3 (T-02-10)                               */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * The e2e seam for a hostile/broken DOM scan: the redactor's `TreeWalker` is
+ * the only `createTreeWalker` caller in the SDK, so overriding it makes the
+ * redaction pass throw exactly where a real scan/geometry failure would.
+ * Nothing else in the widget, harness or Playwright's own page utilities
+ * touches that API.
+ */
+const BREAK_DOM_SCAN = String.raw`(() => {
+  const original = document.createTreeWalker;
+  if (typeof original !== 'function') return;
+  document.createTreeWalker = function () {
+    document.documentElement.setAttribute('data-wb-stub-invoked', 'redaction-scan-failure');
+    throw new Error('e2e: simulated redaction DOM-scan failure');
+  };
+})();`;
+
+test('fail-closed: a redaction scan error lands in the loud capture-failed state with zero POST attempts', async ({
+  page,
+  browserName,
+}) => {
+  await installCaptureStub(page, browserName);
+  await page.addInitScript({ content: BREAK_DOM_SCAN });
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+
+  const calls = await interceptIncidentPosts(page, async () => ({
+    status: 201,
+    body: JSON.stringify({ id: INTERCEPTED_ID }),
+  }));
+
+  await clickLauncher(page);
+  await waitForHeadline(page, "Couldn't capture the screen.", 10_000);
+
+  const failed = await probeWidget(page);
+  expect(failed.headlineRole).toBe('alert');
+  expect(failed.hint).toBe(CAPTURE_HINT);
+  expect(failed.actionsVisible).toBe(true);
+
+  // Non-vacuity: the capture DID run (host observed hidden at stub time) and
+  // the scan provocation fired — the failure is redaction's, not capture's,
+  // and the flow must have short-circuited before encode/send.
+  const observation = await page.locator('html').getAttribute('data-wb-stub-observation');
+  expect(observation, 'the capture stub must have run before the scan failed').not.toBeNull();
+  expect(await page.locator('html').getAttribute('data-wb-stub-invoked')).toBe(
+    'redaction-scan-failure',
+  );
+  await expectNoRequest(page, calls);
+});
