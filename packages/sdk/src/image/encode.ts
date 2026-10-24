@@ -48,6 +48,21 @@ export function sniffImageType(producedType: string): string {
 }
 
 /**
+ * Real WebP bytes: `RIFF` at 0 and `WEBP` at 8.
+ *
+ * `blob.type` alone is not a sufficient capability answer. WebKit answers a
+ * WebP request with a **zero-byte blob still labelled `image/webp`** rather than
+ * the spec's PNG fallback, so a type-only probe would cache "WebP works", encode
+ * an empty image and hand the API nothing to sniff. The magic bytes are the only
+ * claim the server will accept, so they are the claim the probe trusts.
+ */
+function hasWebpMagic(bytes: Uint8Array): boolean {
+  const ascii = (start: number, end: number): string =>
+    String.fromCharCode(...bytes.subarray(start, end));
+  return bytes.length >= 12 && ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WEBP';
+}
+
+/**
  * The only call site of the canvas encode API in `packages/sdk/src`.
  * Everything else in the SDK goes through it.
  */
@@ -76,7 +91,9 @@ async function preferredMimeType(): Promise<string> {
     probe.width = 1;
     probe.height = 1;
     const produced = await encodeOnce(probe, WEBP_MIME, 0.8);
-    webpSupported = sniffImageType(produced.type) === WEBP_MIME;
+    const bytes = new Uint8Array(await produced.arrayBuffer());
+    webpSupported =
+      sniffImageType(produced.type) === WEBP_MIME && hasWebpMagic(bytes);
   }
   return webpSupported ? WEBP_MIME : PNG_MIME;
 }
@@ -144,6 +161,9 @@ export async function encodeLadder(image: ImageData): Promise<EncodedImage> {
   for (let round = 0; round < MAX_ENCODE_ROUNDS; round += 1) {
     for (const quality of QUALITY_LADDER) {
       const blob = await encodeOnce(current, mimeType, quality);
+      // An empty encode is a broken engine answer, never a sendable image: the
+      // API rejects it on magic bytes and the user gets a pointless round trip.
+      if (blob.size === 0) throw new Error('the canvas produced an empty image');
       last = {
         blob,
         mimeType: sniffImageType(blob.type),
