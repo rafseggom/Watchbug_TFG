@@ -1283,3 +1283,346 @@ test('WDG-05: a z-index tie stays resolved by DOM order and the host is re-appen
   // Still above the replacement document: the widget host wins the hit test.
   expect(after.documentHitsHost).toBe(true);
 });
+
+/* ------------------------------------------------------------------------- */
+/* Auto-redaction artifact rows — 02-04 (PRV-01/02/03, H-1, P2-D-08, fail-closed) */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * The CA-02-style proof for the auto-redaction families (02-04): decode the
+ * bytes that left the browser **in the page that produced them** and check the
+ * expected mask rect against the original pixels the capture stub painted
+ * there.
+ *
+ * Non-vacuity comes from the stubs' marker paint: both capture tiers paint
+ * `#ff00ff` over `[data-capture-marker]`'s viewport rect with the same
+ * outward rounding the redactor uses. A masked row therefore proves
+ * destruction ("zero marker-coloured pixels inside the expected rect"), and
+ * the lookalike/negative-control rows prove the marker survives — and is found
+ * by this very analysis — when no family matches. Secret elements are styled
+ * `line-height: 1` so the element rect the stub paints sits **inside** the
+ * text-node rect the redactor masks (probe-verified on all three engines);
+ * with `line-height: 1.5` the line box is taller than the text rect and
+ * legitimate marker pixels would survive outside the mask.
+ */
+interface CssRect {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+/** One absolutely-positioned element a redaction row injects pre-gesture. */
+interface SecretSpec {
+  id: string;
+  tag?: 'span' | 'div' | 'input';
+  text?: string;
+  value?: string;
+  attrs?: Record<string, string>;
+  left: number;
+  top: number;
+  marker?: boolean;
+  style?: string;
+}
+
+async function installSecrets(page: Page, secrets: SecretSpec[]): Promise<void> {
+  await page.evaluate((specs) => {
+    for (const spec of specs) {
+      const element = document.createElement(spec.tag ?? 'div');
+      element.id = spec.id;
+      if (spec.text !== undefined) element.textContent = spec.text;
+      if (spec.value !== undefined) (element as HTMLInputElement).value = spec.value;
+      for (const [name, value] of Object.entries(spec.attrs ?? {})) {
+        element.setAttribute(name, value);
+      }
+      if (spec.marker === true) element.setAttribute('data-capture-marker', '');
+      element.style.cssText =
+        `position:absolute;left:${spec.left}px;top:${spec.top}px;` +
+        'white-space:nowrap;font:600 16px/1 ui-monospace,SFMono-Regular,Consolas,monospace;color:#0b0b0b;' +
+        (spec.style ?? '');
+      document.body.appendChild(element);
+    }
+  }, secrets);
+}
+
+/** Which rect the redactor is expected to mask for `#id`. */
+type MaskSource = 'element' | 'text-node';
+
+/**
+ * The expected mask rect: `element` for the structural families (password
+ * inputs, `data-watchbug-sensitive` — the scan uses `getBoundingClientRect`),
+ * `text-node` for pattern families (the union of `range.getClientRects()`,
+ * exactly as `redactor.ts` computes it).
+ */
+async function readMaskRect(page: Page, id: string, source: MaskSource): Promise<CssRect> {
+  const rect = await page.evaluate(
+    ({ elementId, mode }) => {
+      const element = document.getElementById(elementId);
+      if (element === null) throw new Error(`installSecrets: #${elementId} was not injected`);
+      if (mode === 'element') {
+        const box = element.getBoundingClientRect();
+        return { left: box.left, top: box.top, right: box.right, bottom: box.bottom };
+      }
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      let left = Number.POSITIVE_INFINITY;
+      let top = Number.POSITIVE_INFINITY;
+      let right = Number.NEGATIVE_INFINITY;
+      let bottom = Number.NEGATIVE_INFINITY;
+      for (const box of Array.from(range.getClientRects())) {
+        left = Math.min(left, box.left);
+        top = Math.min(top, box.top);
+        right = Math.max(right, box.right);
+        bottom = Math.max(bottom, box.bottom);
+      }
+      return { left, top, right, bottom };
+    },
+    { elementId: id, mode: source },
+  );
+  if (!Number.isFinite(rect.left) || rect.right - rect.left < 8 || rect.bottom - rect.top < 4) {
+    throw new Error(`readMaskRect: #${id} has a degenerate rect (${JSON.stringify(rect)})`);
+  }
+  return rect;
+}
+
+/** A region far from every injected secret — it must keep its pixels. */
+const REDACTION_CONTROL_RECT: CssRect = { left: 900, top: 110, right: 1120, bottom: 250 };
+
+interface RedactionReport {
+  width: number;
+  height: number;
+  insidePixels: number;
+  insideMagenta: number;
+  insideBlack: number;
+  interiorPixels: number;
+  interiorMagenta: number;
+  interiorBlack: number;
+  ringPixels: number;
+  ringMagenta: number;
+  ringBlack: number;
+  controlPixels: number;
+  controlBlack: number;
+  controlDistinct: number;
+}
+
+/**
+ * Decode the outgoing bytes in-page and count, over the expected mask rect,
+ * its 1-px-shrunk interior, the 1-px ring outside it, and a control region:
+ *
+ *  - **magenta** ≈ original `#ff00ff` marker pixels (distance² ≤ 120², lossy
+ *    encode tolerant) — zero inside rect+ring is the "original pixel values
+ *    are gone" proof (CA-02);
+ *  - **black** = flat opaque fill (`max(rgb) ≤ 24`) — present inside proves
+ *    the destructive fill landed (R-13), absent outside proves the mask is
+ *    targeted, not a wipe.
+ */
+async function analyzeRedaction(
+  page: Page,
+  bytes: Buffer,
+  options: { viewport: CssRect; masked: CssRect; control?: CssRect },
+): Promise<RedactionReport> {
+  const control = options.control ?? REDACTION_CONTROL_RECT;
+  return page.evaluate(
+    async ({ payload, viewport, masked, control: controlRect }) => {
+      const binary = atob(payload);
+      const raw = new Uint8Array(binary.length);
+      for (let at = 0; at < binary.length; at += 1) raw[at] = binary.charCodeAt(at);
+      const bitmap = await createImageBitmap(new Blob([raw.buffer]));
+      const canvas = document.createElement('canvas');
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const context = canvas.getContext('2d');
+      if (context === null) throw new Error('analyzeRedaction: a 2D canvas is unavailable');
+      context.drawImage(bitmap, 0, 0);
+      const data = context.getImageData(0, 0, canvas.width, canvas.height).data;
+      const width = bitmap.width;
+      const height = bitmap.height;
+
+      const scaleX = width / Math.max(1, viewport.right - viewport.left);
+      const scaleY = height / Math.max(1, viewport.bottom - viewport.top);
+      const mapRect = (rect: CssRect): { left: number; top: number; right: number; bottom: number } => ({
+        left: Math.max(0, Math.floor((rect.left - viewport.left) * scaleX)),
+        top: Math.max(0, Math.floor((rect.top - viewport.top) * scaleY)),
+        right: Math.min(width, Math.ceil((rect.right - viewport.left) * scaleX)),
+        bottom: Math.min(height, Math.ceil((rect.bottom - viewport.top) * scaleY)),
+      });
+      const inside = mapRect(masked);
+      const controlBox = mapRect(controlRect);
+
+      const isMagenta = (at: number): boolean => {
+        const dr = 255 - data[at];
+        const dg = data[at + 1];
+        const db = 255 - data[at + 2];
+        return dr * dr + dg * dg + db * db <= 14400;
+      };
+      const isBlack = (at: number): boolean => Math.max(data[at], data[at + 1], data[at + 2]) <= 24;
+
+      const scan = (
+        x0: number,
+        y0: number,
+        x1: number,
+        y1: number,
+      ): { pixels: number; magenta: number; black: number } => {
+        const stats = { pixels: 0, magenta: 0, black: 0 };
+        for (let y = Math.max(0, y0); y < Math.min(height, y1); y += 1) {
+          for (let x = Math.max(0, x0); x < Math.min(width, x1); x += 1) {
+            const at = (y * width + x) * 4;
+            stats.pixels += 1;
+            if (isMagenta(at)) stats.magenta += 1;
+            if (isBlack(at)) stats.black += 1;
+          }
+        }
+        return stats;
+      };
+
+      const core = scan(inside.left, inside.top, inside.right, inside.bottom);
+      const expanded = scan(inside.left - 1, inside.top - 1, inside.right + 1, inside.bottom + 1);
+      const interior = scan(inside.left + 1, inside.top + 1, inside.right - 1, inside.bottom - 1);
+      const controlStats = scan(controlBox.left, controlBox.top, controlBox.right, controlBox.bottom);
+
+      const distinct = new Set<number>();
+      for (let y = Math.max(0, controlBox.top); y < Math.min(height, controlBox.bottom); y += 1) {
+        for (let x = Math.max(0, controlBox.left); x < Math.min(width, controlBox.right); x += 1) {
+          const at = (y * width + x) * 4;
+          distinct.add(((data[at] >> 5) << 10) | ((data[at + 1] >> 5) << 5) | (data[at + 2] >> 5));
+        }
+      }
+
+      return {
+        width,
+        height,
+        insidePixels: core.pixels,
+        insideMagenta: core.magenta,
+        insideBlack: core.black,
+        interiorPixels: interior.pixels,
+        interiorMagenta: interior.magenta,
+        interiorBlack: interior.black,
+        ringPixels: expanded.pixels - core.pixels,
+        ringMagenta: expanded.magenta - core.magenta,
+        ringBlack: expanded.black - core.black,
+        controlPixels: controlStats.pixels,
+        controlBlack: controlStats.black,
+        controlDistinct: distinct.size,
+      };
+    },
+    { payload: bytes.toString('base64'), viewport: options.viewport, masked: options.masked, control },
+  );
+}
+
+/** The CA-02 destruction proof: original pixels gone in rect + ring, fill burned in, outside untouched. */
+function expectMaskedAndTargeted(report: RedactionReport, minInteriorBlack = 0.98): void {
+  expect(report.insidePixels, 'the expected mask rect must land inside the captured frame').toBeGreaterThan(
+    50,
+  );
+  expect(report.interiorPixels, 'the mask interior must be non-degenerate').toBeGreaterThan(0);
+  expect(report.insideMagenta, 'zero original pixels inside the masked rect (CA-02)').toBe(0);
+  expect(report.ringMagenta, 'zero original pixels on the 1-px boundary ring (CA-02)').toBe(0);
+  expect(
+    report.interiorBlack / report.interiorPixels,
+    'the mask interior must be the flat opaque fill',
+  ).toBeGreaterThanOrEqual(minInteriorBlack);
+  expect(
+    report.insideBlack / report.insidePixels,
+    'the rect including its boundary pixel row must be filled',
+  ).toBeGreaterThanOrEqual(0.9);
+  expect(report.ringBlack / report.ringPixels, 'the 1-px ring outside the rect must not be wiped').toBeLessThan(
+    0.5,
+  );
+  expect(report.controlBlack / report.controlPixels, 'the control region must keep its pixels').toBeLessThan(
+    0.2,
+  );
+  expect(report.controlDistinct, 'the control region must keep more than one colour').toBeGreaterThanOrEqual(
+    2,
+  );
+}
+
+/** The non-vacuous twin: an element no family matches keeps every original pixel. */
+function expectStillVisible(report: RedactionReport): void {
+  expect(report.insidePixels, 'the control rect must land inside the captured frame').toBeGreaterThan(50);
+  expect(report.interiorPixels, 'the control interior must be non-degenerate').toBeGreaterThan(0);
+  expect(
+    report.interiorMagenta / report.interiorPixels,
+    'an unmatched element keeps its original marker pixels',
+  ).toBeGreaterThanOrEqual(0.9);
+  expect(
+    report.interiorBlack / report.interiorPixels,
+    'an unmatched element must not be flat-filled',
+  ).toBeLessThanOrEqual(0.2);
+}
+
+/** One shared row body: inject secrets, gesture, decode, analyze. */
+async function runRedactionRow(
+  page: Page,
+  browserName: string,
+  secrets: SecretSpec[],
+): Promise<{ report: RedactionReport; masked: CssRect; viewport: CssRect; calls: PostCall[] }> {
+  await installCaptureStub(page, browserName);
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+  await installSecrets(page, secrets);
+
+  const first = secrets[0];
+  if (first === undefined) throw new Error('runRedactionRow: no secret injected');
+  const masked = await readMaskRect(page, first.id, first.tag === 'input' || (first.attrs !== undefined && 'data-watchbug-sensitive' in first.attrs) ? 'element' : 'text-node');
+
+  const size = page.viewportSize();
+  if (size === null) throw new Error('runRedactionRow: no viewport');
+  const viewport: CssRect = { left: 0, top: 0, right: size.width, bottom: size.height };
+
+  const calls = await interceptIncidentPosts(page, async () => ({
+    status: 201,
+    body: JSON.stringify({ id: INTERCEPTED_ID }),
+  }));
+
+  await clickLauncher(page);
+  await waitForHeadline(page, 'Report sent ✓', 20_000);
+  expect(calls, 'the gesture must send exactly one report').toHaveLength(1);
+
+  const image = await readOutgoingImage(page);
+  const report = await analyzeRedaction(page, image, { viewport, masked });
+  return { report, masked, viewport, calls };
+}
+
+test('PRV-02: JWT shape masks the whole text node — decoded bytes contain zero original pixels inside the rect and its 1-px boundary ring', async ({
+  page,
+  browserName,
+}) => {
+  const { report } = await runRedactionRow(
+    page,
+    browserName,
+    [
+      {
+        id: 'wb-jwt-secret',
+        text: 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI0MiJ9.Um9ja2V0U2lnbmF0dXJlMTIzNDU2Nzg5',
+        left: 80,
+        top: 140,
+        marker: true,
+      },
+    ],
+  );
+  // The default tracer frame on both tiers: 640×360 at a 1280×720 viewport.
+  expect(report.width).toBe(640);
+  expect(report.height).toBe(360);
+  expectMaskedAndTargeted(report);
+});
+
+test('PRV-02: a JWT lookalike outside the eyJ shape stays visible — its original pixels survive in the decoded bytes', async ({
+  page,
+  browserName,
+}) => {
+  const { report } = await runRedactionRow(
+    page,
+    browserName,
+    [
+      {
+        id: 'wb-jwt-lookalike',
+        text: 'xJhdXRv.NExhbWVfaWRlbnRpdHlfOTk5OTk5.SGNyZWRzX3NpZ25hdHVyZV8xMjM0',
+        left: 80,
+        top: 140,
+        marker: true,
+      },
+    ],
+  );
+  expect(report.width).toBe(640);
+  expectStillVisible(report);
+});
