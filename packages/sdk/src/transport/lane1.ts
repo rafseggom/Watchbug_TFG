@@ -87,7 +87,11 @@ export function buildMeta(doc: Document, loc: Location): ReportMeta {
   const title = rawTitle.length > 0 ? rawTitle : 'Untitled page';
   return {
     type: 'bug',
-    title: title.slice(0, MAX_TITLE_CHARS),
+    // Truncated by CODE POINTS, matching the Zod `.max(MAX_TITLE_CHARS)` cap
+    // the server validates against: `slice(0, MAX_TITLE_CHARS)` counts UTF-16
+    // code units, so a non-BMP-heavy title would be cut short of the cap (and a
+    // unit-boundary cut could split a surrogate pair).
+    title: [...title].slice(0, MAX_TITLE_CHARS).join(''),
     url: loc.pathname.slice(0, MAX_URL_PATH_CHARS),
   };
 }
