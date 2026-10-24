@@ -85,6 +85,28 @@ New evidence rows added by this remediation:
   and mounts nothing; the same bundle with an explicit endpoint mounts and posts
   to exactly that base.
 
+## Second ledger — `02-REVIEW-FIX.md` (regression pass over the remediation)
+
+A separate `gsd-code-reviewer` pass reviewed the remediation commit `0c6565f` itself and
+found six defects **introduced by the fixes**. All six are closed in `12a5049`. These IDs
+(`FX-`) never collide with the first review's; `02-REVIEW-FIX.md` is their report of record.
+
+| Finding | Severity | Disposition | Source |
+|---------|----------|-------------|--------|
+| FX-01 | critical | fixed | `12a5049` — the no-CSPRNG exit now calls `host.restore()`, and row `WR-03 guard` drives that path and asserts the host is visible again |
+| FX-02 | critical | fixed | `12a5049` — a frame whose path is not a pure translation is REFUSED (fail closed, OQ-1 precedent); row `S-7 guard` drives a rotated same-origin frame to a loud failure with zero POSTs |
+| FX-03 | warning | fixed | `12a5049` — a non-string `endpoint` (e.g. `null` from a JSON config) is a hard `TypeError` taken before the S-8 cross-origin check; asserted in the S-8 row |
+| FX-04 | warning | fixed | `12a5049` — `HostFixtureOptions.projectKey` goes through the same shape validation as the `.env` key (`fixtureKey()`) |
+| FX-05 | info | fixed | `12a5049` — six corrupted comment em-dashes in `redactor.ts` restored |
+| FX-06 | info | fixed | `12a5049` — `MAX_SCAN_DEPTH` exhaustion now throws instead of silently skipping a subtree |
+
+**Status: 6 / 6 resolved.** Combined with the first ledger: **15 / 15 resolved.**
+
+Known scope decision recorded by the FX-02 fix: the frame map supports **pure translation
+only**. A scaled or rotated same-origin frame is refused loudly rather than mapped — correct
+and fail-closed, but stricter than strictly necessary for pure `scale`, which *could* be mapped
+exactly. That extension is deliberate backlog, not an oversight.
+
 ## Notes
 
 Note 1: REVIEW.md authored these findings as `#### <ID>:` (h4) headings, one level deeper than the

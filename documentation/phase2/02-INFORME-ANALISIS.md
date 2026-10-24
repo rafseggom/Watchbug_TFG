@@ -22,10 +22,10 @@
 | **Ejecución del objetivo** | ninguna (sin `npm test`, sin `npm run verify`, sin Playwright, sin servidores, sin red). Único contacto con ejecutable: **medición estática** de artefactos ya construidos en `packages/sdk/dist/` |
 | **Auditoría de dependencias** | `git diff -- '*package.json' '*lock*'` → **sin cambios de manifiestos** (ver **§5** del flujo: auditoría global única) |
 | **Fecha (remediación)** | 2026-10-24 |
-| **HEAD (tras remediación)** | `0c6565f` — *fix(02): close the code-review findings and the analysis backlog* |
-| **Modo (remediación)** | `/gsd-code-review 02 --fix` — correcciones aplicadas y verificadas; ver **§8** |
-| **Ejecución (tras remediación)** | `npm run verify` **303/303** (chromium + firefox + webkit) · `lint` · `check:size` · `gate.mjs` · `check:compose` · `stopthatslop --pack ts` **0 findings / exit 0** — todo en verde |
-| **Hallazgos del code review** | `02-REVIEW.md` (9 hallazgos: 3 critical · 3 warning · 3 info) → **`02-REVIEW-DISPOSITION.md` 9/9 resueltos** |
+| **HEAD (tras remediación)** | `12a5049` — *fix(02): close the six findings of the remediation regression pass* (sobre `0c6565f`, la primera tanda) |
+| **Modo (remediación)** | `/gsd-code-review 02 --fix` — correcciones aplicadas y verificadas en dos tandas; ver **§8** |
+| **Ejecución (tras remediación)** | `npm run verify` **309/309** (chromium + firefox + webkit) · `lint` · `check:size` · `gate.mjs` · `check:compose` · `stopthatslop --pack ts` **0 findings / exit 0** — todo en verde |
+| **Hallazgos del code review** | `02-REVIEW.md` (9: 3 critical · 3 warning · 3 info) **y** `02-REVIEW-FIX.md` (6: 2 critical · 2 warning · 2 info, el pase de regresión sobre la remediación) → **`02-REVIEW-DISPOSITION.md` 15/15 resueltos** |
 
 ---
 
@@ -45,7 +45,7 @@
 4. **P3 — Hallazgos informativos**: el bundle de e2e `watchbug.e2e.*` (`SHADOW_MODE='open'`) se emite en el mismo `dist/` **sin ningún gate que impida desplegarlo** (`build.mjs:83-98`), y el fallback de la clave de idempotencia usa `Math.random()` (`pipeline.ts:127-133`).
 5. **P3 — Test-only**: la clave de proyecto se concatena en un literal JS/HTML sin validar su formato (`host-fixtures.ts:50-59`).
 
-> **Estado (2026-10-24, tras remediación `0c6565f`):** este resumen describe el análisis original sobre `9c0c089`. **Todo lo prioritario está corregido** — S-7, S-8, I-2, S-9, I-1 y los tres focos de complejidad C-4/C-5/C-6 están **resueltos**, y los tres focos `15+` de código de producto bajaron a CC 6 / 2 / 7. Además `/gsd-code-review 02 --fix` cerró los **7 hallazgos abiertos de `02-REVIEW.md`** (CR-03, WR-01, WR-02, WR-03, IN-01, IN-02, IN-03): **9/9 resueltos**. Quedan abiertos únicamente 8 `needs_validation` de despliegue (§4.2) y los focos 6-10 que no se tocaron (C-7). Detalle, evidencia y verificación en **§8**.
+> **Estado (2026-10-24, tras remediación `12a5049`):** este resumen describe el análisis original sobre `9c0c089`. **Todo lo prioritario está corregido** — S-7, S-8, I-2, S-9, I-1 y los tres focos de complejidad C-4/C-5/C-6 están **resueltos**, y los tres focos `15+` de código de producto bajaron a CC 6 / 2 / 7 (hoy ninguna función de producto está por encima de CC 10). Además `/gsd-code-review 02 --fix` cerró los **7 hallazgos abiertos de `02-REVIEW.md`** (CR-03, WR-01, WR-02, WR-03, IN-01, IN-02, IN-03) **y** los 6 que un pase de regresión encontró en la propia remediación (`02-REVIEW-FIX.md`, FX-01…FX-06): **15/15 resueltos**. Quedan abiertos únicamente 8 `needs_validation` de despliegue (§4.2) y los focos 6-10 que no se tocaron (C-7). Detalle, evidencia y verificación en **§8**.
 
 ---
 
@@ -446,9 +446,11 @@ git diff --shortstat origin/develop...HEAD                   # 54 files changed,
 
 ---
 
-## 8. Estado de remediación (2026-10-24, HEAD `0c6565f`)
+## 8. Estado de remediación (2026-10-24, HEAD `12a5049`)
 
-> §8 es el **estado actual tras corregir**. §0–§7 describen el análisis original sobre `9c0c089` y **no se reescriben**: son el registro histórico de aquella pasada. Todo lo que sigue se **re-verificó contra el código en `0c6565f`**, no se heredó del análisis. La remediación se ejecutó con `/gsd-code-review 02 --fix`, que además cerró los **7 hallazgos abiertos de `02-REVIEW.md`** (CR-03, WR-01, WR-02, WR-03, IN-01, IN-02, IN-03) — ver `02-REVIEW-DISPOSITION.md`, hoy **9/9 resueltos**.
+> §8 es el **estado actual tras corregir**. §0–§7 describen el análisis original sobre `9c0c089` y **no se reescriben**: son el registro histórico de aquella pasada. Todo lo que sigue se **re-verificó contra el código en `12a5049`**, no se heredó del análisis.
+>
+> La remediación se ejecutó con `/gsd-code-review 02 --fix` en dos tandas: primero cerró los **7 hallazgos abiertos de `02-REVIEW.md`** (CR-03, WR-01, WR-02, WR-03, IN-01, IN-02, IN-03) y el backlog de este informe; después, un **pase de regresión independiente** sobre la propia remediación (`02-REVIEW-FIX.md`) encontró 6 defectos nuevos, también cerrados. `02-REVIEW-DISPOSITION.md` da el estado de las dos tandas: **15/15 resueltos**.
 
 ### 8.1 Resumen
 
@@ -460,7 +462,7 @@ git diff --shortstat origin/develop...HEAD                   # 54 files changed,
 | **S-9** | Clave concat sin validar (LOW, test, §4.1-3) | ✅ **resuelto** | `projectKey()` valida `^wkbt_[0-9A-Za-z]{32}$` **antes** de interpolar. La garantía de formato ya no depende del arranque de la API. |
 | **I-1** | Bundle e2e `open` en `dist/` sin gate (INFO, §4.1-4) | ✅ **resuelto** | Los bundles de test se emiten en `dist/e2e/`, el build borra los rezagados del layout anterior y una aserción **falla el build** si algún artefacto `SHADOW_MODE:'open'` vuelve a `dist/`. |
 | **C-4** | `render` CC 18 / 90 LOC | ✅ **resuelto** | **CC 18 → 6** (37 LOC), con `viewFlags` / `applyVisibility` / `renderHeadline` / `renderFailed`. |
-| **C-5** | `collectMaskRects` CC 17 / 52 LOC | ✅ **resuelto** | **CC 17 → 2** (9 LOC): `collectStructuralRects` (2), `collectValueRects` (5), `collectTextRects` (8), `textNodeRect` (6), `collectScanRoots` (1 + visit 6). |
+| **C-5** | `collectMaskRects` CC 17 / 52 LOC | ✅ **resuelto** | **CC 17 → 2** (9 LOC): `collectStructuralRects` (2), `collectValueRects` (5), `collectTextRects` (8), `textNodeRect` (6), `collectScanRoots` (1 + visit 7). |
 | **C-6** | `capture()` CC 15 / 97 LOC | ✅ **resuelto** | **CC 15 → 7** (39 LOC): `captureFromSeam` (2), `assertTabSurface` (3), `readFrame` (4). |
 | **V-1** | 11 `needs_validation` (§4.2) | 🟡 **parcial** | #1, #2 y #8 cerrados aquí (ver §8.8). El resto son hechos del despliegue real: siguen abiertos por naturaleza. |
 | **L-1** | Slop | ✅ **0 findings** | Re-ejecutado sobre `0c6565f`: `gate_finding_count: 0`, `exit 0` (ver §8.9). |
@@ -468,6 +470,7 @@ git diff --shortstat origin/develop...HEAD                   # 54 files changed,
 | **IN-01** *(sólo review)* | `beyond-cap` asigna canvas antes de su `return` | ✅ **resuelto** | Ver §8.6. |
 | **IN-02** *(sólo review)* | `truncateReason` parte pares sustitutos | ✅ **resuelto** | Ver §8.6. |
 | **IN-03** *(sólo review)* | Igualdad de bytes vacía en WebKit | ✅ **resuelto** | Ver §8.6. |
+| **FX-01 … FX-06** *(pase de regresión)* | **6 defectos introducidos por los propios arreglos** (2 críticos, 2 avisos, 2 info) | ✅ **los 6 cerrados** | Ver **§8.10** — incluido FX-01, que dejaba el widget muerto tras un fallo sin CSPRNG, y FX-02, que ponía la máscara sobre otros píxeles si un marco llevaba `transform` |
 
 > **Sobre los IDs duplicados.** `02-REVIEW.md` y este informe se escribieron en pasadas independientes y nombraron los mismos defectos con IDs distintos. La tabla de arriba es la correspondencia; **CR-03 ≡ S-7**, **WR-02 ≡ S-8**, **WR-03 ≡ I-2**. `02-REVIEW-DISPOSITION.md` es la fuente de verdad para el estado de los hallazgos del review.
 
@@ -537,10 +540,10 @@ Si un `CaptureSource` no invocara `beforeRead`, `redact` vuelve a medir por su c
 | Función | Antes | Después | Piezas nuevas |
 |---|---|---|---|
 | `render` (`widget/status-panel.ts`) | **18** / 90 LOC | **6** / 37 LOC | `viewFlags` 4 · `applyVisibility` 2 · `renderHeadline` 7 · `renderFailed` 6 |
-| `collectMaskRects` (`redact/redactor.ts`) | **17** / 52 LOC | **2** / 9 LOC | `collectStructuralRects` 2 · `collectValueRects` 5 · `collectTextRects` 8 · `textNodeRect` 6 · `collectScanRoots` 1 (+ `visit` 6) |
+| `collectMaskRects` (`redact/redactor.ts`) | **17** / 52 LOC | **2** / 9 LOC | `collectStructuralRects` 2 · `collectValueRects` 5 · `collectTextRects` 8 · `textNodeRect` 6 · `collectScanRoots` 1 (+ `visit` 7) |
 | `capture()` (`capture/capture-source.ts`) | **15** / 97 LOC | **7** / 39 LOC | `captureFromSeam` 2 · `assertTabSurface` 3 · `readFrame` 4 |
 
-**Distribución global tras el refactor (mismos 19 ficheros del alcance):** 333 funciones · media **2,09** · máx 19 · bandas **ok 305 / vigilar 26 / refactorizar 1 / dividir 1**.
+**Distribución global tras el refactor (mismos 19 ficheros del alcance):** 342 funciones · media **2,09** · máx 19 · bandas **ok 314 / vigilar 26 / refactorizar 1 / dividir 1**.
 
 **Ya ninguna función de producto está en banda 11+.** Los dos focos que quedan por encima de 10 son **de test** y quedan fuera del plan por la convención heredada de la fase 1 (§3.4-5: los tests se miden, no se refactorizan aquí):
 
@@ -570,36 +573,56 @@ Todo en verde sobre `0c6565f`, evidencia fresca ejecutada en esta sesión:
 
 | Comando | Resultado |
 |---|---|
-| `npm run verify` | **303/303** — chromium + firefox + webkit (era **297/297** en la línea base; +2 filas nuevas × 3 motores) |
+| `npm run verify` | **309/309** — chromium + firefox + webkit (era **297/297** en la línea base) |
 | `npm run lint` | ✅ limpio (`tsc -p tsconfig.json` por workspace) |
-| `npm run check:size` | ✅ `core 9,2 · lazy 0,3 · adapter 0,3 · runtime 9,8 KB gz / 80 KB` — topes 45 / 25 / 14 intactos |
+| `npm run check:size` | ✅ `core 9,4 · lazy 0,3 · adapter 0,3 · runtime 10,1 KB gz / 80 KB` — topes 45 / 25 / 14 intactos |
 | `node scripts/gate.mjs` | ✅ 3 passed, 0 failed, 0 skipped |
 | `npm run check:compose` | ✅ exactamente tres servicios |
 | `python -m stopthatslop_cli check --pack ts` | ✅ `gate_finding_count: 0`, `teach_only_finding_count: 0`, **`exit 0`** |
 
-**Filas e2e nuevas (2):**
+**Filas e2e nuevas (4):**
 
 | Fila | Qué afirma | Motores |
 |---|---|---|
 | `S-7 / PRV-02` | un secreto en **sombra abierta** y otro en **iframe de mismo origen** enmascaran en los bytes decodificados; cero píxeles originales dentro del rect y su anillo de 1 px; la región de control conserva sus píxeles | 3/3 |
-| `S-8` | un script de **origen cruzado** sin `endpoint` **se niega** a iniciar y no monta nada; con `endpoint` explícito monta y publica exactamente ahí | 3/3 |
+| `S-8` | un script de **origen cruzado** sin `endpoint` **se niega** a iniciar y no monta nada; `endpoint: null` es un error duro; con `endpoint` explícito monta y publica exactamente ahí | 3/3 |
+| `S-7 guard` | un marco de mismo origen **rotado** se rechaza en voz alta y **no sale ninguna petición** (FX-02) | 3/3 |
+| `WR-03 guard` | sin CSPRNG el flujo falla **a la vista**, el host vuelve a estar visible y no se envía nada (FX-01) | 3/3 |
 
 **Filas modificadas (2):** `fail-closed` (el orden de la tier *seam* tras WR-01, §8.5) y `P2-D-03` (no-vacuidad explícita de la igualdad de bytes, §8.6).
 
-**Delta RNF-01:** `watchbug.js` **8745 → 9394 B gz** (8,54 → 9,17 KB, **+649 B**). Sigue en el **20 %** del tope duro de 45 KB y la suma runtime es **9,8 KB gz** sobre 80 KB. `watchbug.mjs` 8526 → 9178 B gz. Ningún lane cambió de naturaleza: sigue siendo un núcleo inyectado, sin imports nuevos y con **cero dependencias runtime** (regla `sdk-runtime-deps` en verde).
+**Delta RNF-01:** `watchbug.js` **8745 → 9628 B gz** (8,54 → 9,40 KB, **+883 B**), todavía por debajo de una cuarta parte del tope duro de 45 KB. `watchbug.mjs` 8526 → 9405 B gz. La suma runtime es **10,1 KB gz** sobre 80 KB. Ningún lane cambió de naturaleza: sigue siendo un núcleo inyectado, sin imports nuevos y con **cero dependencias runtime** (regla `sdk-runtime-deps` en verde).
 
-**Línea base previa:** la suite se ejecutó **antes** de tocar nada (297/297 en `9c0c089`) y **después** de cada tanda de cambios; la única regresión intermedia fue exactamente el cambio de orden de WR-01 en la fila `fail-closed` de WebKit, corregido ajustando la afirmación al orden real de cada tier (§8.5).
+**Línea base previa.** La suite se ejecutó **antes** de tocar nada (**297/297** en `9c0c089`) y **después** de cada tanda de cambios. Dos regresiones intermedias aparecieron y se corrigieron ajustando la afirmación de la fila al comportamiento real, no aflojándola: el cambio de orden de WR-01 en la fila `fail-closed` de WebKit (§8.5) y, tras el pase de regresión de §8.10, el defecto FX-01 — que **no** lo detectó ninguna fila previa y por eso existe la fila `WR-03 guard`.
 
-### 8.10 Lo que queda fuera de esta remediación
+### 8.10 Pase de regresión sobre la remediación (`02-REVIEW-FIX.md`)
+
+La remediación se sometió a su vez a un code review independiente (`gsd-code-reviewer`, profundidad *standard*, sobre exactamente los 10 ficheros del commit `0c6565f`). **Encontró 6 defectos introducidos por los propios arreglos** — 2 críticos, 2 avisos, 2 informativos. Los seis están **cerrados** en `12a5049`. Es la razón por la que esta sección tiene dos tandas: la primera remediación no era el final.
+
+| ID | Hallazgo | Estado | Qué se hizo |
+|---|---|---|---|
+| **FX-01** *(crítico)* | La salida «sin CSPRNG» de WR-03 devolvía **sin `host.restore()`**. El launcher ya había ocultado el host en su propio handler, así que el «estado terminal visible» se pintaba dentro de un host `display:none` y el widget quedaba muerto para la sesión | ✅ **cerrado** | `host.restore()` en esa salida — todas las demás ya lo hacían. Fila nueva `WR-03 guard`: quita las dos entradas del CSPRNG, dispara el gesto y afirma que el host **vuelve a estar visible** y que no sale ninguna petición |
+| **FX-02** *(crítico)* | El mapa de marcos era **sólo traslación**: cualquier `transform` CSS en un marco (o en un ancestro) colocaba la máscara sobre otros píxeles — el *fall-open* silencioso que SEC-01 prohíbe. La fila S-7 no podía cazarlo porque el fixture replicaba la misma fórmula sin transformar | ✅ **cerrado** | El mapa queda **custodiado**: un marco cuyo camino no sea una traslación pura, o cuyo tamaño renderizado difiera del de layout, se **rechaza** y el flujo falla en cerrado — la misma política que `capture-source.ts` aplica a una captura de ventana/pantalla cuyo registro DOM→bitmap no es verificable (OQ-1 / T-02-05). Fila nueva `S-7 guard` con un marco **rotado** |
+| **FX-03** *(aviso)* | `endpoint: null` — la forma que produce una configuración JSON — se saltaba la comprobación estricta de `undefined` y caía por `??` a `location.origin`, eludiendo el rechazo de S-8 y perdiendo el `TypeError` documentado | ✅ **cerrado** | Un `endpoint` que no sea cadena es ahora un error duro tomado **antes** de cualquiera de las dos decisiones. Se afirma dentro de la fila S-8 |
+| **FX-04** *(aviso)* | S-9 validaba la clave leída de `.env` pero **no** `HostFixtureOptions.projectKey`, mientras el comentario en el punto de interpolación afirmaba una garantía incondicional de no-escape | ✅ **cerrado** | Los dos caminos pasan por `fixtureKey()`, que valida la misma forma canónica |
+| **FX-05** *(info)* | La cirugía de bytes del commit anterior corrompió **seis guiones largos** en comentarios de `redactor.ts` (mojibake) | ✅ **cerrado** | Restaurados; barrido de mojibake sobre los 10 ficheros limpio |
+| **FX-06** *(info)* | El truncado por `MAX_SCAN_DEPTH` era un **salto silencioso**, contradiciendo la propia afirmación del módulo («nunca un salto silencioso») | ✅ **cerrado** | El exceso de profundidad ahora **lanza**: un subárbol al que no descendemos sacaría sus secretos sin enmascarar. La cota queda documentada como anidamiento de **roots**, nunca como altura del DOM |
+
+El mismo pase declaró **sano el resto de la remediación**: traducción y corrección de *realm* en roots anidados, caminata única del contenido *slotted*, propagación *fail closed*, población de `measured.rects` y su interacción con el reintento y la idempotencia, la lane ESM, los refactors C-4/C-5/C-6 (verificados hunk a hunk contra la pre-imagen), el *tripwire* de build de I-1, V-1 #8, y las invariantes SEC-02/SEC-03, INV-01/INV-02 y RNF-01.
+
+> **Decisión de alcance registrada (FX-02).** El mapa de marcos soporta **sólo traslación pura**. Un marco escalado o rotado se rechaza en voz alta en lugar de mapearse: es correcto y falla en cerrado, pero más estricto de lo necesario para un `scale` puro, que sí podría mapearse exactamente (`box.width / offsetWidth`). Es *backlog* deliberado, no un olvido — ver §8.11.
+
+### 8.11 Lo que queda fuera de esta remediación
 
 1. **Los 8 `needs_validation` de despliegue** (§8.8) siguen abiertos: son comprobaciones sobre un stack real, no sobre el repositorio.
 2. **Refactors 6-10 no ejecutados** (C-7): 26 focos en banda *vigilar*, por la regla de §3.4-4.
 3. **Dos focos de test por encima de CC 10** (`readControlProof` 19, `attachSecret` 11), fuera del plan por convención (§8.7).
 4. **Cambio de la interfaz pública** en S-8 (§8.3): registrado como disparador de consulta, pendiente de confirmación del propietario.
 5. **`collectTextRects` quedó en CC 8** (era 17): dentro del objetivo de §3.4 (< 10), pero es la pieza más densa de las nuevas. Si se vuelve a tocar, `textMatchesFamily` + el filtro `UNRENDERED_PARENTS` son el siguiente corte natural.
-6. **El informe no cubre** lo que §1.3 ya declaraba fuera: nada se ejecutó durante el análisis; esta remediación **sí** ejecutó la suite completa y los gates, pero sigue sin ser una auditoría de seguridad en vivo ni una prueba de penetración.
+6. **El mapa de marcos soporta sólo traslación pura** (§8.10, FX-02): un marco con `scale`/`zoom` se rechaza en voz alta aunque podría mapearse exactamente con `box.width / offsetWidth`. Es la extensión natural si un integrador lo necesita.
+7. **El informe no cubre** lo que §1.3 ya declaraba fuera: nada se ejecutó durante el análisis; esta remediación **sí** ejecutó la suite completa y los gates, pero sigue sin ser una auditoría de seguridad en vivo ni una prueba de penetración.
 
 ---
 
 *Análisis generado el 2026-10-24 sobre `9c0c089` (rama `gsd/phase-2-sdk-tracer-bullet`, base `origin/develop` = `2686e15`).*
-*Remediación aplicada el 2026-10-24 (HEAD `0c6565f`)* — *estado actual en **§8**.*
+*Remediación aplicada el 2026-10-24 en dos tandas (`0c6565f` y `12a5049`) — estado actual en **§8**.*
