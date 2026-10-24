@@ -1935,3 +1935,198 @@ test('fail-closed: a redaction scan error lands in the loud capture-failed state
   );
   await expectNoRequest(page, calls);
 });
+
+/* ------------------------------------------------------------------ */
+/* PRV-05 — the outgoing report carries no host credential material     */
+/* (SEC-03 by payload, C-5 groundwork)                                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Four distinct sentinel strings, one per host-credential surface PRV-05
+ * names: a cookie, `localStorage`, `sessionStorage` and an authorization-style
+ * request header. They are long and random enough that a hit anywhere in the
+ * request — header name, header value, multipart framing, `meta` JSON or the
+ * encoded image bytes — is a leak, never a coincidence.
+ */
+const SENTINELS = {
+  cookie: 'SENTINEL-COOKIE-9a4f21c7e05b',
+  local: 'SENTINEL-LOCAL-5c8be03317da',
+  session: 'SENTINEL-SESSION-e17d4a9684fc',
+  auth: 'SENTINEL-AUTH-b30f6e52a19c',
+} as const;
+
+/**
+ * Headers the browser itself sets on a `fetch` POST. Anything **not** in this
+ * set was put on the request by page or SDK code, so PRV-05 requires that the
+ * remainder is exactly the two contract headers. `cookie` and `authorization`
+ * are deliberately absent from the set: their mere presence fails the row.
+ */
+const BROWSER_STANDARD_HEADERS = new Set([
+  'accept',
+  'accept-encoding',
+  'accept-language',
+  'cache-control',
+  'connection',
+  'content-length',
+  'content-type',
+  'host',
+  'origin',
+  'pragma',
+  'priority',
+  'referer',
+  'sec-ch-ua',
+  'sec-ch-ua-mobile',
+  'sec-ch-ua-platform',
+  'sec-fetch-dest',
+  'sec-fetch-mode',
+  'sec-fetch-site',
+  'upgrade-insecure-requests',
+  'user-agent',
+]);
+
+test('PRV-05: the intercepted report carries no host cookie, storage or auth material — zero sentinels across every header and every request byte', async ({
+  page,
+  browserName,
+}) => {
+  await installCaptureStub(page, browserName);
+
+  // Seed the host cookie before the fixture document loads.
+  await page.context().addCookies([
+    { name: 'wb_session', value: SENTINELS.cookie, url: FIXTURE_ORIGIN },
+  ]);
+
+  // Non-vacuity for the two network provocations: this route records the host
+  // page's OWN requests, so the row proves the sentinels really do ride the
+  // page's traffic (Authorization attempt, and the cookie on a default
+  // same-origin request) before checking that the widget's report carries none.
+  const hostCalls: { headers: Record<string, string> }[] = [];
+  await page.route(/\/api\/health$/, async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.continue();
+      return;
+    }
+    hostCalls.push({ headers: await route.request().allHeaders() });
+    await route.continue();
+  });
+
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+
+  const seeded = await page.evaluate(async (sentinels) => {
+    localStorage.setItem('wb_local_token', sentinels.local);
+    sessionStorage.setItem('wb_session_token', sentinels.session);
+    document.cookie = 'wb_page_cookie=' + sentinels.cookie;
+    // The authorization-style header attempt: the host app's own authenticated
+    // call, carrying the sentinel on the wire.
+    await fetch('/api/health', { headers: { Authorization: 'Bearer ' + sentinels.auth } });
+    // And a default same-origin request, which the browser will attach the
+    // seeded cookie to — the provocation the SDK's `credentials: 'omit'` must
+    // neutralise for the report.
+    await fetch('/api/health', { credentials: 'include' });
+    return {
+      cookie: document.cookie,
+      local: localStorage.getItem('wb_local_token'),
+      session: sessionStorage.getItem('wb_session_token'),
+    };
+  }, SENTINELS);
+  expect(seeded.local, 'localStorage sentinel must be seeded').toBe(SENTINELS.local);
+  expect(seeded.session, 'sessionStorage sentinel must be seeded').toBe(SENTINELS.session);
+  expect(seeded.cookie, 'cookie sentinel must be seeded').toContain(SENTINELS.cookie);
+
+  expect(hostCalls, 'the host page must have made both provocation requests').toHaveLength(2);
+  expect(
+    hostCalls[0].headers['authorization'] ?? '',
+    'the Authorization attempt must ride the host request',
+  ).toContain(SENTINELS.auth);
+  if (browserName !== 'webkit') {
+    expect(
+      hostCalls[1].headers['cookie'] ?? '',
+      'the seeded cookie must ride a default same-origin request',
+    ).toContain(SENTINELS.cookie);
+  }
+  // webkit: Playwright's WebKit exposes NO cookie header on intercepted
+  // requests at all — `headerValue('cookie')` is null even with seeded cookies
+  // and `credentials: 'include'` (probe 2026-10-24, this host). The cookie
+  // provocation is therefore asserted on chromium/firefox only; the SDK-side
+  // guarantee (`credentials: 'omit'` in lane1) is source-asserted by
+  // `gate.mjs sdk-no-host-storage`'s credentials rule.
+
+  // Intercept the outgoing report: full headers plus the raw bytes Node sees.
+  // Fulfilled with 201 — the real-stack path is INT-02's; this row's subject is
+  // the request itself.
+  let report: { headers: Record<string, string>; buffer: Buffer } | null = null;
+  await page.route(INCIDENT_POST_RE, async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.continue();
+      return;
+    }
+    const request = route.request();
+    report = {
+      headers: await request.allHeaders(),
+      buffer: request.postDataBuffer() ?? Buffer.alloc(0),
+    };
+    await route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({ id: INTERCEPTED_ID }),
+    });
+  });
+
+  await clickLauncher(page);
+  await waitForHeadline(page, 'Report sent ✓', 15_000);
+
+  expect(report, 'the gesture must have sent a report').not.toBeNull();
+  if (report === null) return;
+  const sent = report;
+
+  // Non-vacuity: a real multipart request was inspected (meta part present on
+  // every engine — WebKit drops only the blob-backed image part, 02-02 dev. 2).
+  expect(sent.buffer.toString('utf8')).toContain('name="meta"');
+
+  // (1) Zero sentinel occurrences in every header name and value.
+  for (const [name, value] of Object.entries(sent.headers)) {
+    const haystack = `${name}\n${value}`;
+    for (const [surface, sentinel] of Object.entries(SENTINELS)) {
+      expect(
+        haystack.includes(sentinel),
+        `the ${surface} sentinel must not appear in request header "${name}"`,
+      ).toBe(false);
+    }
+  }
+
+  // (2) No credential header of any kind — not even an empty one. On webkit
+  // the cookie half is trivially satisfied (that engine exposes no cookie
+  // header at all, see the provocation comment above); the Authorization half
+  // is observable on every engine.
+  expect(sent.headers['authorization']).toBeUndefined();
+  expect(sent.headers['cookie']).toBeUndefined();
+
+  // (3) Beyond the browser's own headers, exactly the two contract headers ride.
+  const nonBrowserHeaders = Object.keys(sent.headers)
+    .filter((name) => !BROWSER_STANDARD_HEADERS.has(name))
+    .sort();
+  expect(nonBrowserHeaders).toEqual(['idempotency-key', 'x-project-key']);
+  expect(sent.headers['x-project-key']).toBe(projectKey());
+  expect(sent.headers['idempotency-key']).toMatch(/^[0-9a-f-]{36}$/);
+
+  // (4) Zero sentinel occurrences in the raw multipart bytes Node received.
+  const rawBody = sent.buffer.toString('latin1');
+  for (const [surface, sentinel] of Object.entries(SENTINELS)) {
+    expect(
+      rawBody.includes(sentinel),
+      `the ${surface} sentinel must not appear in the raw request body`,
+    ).toBe(false);
+  }
+
+  // (5) …and in the image bytes read at the fetch boundary: WebKit's
+  // `postDataBuffer()` reports 0 bytes for blob-backed parts, so the
+  // intercepted buffer alone cannot cover the image on that engine.
+  const image = await readOutgoingImage(page);
+  const imageText = image.toString('latin1');
+  for (const [surface, sentinel] of Object.entries(SENTINELS)) {
+    expect(
+      imageText.includes(sentinel),
+      `the ${surface} sentinel must not appear in the outgoing image bytes`,
+    ).toBe(false);
+  }
+});
