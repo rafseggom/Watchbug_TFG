@@ -158,13 +158,33 @@ export const PANEL_CSS = `
 }
 `;
 
-/** Truncate to `max` chars total, ending in an ellipsis, at a word boundary. */
+/**
+ * Truncate to `max` UTF-16 units total, ending in an ellipsis, at a word
+ * boundary. Cut by CODE POINTS so the boundary can never fall inside a
+ * surrogate pair (IN-02) while still honouring the same UTF-16 cap the UI-SPEC
+ * backstop row asserts.
+ */
 export function truncateReason(text: string, max: number = MAX_REASON_CHARS): string {
   if (text.length <= max) return text;
-  const cut = text.slice(0, max - 1);
+  const cut: string[] = [];
+  let units = 0;
+  for (const char of text) {
+    if (units + char.length > max - 1) break;
+    cut.push(char);
+    units += char.length;
+  }
   const lastSpace = cut.lastIndexOf(' ');
-  const base = lastSpace > 0 ? cut.slice(0, lastSpace) : cut;
-  return `${base}…`;
+  return `${(lastSpace > 0 ? cut.slice(0, lastSpace) : cut).join('')}…`;
+}
+
+/**
+ * Node-group flags for one view (C-4). Kept out of `render` so the render
+ * path stays a flat sequence instead of a nested decision tree.
+ */
+function viewFlags(view: StatusView): { inFlight: boolean; terminal: boolean; failed: boolean } {
+  const inFlight = view.kind === 'capturing' || view.kind === 'sending' || view.kind === 'retrying';
+  const failed = view.kind === 'failed';
+  return { inFlight, terminal: view.kind === 'sent' || failed, failed };
 }
 
 function el(tag: string, className: string): HTMLElement {
@@ -278,44 +298,44 @@ export function createStatusPanel(handlers: StatusPanelHandlers): StatusPanel {
     headline.appendChild(document.createTextNode(copy.slice(at + 1)));
   };
 
-  const render = (view: StatusView): void => {
-    const inFlight = view.kind === 'capturing' || view.kind === 'sending' || view.kind === 'retrying';
-    const terminal = view.kind === 'sent' || view.kind === 'failed';
-    const failed = view.kind === 'failed';
+  /** Per-state visibility of the five toggled nodes (C-4). */
+  const applyVisibility = (flags: ReturnType<typeof viewFlags>): void => {
+    show(spinner, flags.inFlight);
+    show(failureGlyph, flags.failed);
+    show(actions, flags.terminal);
+    show(retryButton, flags.failed);
+    show(dismissButton, flags.terminal);
+  };
 
-    // A re-render replaces the previous panel state, including its auto-dismiss
-    // timer and its Escape affordance.
-    clearDismissTimer();
-    setEscapeListening(terminal);
-
-    panel.setAttribute('data-hidden', view.kind === 'idle' ? 'true' : 'false');
-    panel.classList.toggle('panel--terminal', terminal);
-    panel.classList.toggle('panel--failed', failed);
-
-    if (view.kind === 'idle') {
-      headline.textContent = '';
-      hint.textContent = '';
-      reason.textContent = '';
-      return;
+  /** Terminal failure copy (C-4): one headline/hint pair per failure class. */
+  const renderFailed = (view: Extract<StatusView, { kind: 'failed' }>): void => {
+    switch (view.failure) {
+      case 'capture':
+        headline.textContent = t('status.captureFailed');
+        hint.textContent = t('status.captureFailed.hint');
+        break;
+      case 'blank':
+        headline.textContent = t('status.blankCapture');
+        hint.textContent = t('status.blankCapture.hint');
+        break;
+      case 'network':
+        headline.textContent = t('status.sendFailed');
+        hint.textContent = t('status.sendFailed.hint');
+        break;
+      case 'rejected': {
+        headline.textContent = t('status.rejected');
+        const serverReason = view.reason?.trim() ?? '';
+        if (serverReason.length > 0) reason.textContent = truncateReason(serverReason);
+        break;
+      }
     }
+  };
 
-    show(spinner, inFlight);
-    show(failureGlyph, failed);
-    show(actions, terminal);
-    show(retryButton, failed);
-    show(dismissButton, terminal);
-
-    headline.textContent = '';
-    hint.textContent = '';
-    reason.textContent = '';
-
-    if (failed) {
-      headline.setAttribute('role', 'alert');
-    } else {
-      headline.removeAttribute('role');
-    }
-
+  /** The headline this view owns (C-4); terminal failures delegate further. */
+  const renderHeadline = (view: StatusView): void => {
     switch (view.kind) {
+      case 'idle':
+        break;
       case 'capturing':
         headline.textContent = t('status.capturing');
         break;
@@ -331,33 +351,39 @@ export function createStatusPanel(handlers: StatusPanelHandlers): StatusPanel {
       case 'sent':
         renderSentHeadline();
         break;
-      case 'failed': {
-        switch (view.failure) {
-          case 'capture':
-            headline.textContent = t('status.captureFailed');
-            hint.textContent = t('status.captureFailed.hint');
-            break;
-          case 'blank':
-            headline.textContent = t('status.blankCapture');
-            hint.textContent = t('status.blankCapture.hint');
-            break;
-          case 'network':
-            headline.textContent = t('status.sendFailed');
-            hint.textContent = t('status.sendFailed.hint');
-            break;
-          case 'rejected': {
-            headline.textContent = t('status.rejected');
-            const serverReason = view.reason?.trim() ?? '';
-            if (serverReason.length > 0) {
-              reason.textContent = truncateReason(serverReason);
-            }
-            break;
-          }
-        }
+      case 'failed':
+        renderFailed(view);
         break;
-      }
+    }
+  };
+
+  const render = (view: StatusView): void => {
+    // A re-render replaces the previous panel state, including its auto-dismiss
+    // timer and its Escape affordance (UI-SPEC A-5/A-7).
+    clearDismissTimer();
+    setEscapeListening(view.kind === 'sent' || view.kind === 'failed');
+
+    panel.setAttribute('data-hidden', view.kind === 'idle' ? 'true' : 'false');
+    const flags = viewFlags(view);
+    panel.classList.toggle('panel--terminal', flags.terminal);
+    panel.classList.toggle('panel--failed', flags.failed);
+
+    if (view.kind === 'idle') {
+      headline.textContent = '';
+      hint.textContent = '';
+      reason.textContent = '';
+      return;
     }
 
+    applyVisibility(flags);
+    headline.textContent = '';
+    hint.textContent = '';
+    reason.textContent = '';
+
+    if (flags.failed) headline.setAttribute('role', 'alert');
+    else headline.removeAttribute('role');
+
+    renderHeadline(view);
     show(hint, (hint.textContent ?? '').length > 0);
     show(reason, (reason.textContent ?? '').length > 0);
 

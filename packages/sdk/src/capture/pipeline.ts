@@ -19,6 +19,7 @@ import { MAX_IMAGE_PIXELS } from '@watchbug/contracts/constants';
 import { createDisplayMediaCapture, type CaptureSource } from './capture-source.ts';
 import { encodeLadder, type EncodedImage } from '../image/encode.ts';
 import { createDomRedactor, type Redactor } from '../redact/redactor.ts';
+import type { RectLike } from '../redact/geometry.ts';
 import {
   buildMeta,
   filenameFor,
@@ -124,12 +125,28 @@ interface PendingSend {
   idempotencyKey: string;
 }
 
+/**
+ * Idempotency key (P2-D-03). Every key comes from a CSPRNG: `randomUUID` where
+ * it exists, otherwise a v4 UUID assembled from `getRandomValues` -- which is
+ * NOT secure-context-gated, so plain-HTTP self-hosting (a primary deployment
+ * shape) still mints a real key instead of `Date.now()` + `Math.random()` (WR-03,
+ * I-2). With no CSPRNG at all this throws rather than mint a guessable key
+ * behind `UNIQUE (project_id, idempotency_key)`: a collision would silently
+ * replay another session's response over a real submission (M-6).
+ */
 function newIdempotencyKey(): string {
   const source = typeof crypto === 'undefined' ? undefined : crypto;
   if (source !== undefined && typeof source.randomUUID === 'function') {
     return source.randomUUID();
   }
-  return `wb-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  if (source === undefined || typeof source.getRandomValues !== 'function') {
+    throw new Error('no CSPRNG available for the idempotency key');
+  }
+  const bytes = source.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 /**
@@ -186,6 +203,21 @@ export function createCaptureFlow(deps: CaptureFlowDeps): CaptureFlow {
       pendingSend = null;
       onView({ kind: 'capturing' });
 
+      // WR-03 / I-2: minted BEFORE the capture, so a missing CSPRNG is a loud
+      // visible failure here and never a request carrying a guessable key.
+      let idempotencyKey: string;
+      try {
+        idempotencyKey = newIdempotencyKey();
+      } catch {
+        onView({ kind: 'failed', failure: 'capture' });
+        return;
+      }
+
+      // WR-01: the mask rects are measured inside `beforeRead`, the same instant
+      // the pixels are read, so a layout shift in between cannot move a secret
+      // out from under its mask. The host is `display:none` at that instant, so
+      // the widget itself cannot contribute a rect.
+      const measured: { rects: RectLike[] | null } = { rects: null };
       let image: ImageData | null = null;
       try {
         // P2-D-06: the assertion runs inside the adapter, immediately before
@@ -196,6 +228,7 @@ export function createCaptureFlow(deps: CaptureFlowDeps): CaptureFlow {
             if (!host.isHidden()) {
               throw new PipelineInvariantError('the widget host was visible at pixel-read time');
             }
+            measured.rects = redactor.collect();
           },
         });
       } catch {
@@ -223,7 +256,10 @@ export function createCaptureFlow(deps: CaptureFlowDeps): CaptureFlow {
       // (its load-bearing sentence is "Nothing was sent." — dedicated copy,
       // if wanted, belongs with the Phase 3 composer).
       try {
-        redactor.redact(image);
+        // `measured.rects` is set by every `CaptureSource` that honours
+        // `beforeRead`; the fallback re-measures so a misbehaving seam degrades
+        // to a later measurement, never to unredacted bytes (T-02-10).
+        redactor.redact(image, measured.rects ?? undefined);
       } catch {
         onView({ kind: 'failed', failure: 'capture' });
         return;
@@ -243,7 +279,7 @@ export function createCaptureFlow(deps: CaptureFlowDeps): CaptureFlow {
         blob: encoded.blob,
         filename: filenameFor(encoded.mimeType),
         meta: buildMeta(document, location),
-        idempotencyKey: newIdempotencyKey(),
+        idempotencyKey,
       });
     } finally {
       running = false;

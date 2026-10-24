@@ -33,13 +33,34 @@ export interface BitmapTransform {
   scaleY: number;
 }
 
-/** Map a CSS-pixel rect into bitmap space, outward-rounded and clamped. */
+/** True only when every edge of `rect` is a real, finite number. */
+function allFinite(rect: RectLike): boolean {
+  return (
+    Number.isFinite(rect.left) &&
+    Number.isFinite(rect.top) &&
+    Number.isFinite(rect.right) &&
+    Number.isFinite(rect.bottom)
+  );
+}
+
+/** Map a CSS-pixel rect into bitmap space, outward-rounded and clamped.
+ *
+ * FAIL CLOSED (T-02-10): a non-finite input THROWS. With `NaN`, `right <= left`
+ * is `false`, so the degenerate guard below would not fire and the rect would be
+ * handed back unpaintable -- the mask silently not landing is exactly the
+ * fall-open this module exists to prevent. Every source is a DOM rect today
+ * (always finite); this keeps the boundary honest if a future one is not
+ * (V-1 #8).
+ */
 export function toBitmapRect(
   rect: RectLike,
   transform: BitmapTransform,
   width: number,
   height: number,
 ): BitmapRect | null {
+  if (!allFinite(rect)) {
+    throw new Error('toBitmapRect: non-finite rect (refusing to guess a mask region)');
+  }
   const left = Math.max(0, Math.floor(rect.left * transform.scaleX));
   const top = Math.max(0, Math.floor(rect.top * transform.scaleY));
   const right = Math.min(width, Math.ceil(rect.right * transform.scaleX));

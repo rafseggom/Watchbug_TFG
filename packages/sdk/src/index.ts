@@ -36,8 +36,11 @@ export interface WatchbugInitOptions {
    */
   projectKey: string;
   /**
-   * Watchbug API base URL. Defaults to the origin of the loading script, i.e.
-   * the developer's own deployment (first-party delivery — PITFALLS.md:383).
+   * Watchbug API base URL. Defaults to **the origin of the document**:
+   * a report must never leave the developer's infrastructure, so a bundle
+   * served from a third-party origin (a CDN) cannot supply the default.
+   * `init()` then refuses to run rather than post captures there -- pass
+   * `endpoint` explicitly (S-8 / WR-02).
    */
   endpoint?: string;
 }
@@ -57,13 +60,24 @@ interface MountedWidget {
 
 /**
  * The document's loading script URL, captured at module evaluation time.
- * `document.currentScript` is only non-null while the script itself runs, so
- * this cannot be read lazily from inside `init()`.
+ * `document.currentScript` is only non-null while the script itself runs,
+ * and is ALWAYS null for a module script -- so the ESM lane has none and
+ * `loadingScriptOrigin()` returns null there.
  */
 const LOADING_SCRIPT_URL: string | undefined = (() => {
   const script = document.currentScript;
   return script instanceof HTMLScriptElement && script.src.length > 0 ? script.src : undefined;
 })();
+
+/** Origin of the loading script, or `null` when it cannot be determined. */
+function loadingScriptOrigin(): string | null {
+  if (LOADING_SCRIPT_URL === undefined) return null;
+  try {
+    return new URL(LOADING_SCRIPT_URL).origin;
+  } catch {
+    return null;
+  }
+}
 
 let mounted: MountedWidget | null = null;
 
@@ -76,14 +90,37 @@ function isAbsoluteHttpUrl(value: string): boolean {
   }
 }
 
-/** Best-effort API base: the loading script's origin, else the document's. */
+/**
+ * The default API base is **always the document's own origin** (S-8).
+ * Never the loading script's: a bundle served from a CDN would otherwise
+ * post captures to the CDN, breaking the promise that a report never
+ * leaves the developer's infrastructure. Any other destination is an
+ * explicit integrator decision (`endpoint`).
+ */
 function defaultEndpoint(): string {
-  try {
-    const base = LOADING_SCRIPT_URL ?? document.baseURI;
-    return new URL(base).origin;
-  } catch {
-    return '';
+  return location.origin;
+}
+
+/**
+ * Resolve the API base (S-8 / WR-02). The document origin is the only safe
+ * default; when the loading script came from somewhere else there is no
+ * default to make and the integrator must say where the API is.
+ */
+function resolveEndpoint(endpoint: string | undefined): string {
+  if (endpoint === undefined) {
+    const scriptOrigin = loadingScriptOrigin();
+    if (scriptOrigin !== null && scriptOrigin !== location.origin) {
+      throw new TypeError(
+        'Watchbug.init: the loading script origin differs from the document origin; pass `endpoint` explicitly.',
+      );
+    }
   }
+  const raw: unknown = endpoint ?? defaultEndpoint();
+  const resolved = typeof raw === 'string' ? raw.replace(/\/+$/, '') : '';
+  if (!isAbsoluteHttpUrl(resolved)) {
+    throw new TypeError('Watchbug.init: `endpoint` must be an absolute http(s) URL.');
+  }
+  return resolved;
 }
 
 function resolveOptions(options: WatchbugInitOptions): ResolvedInitOptions {
@@ -91,16 +128,7 @@ function resolveOptions(options: WatchbugInitOptions): ResolvedInitOptions {
   if (typeof projectKey !== 'string' || projectKey.trim().length === 0) {
     throw new TypeError('Watchbug.init: `projectKey` must be a non-empty string.');
   }
-
-  const endpoint = options.endpoint;
-  if (endpoint !== undefined) {
-    if (typeof endpoint !== 'string' || !isAbsoluteHttpUrl(endpoint)) {
-      throw new TypeError('Watchbug.init: `endpoint` must be an absolute http(s) URL.');
-    }
-  }
-
-  const resolvedEndpoint = (endpoint ?? defaultEndpoint()).replace(/\/+$/, '');
-  return { projectKey: projectKey.trim(), endpoint: resolvedEndpoint };
+  return { projectKey: projectKey.trim(), endpoint: resolveEndpoint(options.endpoint) };
 }
 
 /**

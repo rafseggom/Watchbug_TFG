@@ -112,14 +112,7 @@ export function createDisplayMediaCapture(hostElement: HTMLElement): CaptureSour
   return {
     async capture(request: CaptureRequest): Promise<ImageData> {
       const seam = readCaptureSeam(hostElement);
-      if (seam !== null) {
-        request.beforeRead();
-        const frame = seam();
-        if (!(frame instanceof ImageData)) {
-          throw new CaptureUnavailableError('the capture seam produced no ImageData');
-        }
-        return frame;
-      }
+      if (seam !== null) return captureFromSeam(seam, request);
 
       const media = navigator.mediaDevices;
       if (media === undefined || typeof media.getDisplayMedia !== 'function') {
@@ -145,67 +138,89 @@ export function createDisplayMediaCapture(hostElement: HTMLElement): CaptureSour
           throw new CaptureUnavailableError('the capture stream carries no video track');
         }
 
-        // OQ-1 / Pitfall 7 — the displaySurface policy. Only a TAB frame maps
-        // to this page's DOM, so only a tab frame can be redacted
-        // automatically:
-        //   'browser'  → the current tab: accepted.
-        //   'window'   → a single window: DOM→bitmap mapping unverifiable —
-        //                refused (nothing is sent; never "send anyway").
-        //   'screen'   → the whole monitor: same reason — refused.
-        //   undefined  → older engines report no surface at all: ACCEPTED
-        //                with the documented caveat (flagged assumption) that
-        //                `preferCurrentTab` plus the picker choice are the
-        //                only signals there; refusing would break browsers
-        //                that never report the surface.
-        // Any other reported surface ('monitor', 'application') is refused
-        // with the same loud failure — conservative per P2-D-09 (T-02-05).
-        const surface = track.getSettings().displaySurface;
-        if (surface === undefined) {
-          // Caveat accepted (OQ-1): no surface reported → proceed.
-        } else if (surface === 'window' || surface === 'screen') {
-          throw new CaptureUnavailableError(
-            `only tab captures can be redacted automatically (surface: ${surface})`,
-          );
-        } else if (surface !== 'browser') {
-          throw new CaptureUnavailableError(
-            `only tab captures can be redacted automatically (surface: ${surface})`,
-          );
-        }
+        assertTabSurface(track);
 
         const video = document.createElement('video');
         video.muted = true;
         video.playsInline = true;
         video.srcObject = stream;
-        try {
-          await waitForFrame(video);
-          await video.play();
-          await nextFrame();
-
-          const width = video.videoWidth;
-          const height = video.videoHeight;
-          if (width < 1 || height < 1) {
-            throw new CaptureUnavailableError('the captured frame is empty');
-          }
-
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
-          const context = canvas.getContext('2d', { willReadFrequently: true });
-          if (context === null) {
-            throw new CaptureUnavailableError('a 2D canvas is unavailable');
-          }
-
-          // P2-D-06: asserted in code, immediately before pixels are read.
-          request.beforeRead();
-          context.drawImage(video, 0, 0);
-          return context.getImageData(0, 0, width, height);
-        } finally {
-          video.srcObject = null;
-          video.remove();
-        }
+        return await readFrame(video, request);
       } finally {
         for (const track of stream.getTracks()) track.stop();
       }
     },
   };
+}
+
+/**
+ * The e2e seam branch (A-02): a page-supplied frame, accepted only from the
+ * `SHADOW_MODE === 'open'` build. Kept in its own function so the production
+ * `capture()` reads as three guard clauses and two collaborators.
+ */
+function captureFromSeam(seam: SeamFrameProvider, request: CaptureRequest): ImageData {
+  request.beforeRead();
+  const frame = seam();
+  if (!(frame instanceof ImageData)) {
+    throw new CaptureUnavailableError('the capture seam produced no ImageData');
+  }
+  return frame;
+}
+
+/**
+ * OQ-1 / Pitfall 7 -- the displaySurface policy. Only a TAB frame maps to this
+ * page's DOM, so only a tab frame can be redacted automatically:
+ *
+ *   'browser'  -> the current tab: accepted.
+ *   'window'   -> a single window: DOM-to-bitmap registration is unverifiable,
+ *                 so it is refused (nothing is sent; never "send anyway").
+ *   'screen'   -> the whole monitor: same reason -- refused.
+ *   undefined  -> older engines report no surface at all: ACCEPTED with the
+ *                 documented caveat (OQ-1) that `preferCurrentTab` plus the
+ *                 picker choice are the only signals there; refusing outright
+ *                 would break browsers that never report the surface.
+ *
+ * Any other reported surface ('monitor', 'application') is refused with the
+ * same loud failure -- conservative per P2-D-09 (T-02-05).
+ */
+function assertTabSurface(track: MediaStreamTrack): void {
+  const surface = track.getSettings().displaySurface;
+  if (surface === undefined || surface === 'browser') return;
+  throw new CaptureUnavailableError(
+    `only tab captures can be redacted automatically (surface: ${surface})`,
+  );
+}
+
+/**
+ * Wait for a real decoded frame and read it into raw pixels. `beforeRead` runs
+ * immediately before `getImageData`, and the video is torn down in `finally`
+ * whatever happens.
+ */
+async function readFrame(video: HTMLVideoElement, request: CaptureRequest): Promise<ImageData> {
+  try {
+    await waitForFrame(video);
+    await video.play();
+    await nextFrame();
+
+    const width = video.videoWidth;
+    const height = video.videoHeight;
+    if (width < 1 || height < 1) {
+      throw new CaptureUnavailableError('the captured frame is empty');
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    if (context === null) {
+      throw new CaptureUnavailableError('a 2D canvas is unavailable');
+    }
+
+    // P2-D-06: asserted in code, immediately before pixels are read.
+    request.beforeRead();
+    context.drawImage(video, 0, 0);
+    return context.getImageData(0, 0, width, height);
+  } finally {
+    video.srcObject = null;
+    video.remove();
+  }
 }

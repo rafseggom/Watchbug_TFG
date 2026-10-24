@@ -1,17 +1,17 @@
 /**
- * `Redactor` (SEC-01/SEC-02, R-13, A-01, P2-D-08/09) — the destructive half
+ * `Redactor` (SEC-01/SEC-02, R-13, A-01, P2-D-08/09) â€” the destructive half
  * of the privacy contract.
  *
  * Three detection routes, one primitive:
  *
- *  - **structural elements** — `input[type="password"]` (secret by
+ *  - **structural elements** â€” `input[type="password"]` (secret by
  *    declaration) and `[data-watchbug-sensitive]` (the integrator's opt-in):
  *    masked at the full element rect;
- *  - **form-control values** — the P2-D-07 catalog matched against
+ *  - **form-control values** â€” the P2-D-07 catalog matched against
  *    `input`/`textarea` values: masked at the full element rect;
- *  - **text nodes** — the P2-D-07 catalog matched over text nodes with a
+ *  - **text nodes** â€” the P2-D-07 catalog matched over text nodes with a
  *    `TreeWalker`, each match masking the rect of the **whole containing text
- *    node** (`range.getClientRects()` unioned — never just the matched
+ *    node** (`range.getClientRects()` unioned â€” never just the matched
  *    substring: P2-D-08 granularity, over-masking is the safe direction).
  *
  * Every rect goes through `geometry.ts` `toBitmapRect()` (outward rounding)
@@ -21,7 +21,7 @@
  *
  * Fail closed (T-02-10): no step here swallows an error. A scan or geometry
  * failure propagates to `pipeline.ts`, which short-circuits the flow into a
- * loud terminal state before encode/send — falling open to unredacted bytes
+ * loud terminal state before encode/send â€” falling open to unredacted bytes
  * is the one failure mode the core value forbids.
  *
  * Uncertainty resolves to the larger rect (P2-D-09): a multi-line inline
@@ -43,18 +43,96 @@ const UNRENDERED_PARENTS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE']);
 /** The fill colour. Flat, opaque, and the only masking primitive (R-13). */
 const MASK_RGB = { r: 0, g: 0, b: 0 } as const;
 
-/** The R-02 port: destructive, in place, nothing encoded in or out. */
+/**
+ * The R-02 port: destructive, in place, nothing encoded in or out.
+ *
+ * `collect()` and `redact()` are separate so the rects can be measured at the
+ * instant the pixels are read (WR-01) rather than after the frame exists.
+ */
 export interface Redactor {
-  /** Mutate `image` in place; returns how many rects were painted. */
-  redact(image: ImageData): number;
+  /**
+   * Measure the rects to destroy. The pipeline calls this inside the capture
+   * adapter's `beforeRead()` hook, so a layout shift between "frame drawn" and
+   * "rects walked" cannot move a secret out from under its mask (WR-01).
+   */
+  collect(): RectLike[];
+  /**
+   * Mutate `image` in place; returns how many rects were painted. Pass the set
+   * `collect()` returned. Omitting it re-measures now -- the degraded path for
+   * a `CaptureSource` that never calls `beforeRead`, never a weaker one.
+   */
+  redact(image: ImageData, rects?: readonly RectLike[]): number;
+}
+
+/**
+ * S-7 / CR-03: how deep the scan descends across nested roots. It bounds
+ * shadow-root and same-origin frame *nesting*, never DOM height -- a plain
+ * document is depth 0 and its whole tree is always walked.
+ */
+export const MAX_SCAN_DEPTH = 8;
+
+/**
+ * A root the scanner can reach, plus the translation from that root's client
+ * coordinates to the top document's viewport coordinates.
+ *
+ * A shadow root shares its host document's coordinate space (`dx`/`dy` stay
+ * whatever the host document's were). A same-origin frame document does not:
+ * its `getBoundingClientRect()` values are relative to the frame's own
+ * viewport, so the frame's content-box origin is added.
+ */
+interface ScanRoot {
+  root: Document | ShadowRoot;
+  dx: number;
+  dy: number;
 }
 
 /** Skip zero-area rects (invisible elements, collapsed ranges). */
-function pushRect(into: RectLike[], rect: { left: number; top: number; right: number; bottom: number }): void {
+function pushRect(
+  into: RectLike[],
+  rect: { left: number; top: number; right: number; bottom: number },
+  dx = 0,
+  dy = 0,
+): void {
   const width = rect.right - rect.left;
   const height = rect.bottom - rect.top;
   if (width <= 0 || height <= 0) return;
-  into.push({ left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom });
+  into.push({ left: rect.left + dx, top: rect.top + dy, right: rect.right + dx, bottom: rect.bottom + dy });
+}
+
+/**
+ * Every scanning root reachable from `doc` (S-7): the document's own light DOM,
+ * every **open** shadow root, and every same-origin frame document.
+ *
+ * Closed shadow roots are unreachable by construction, and a cross-origin
+ * frame exposes neither `shadowRoot` content nor `contentDocument` -- both are
+ * documented integration limits (T-02-14 / AR-01), not scanner choices. A
+ * traversal error is NOT swallowed here: it propagates and the pipeline turns
+ * it into a loud no-send (T-02-10).
+ */
+export function collectScanRoots(doc: Document, maxDepth = MAX_SCAN_DEPTH): ScanRoot[] {
+  const roots: ScanRoot[] = [];
+
+  const visit = (root: Document | ShadowRoot, dx: number, dy: number, depth: number): void => {
+    if (depth > maxDepth) return;
+    roots.push({ root, dx, dy });
+
+    for (const element of Array.from(root.querySelectorAll('*'))) {
+      // `shadowRoot` is null for a closed root: that subtree is unreachable.
+      const shadow = element.shadowRoot;
+      if (shadow !== null) visit(shadow, dx, dy, depth + 1);
+    }
+
+    for (const frame of Array.from(root.querySelectorAll('iframe, frame'))) {
+      // `contentDocument` is null for a cross-origin frame (T-02-14 / AR-01).
+      const inner = (frame as HTMLIFrameElement).contentDocument;
+      if (inner === null) continue;
+      const box = frame.getBoundingClientRect();
+      visit(inner, dx + box.left + frame.clientLeft, dy + box.top + frame.clientTop, depth + 1);
+    }
+  };
+
+  visit(doc, 0, 0, 0);
+  return roots;
 }
 
 /**
@@ -74,61 +152,94 @@ function textMatchesFamily(text: string, family: PatternFamily): boolean {
 }
 
 /**
- * Viewport-relative rects for everything that must be destroyed. One rect per
- * matched element or text node — collected at redact time, not at mount time,
- * so the page is scanned as the user saw it when they clicked.
+ * Viewport-relative rects for everything that must be destroyed -- one rect per
+ * matched element or text node (P2-D-08: a text node is masked as a whole, and
+ * uncertainty resolves to the larger rect).
+ *
+ * S-7 / CR-03: the scan visits **every** root reachable from `doc` -- light
+ * DOM, open shadow roots and same-origin frame documents -- bounded by
+ * `maxDepth`. What it cannot reach (closed shadow roots, cross-origin frames)
+ * is a documented integration limit, never a silent skip.
  */
-export function collectMaskRects(doc: Document): RectLike[] {
+export function collectMaskRects(doc: Document, maxDepth = MAX_SCAN_DEPTH): RectLike[] {
   const rects: RectLike[] = [];
-
-  // Structural SEC-01 families: the whole element rect.
-  for (const element of doc.querySelectorAll(SENSITIVE_SELECTOR)) {
-    pushRect(rects, element.getBoundingClientRect());
+  for (const { root, dx, dy } of collectScanRoots(doc, maxDepth)) {
+    collectStructuralRects(root, dx, dy, rects);
+    collectValueRects(root, dx, dy, rects);
+    collectTextRects(root, dx, dy, rects);
   }
-
-  // Credential patterns in form-control values: the whole element rect.
-  if (INPUT_VALUE_FAMILIES.length > 0) {
-    for (const element of doc.querySelectorAll(VALUE_SCAN_SELECTOR)) {
-      const value = (element as HTMLInputElement | HTMLTextAreaElement).value;
-      if (value.length === 0) continue;
-      const matched = INPUT_VALUE_FAMILIES.some((family) => textMatchesFamily(value, family));
-      if (matched) pushRect(rects, element.getBoundingClientRect());
-    }
-  }
-
-  // Credential patterns in text nodes: ONE union rect per matched text node
-  // (P2-D-08 — the whole node, never the matched substring). This walk is the
-  // fail-closed seam: any error it raises propagates to the pipeline.
-  if (TEXT_FAMILIES.length > 0) {
-    const walker = doc.createTreeWalker(doc.documentElement, NodeFilter.SHOW_TEXT);
-    for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
-      const text = node as Text;
-      const parent = text.parentElement;
-      if (parent !== null && UNRENDERED_PARENTS.has(parent.tagName)) continue;
-      const data = text.data;
-      if (data.length === 0) continue;
-      const matched = TEXT_FAMILIES.some((family) => textMatchesFamily(data, family));
-      if (!matched) continue;
-
-      const range = doc.createRange();
-      range.selectNodeContents(text);
-      let left = Number.POSITIVE_INFINITY;
-      let top = Number.POSITIVE_INFINITY;
-      let right = Number.NEGATIVE_INFINITY;
-      let bottom = Number.NEGATIVE_INFINITY;
-      for (const box of Array.from(range.getClientRects())) {
-        if (box.right <= box.left || box.bottom <= box.top) continue;
-        left = Math.min(left, box.left);
-        top = Math.min(top, box.top);
-        right = Math.max(right, box.right);
-        bottom = Math.max(bottom, box.bottom);
-      }
-      if (right <= left || bottom <= top) continue;
-      rects.push({ left, top, right, bottom });
-    }
-  }
-
   return rects;
+}
+
+/** Structural SEC-01 families: the whole element rect. */
+function collectStructuralRects(
+  root: Document | ShadowRoot,
+  dx: number,
+  dy: number,
+  into: RectLike[],
+): void {
+  for (const element of root.querySelectorAll(SENSITIVE_SELECTOR)) {
+    pushRect(into, element.getBoundingClientRect(), dx, dy);
+  }
+}
+
+/** Credential patterns in form-control values: the whole element rect. */
+function collectValueRects(root: Document | ShadowRoot, dx: number, dy: number, into: RectLike[]): void {
+  if (INPUT_VALUE_FAMILIES.length === 0) return;
+  for (const element of root.querySelectorAll(VALUE_SCAN_SELECTOR)) {
+    const value = (element as HTMLInputElement | HTMLTextAreaElement).value;
+    if (value.length === 0) continue;
+    const matched = INPUT_VALUE_FAMILIES.some((family) => textMatchesFamily(value, family));
+    if (matched) pushRect(into, element.getBoundingClientRect(), dx, dy);
+  }
+}
+
+/**
+ * The union of a text node's client rects, translated into the top viewport --
+ * the node's whole box, never just the matched substring (P2-D-08). `null` when
+ * the node renders no box at all: there is nothing to mask and nothing of it in
+ * the pixels.
+ */
+function textNodeRect(owner: Document, text: Text, dx: number, dy: number): RectLike | null {
+  const range = owner.createRange();
+  range.selectNodeContents(text);
+  let left = Number.POSITIVE_INFINITY;
+  let top = Number.POSITIVE_INFINITY;
+  let right = Number.NEGATIVE_INFINITY;
+  let bottom = Number.NEGATIVE_INFINITY;
+  for (const box of Array.from(range.getClientRects())) {
+    if (box.right <= box.left || box.bottom <= box.top) continue;
+    left = Math.min(left, box.left + dx);
+    top = Math.min(top, box.top + dy);
+    right = Math.max(right, box.right + dx);
+    bottom = Math.max(bottom, box.bottom + dy);
+  }
+  return right <= left || bottom <= top ? null : { left, top, right, bottom };
+}
+
+/**
+ * Credential patterns in text nodes: ONE union rect per matched text node
+ * (P2-D-08 -- the whole node, never the matched substring). This walk is the
+ * fail-closed seam: any error it raises propagates to the pipeline.
+ */
+function collectTextRects(root: Document | ShadowRoot, dx: number, dy: number, into: RectLike[]): void {
+  if (TEXT_FAMILIES.length === 0) return;
+  // `createTreeWalker` wants the owning document. `ownerDocument` is null for a
+  // Document and set for a ShadowRoot, so this stays realm-correct even for a
+  // same-origin frame's document.
+  const owner: Document = (root as ShadowRoot).ownerDocument ?? (root as Document);
+  const walker = owner.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+    const text = node as Text;
+    const parent = text.parentElement;
+    if (parent !== null && UNRENDERED_PARENTS.has(parent.tagName)) continue;
+    const data = text.data;
+    if (data.length === 0) continue;
+    const matched = TEXT_FAMILIES.some((family) => textMatchesFamily(data, family));
+    if (!matched) continue;
+    const rect = textNodeRect(owner, text, dx, dy);
+    if (rect !== null) into.push(rect);
+  }
 }
 
 /** Paint each rect into the bitmap. Pure, synchronous, destructive. */
@@ -162,16 +273,21 @@ export function fillRects(
 }
 
 /**
- * The DOM-backed redactor. Rect collection happens at redact time — not at
- * mount time — so it sees the page as the user saw it when they clicked.
+ * The DOM-backed redactor. `collect()` is separate from `redact()` so the
+ * pipeline can measure the rects at the pixel-read instant (WR-01); passing
+ * them to `redact()` paints exactly the page the user was shown.
  */
 export function createDomRedactor(doc: Document, view: Window): Redactor {
+  const viewport = (): { width: number; height: number } => ({
+    width: view.innerWidth,
+    height: view.innerHeight,
+  });
   return {
-    redact(image: ImageData): number {
-      return fillRects(image, collectMaskRects(doc), {
-        width: view.innerWidth,
-        height: view.innerHeight,
-      });
+    collect(): RectLike[] {
+      return collectMaskRects(doc);
+    },
+    redact(image: ImageData, rects?: readonly RectLike[]): number {
+      return fillRects(image, rects ?? collectMaskRects(doc), viewport());
     },
   };
 }

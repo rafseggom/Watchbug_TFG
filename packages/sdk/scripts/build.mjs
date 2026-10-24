@@ -1,5 +1,5 @@
 import { gzipSync } from 'node:zlib';
-import { readFileSync, existsSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
@@ -31,6 +31,8 @@ import { build } from 'esbuild';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const dist = join(here, '..', 'dist');
+/** I-1: the test-only bundles are emitted OUTSIDE the deployable directory. */
+const e2eDist = join(dist, 'e2e');
 
 const shared = {
   bundle: true,
@@ -82,8 +84,20 @@ for (const artifact of built) {
 // shadow mode differs — and a filename the size gate does not budget.
 const E2E_CORE = { lane: 'core-e2e', entry: 'src/index.ts', out: 'watchbug.e2e' };
 
+// I-1: the e2e artifacts moved to `dist/e2e/`. Drop the ones the old layout
+// left behind in `dist/` itself -- the build owns its own output, and a stale
+// open-shadow bundle sitting in the deployable directory is exactly the
+// accident the assertion at the bottom of this file exists to catch.
+if (existsSync(dist)) {
+  for (const stale of readdirSync(dist).filter((name) => name.startsWith('watchbug.e2e.'))) {
+    rmSync(join(dist, stale));
+    console.log(`removed stale ${stale} from dist/ (I-1: test builds live in dist/e2e/)`);
+  }
+}
+
 for (const role of FORMAT_ROLES) {
-  const outfile = join(dist, `${E2E_CORE.out}${role.ext}`);
+  mkdirSync(e2eDist, { recursive: true });
+  const outfile = join(e2eDist, `${E2E_CORE.out}${role.ext}`);
   await build({
     ...shared,
     define: { ...shared.define, SHADOW_MODE: JSON.stringify('open') },
@@ -96,3 +110,16 @@ for (const role of FORMAT_ROLES) {
   const gz = gzipSync(readFileSync(outfile)).length;
   console.log(`built ${E2E_CORE.lane.padEnd(17)} ${role.format.padEnd(4)} ${(gz / 1024).toFixed(1)} KB gz  ${outfile}`);
 }
+
+// I-1 / INV-01: nothing compiled with `SHADOW_MODE: 'open'` may sit in the
+// deployable directory. The e2e bundles are emitted under `dist/e2e/` for that
+// reason, and this assertion is what fails the BUILD if that ever changes -- so
+// the open-shadow test artifact can never ship next to a production bundle.
+const OPEN_SHADOW = /mode\s*:\s*['"]open['"]/;
+for (const name of readdirSync(dist)) {
+  if (!/\.(js|mjs)$/.test(name)) continue;
+  if (OPEN_SHADOW.test(readFileSync(join(dist, name), 'utf8'))) {
+    throw new Error(`build: ${name} is compiled with SHADOW_MODE 'open' and must not live in dist/ (INV-01)`);
+  }
+}
+console.log("dist/ holds only closed-shadow bundles (INV-01 / I-1); test builds live in dist/e2e/");

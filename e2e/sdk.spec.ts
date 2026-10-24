@@ -857,11 +857,22 @@ test('P2-D-03: a transient 500 retries with the same Idempotency-Key and the sam
 
   // Same logical submission: the encoded image and the meta part are byte-equal
   // across attempts (only the multipart boundary is regenerated).
+  //
+  // IN-03: `postDataBuffer()` omits blob-backed FormData payload BYTES on
+  // Playwright's WebKit (deviation 2) — there the part headers are present but
+  // the bodies may be empty, so "the same bytes are sent twice" is only
+  // observable on chromium/firefox. Guard the non-vacuity there explicitly and
+  // say so here, instead of letting an `toEqual` over two empty bodies look
+  // cross-engine. The shared `idempotency-key` header and the `meta` part below
+  // carry the claim on all three engines.
   const image0 = multipartPart(calls[0].buffer, 'image');
   const image1 = multipartPart(calls[1].buffer, 'image');
   expect(image0).not.toBeNull();
   expect(image1).not.toBeNull();
-  expect(image1).toEqual(image0);
+  if (browserName !== 'webkit') {
+    expect(image0?.length ?? 0, 'the encoded image must actually be in the payload').toBeGreaterThan(0);
+  }
+  expect(image1, 'the resent part must be byte-identical').toEqual(image0);
   expect(multipartPart(calls[1].buffer, 'meta')).toEqual(multipartPart(calls[0].buffer, 'meta'));
 
   const headlines = await readHeadlines(page);
@@ -1323,6 +1334,9 @@ interface CssRect {
   bottom: number;
 }
 
+/** Where a secret attaches. `shadow`/`iframe` are the S-7 scanner-reach rows. */
+type SecretRoot = 'light' | 'shadow' | 'iframe';
+
 /** One absolutely-positioned element a redaction row injects pre-gesture. */
 interface SecretSpec {
   id: string;
@@ -1334,11 +1348,24 @@ interface SecretSpec {
   top: number;
   marker?: boolean;
   style?: string;
+  /** Defaults to `light`. See `installSecrets` for what `shadow`/`iframe` do. */
+  root?: SecretRoot;
 }
 
+/**
+ * Attach one secret to its root and return the translation from that root's
+ * client coordinates to the TOP document's viewport.
+ *
+ * A shadow root shares its host document's coordinate space (shift 0). A
+ * same-origin frame document does not: its `getBoundingClientRect()` values are
+ * relative to the frame's own viewport, so the frame's content-box origin is
+ * added. This mapping is written out here **independently of `redactor.ts`**,
+ * which is what lets the S-7 row catch a wrong-side frame shift instead of
+ * passing vacuously.
+ */
 async function installSecrets(page: Page, secrets: SecretSpec[]): Promise<void> {
   await page.evaluate((specs) => {
-    for (const spec of specs) {
+    function attachSecret(spec: SecretSpec): void {
       const element = document.createElement(spec.tag ?? 'div');
       element.id = spec.id;
       if (spec.text !== undefined) element.textContent = spec.text;
@@ -1346,13 +1373,63 @@ async function installSecrets(page: Page, secrets: SecretSpec[]): Promise<void> 
       for (const [name, value] of Object.entries(spec.attrs ?? {})) {
         element.setAttribute(name, value);
       }
-      if (spec.marker === true) element.setAttribute('data-capture-marker', '');
       element.style.cssText =
         `position:absolute;left:${spec.left}px;top:${spec.top}px;` +
         'white-space:nowrap;font:600 16px/1 ui-monospace,SFMono-Regular,Consolas,monospace;color:#0b0b0b;' +
         (spec.style ?? '');
-      document.body.appendChild(element);
+
+      const root = spec.root ?? 'light';
+      if (root === 'light') {
+        if (spec.marker === true) element.setAttribute('data-capture-marker', '');
+        document.body.appendChild(element);
+        return;
+      }
+
+      let dx = 0;
+      let dy = 0;
+      if (root === 'shadow') {
+        let host = document.getElementById('wb-shadow-host');
+        if (host === null) {
+          host = document.createElement('div');
+          host.id = 'wb-shadow-host';
+          host.style.cssText = 'position:absolute;left:0;top:0;width:0;height:0;';
+          document.body.appendChild(host);
+          host.attachShadow({ mode: 'open' });
+        }
+        (host.shadowRoot as ShadowRoot).appendChild(element);
+      } else {
+        let frame = document.getElementById('wb-iframe-host') as HTMLIFrameElement | null;
+        if (frame === null) {
+          frame = document.createElement('iframe');
+          frame.id = 'wb-iframe-host';
+          frame.style.cssText = 'position:absolute;left:40px;top:60px;width:1100px;height:420px;border:0;margin:0;';
+          document.body.appendChild(frame);
+          const inner = frame.contentDocument;
+          if (inner === null) throw new Error('installSecrets: the fixture iframe is not same-origin');
+          inner.documentElement.style.margin = '0';
+          inner.body.style.cssText = 'margin:0;';
+        }
+        const box = frame.getBoundingClientRect();
+        dx = box.left + frame.clientLeft;
+        dy = box.top + frame.clientTop;
+        (frame.contentDocument as Document).body.appendChild(element);
+      }
+
+      if (spec.marker !== true) return;
+      // The capture stub paints `[data-capture-marker]` from the TOP document
+      // only, so for a nested root the marker is a separate light-DOM element
+      // sized and placed at the secret's real laid-out rect -- measured by the
+      // browser, not by the code under test.
+      const box = element.getBoundingClientRect();
+      const marker = document.createElement('div');
+      marker.setAttribute('data-capture-marker', '');
+      marker.style.cssText =
+        `position:absolute;left:${box.left + dx}px;top:${box.top + dy}px;` +
+        `width:${box.width}px;height:${box.height}px;`;
+      document.body.appendChild(marker);
     }
+
+    for (const spec of specs) attachSecret(spec);
   }, secrets);
 }
 
@@ -1365,30 +1442,62 @@ type MaskSource = 'element' | 'text-node';
  * `text-node` for pattern families (the union of `range.getClientRects()`,
  * exactly as `redactor.ts` computes it).
  */
-async function readMaskRect(page: Page, id: string, source: MaskSource): Promise<CssRect> {
+async function readMaskRect(
+  page: Page,
+  id: string,
+  source: MaskSource,
+  root: SecretRoot = 'light',
+): Promise<CssRect> {
   const rect = await page.evaluate(
-    ({ elementId, mode }) => {
-      const element = document.getElementById(elementId);
-      if (element === null) throw new Error(`installSecrets: #${elementId} was not injected`);
+    ({ elementId, mode, root }) => {
+      // The expected client-to-top-viewport mapping, written out independently
+      // of `redactor.ts`: a shadow root shares its host document's coordinate
+      // space, while a same-origin frame document needs the frame's content-box
+      // origin added. A wrong-side shift in the SDK shows up as surviving marker
+      // pixels here.
+      let scope: Document | ShadowRoot = document;
+      let dx = 0;
+      let dy = 0;
+      if (root === 'shadow') {
+        scope = document.getElementById('wb-shadow-host')?.shadowRoot ?? document;
+      } else if (root === 'iframe') {
+        const frame = document.getElementById('wb-iframe-host') as HTMLIFrameElement | null;
+        if (frame === null || frame.contentDocument === null) {
+          throw new Error('readMaskRect: the fixture iframe was not injected');
+        }
+        scope = frame.contentDocument;
+        const box = frame.getBoundingClientRect();
+        dx = box.left + frame.clientLeft;
+        dy = box.top + frame.clientTop;
+      }
+
+      const element = scope.querySelector(`#${elementId}`) as HTMLElement | null;
+      if (element === null) throw new Error(`readMaskRect: #${elementId} was not injected`);
       if (mode === 'element') {
         const box = element.getBoundingClientRect();
-        return { left: box.left, top: box.top, right: box.right, bottom: box.bottom };
+        return {
+          left: box.left + dx,
+          top: box.top + dy,
+          right: box.right + dx,
+          bottom: box.bottom + dy,
+        };
       }
-      const range = document.createRange();
+      const owner = (scope as ShadowRoot).ownerDocument ?? (scope as Document);
+      const range = owner.createRange();
       range.selectNodeContents(element);
       let left = Number.POSITIVE_INFINITY;
       let top = Number.POSITIVE_INFINITY;
       let right = Number.NEGATIVE_INFINITY;
       let bottom = Number.NEGATIVE_INFINITY;
       for (const box of Array.from(range.getClientRects())) {
-        left = Math.min(left, box.left);
-        top = Math.min(top, box.top);
-        right = Math.max(right, box.right);
-        bottom = Math.max(bottom, box.bottom);
+        left = Math.min(left, box.left + dx);
+        top = Math.min(top, box.top + dy);
+        right = Math.max(right, box.right + dx);
+        bottom = Math.max(bottom, box.bottom + dy);
       }
       return { left, top, right, bottom };
     },
-    { elementId: id, mode: source },
+    { elementId: id, mode: source, root },
   );
   if (!Number.isFinite(rect.left) || rect.right - rect.left < 8 || rect.bottom - rect.top < 4) {
     throw new Error(`readMaskRect: #${id} has a degenerate rect (${JSON.stringify(rect)})`);
@@ -1566,7 +1675,13 @@ async function runRedactionRow(
   page: Page,
   browserName: string,
   secrets: SecretSpec[],
-): Promise<{ report: RedactionReport; masked: CssRect; viewport: CssRect; calls: PostCall[] }> {
+): Promise<{
+  report: RedactionReport;
+  masked: CssRect;
+  viewport: CssRect;
+  calls: PostCall[];
+  image: Buffer;
+}> {
   await installCaptureStub(page, browserName);
   await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
   await waitForWidget(page);
@@ -1574,7 +1689,14 @@ async function runRedactionRow(
 
   const first = secrets[0];
   if (first === undefined) throw new Error('runRedactionRow: no secret injected');
-  const masked = await readMaskRect(page, first.id, first.tag === 'input' || (first.attrs !== undefined && 'data-watchbug-sensitive' in first.attrs) ? 'element' : 'text-node');
+  const masked = await readMaskRect(
+    page,
+    first.id,
+    first.tag === 'input' || (first.attrs !== undefined && 'data-watchbug-sensitive' in first.attrs)
+      ? 'element'
+      : 'text-node',
+    first.root,
+  );
 
   const size = page.viewportSize();
   if (size === null) throw new Error('runRedactionRow: no viewport');
@@ -1591,7 +1713,7 @@ async function runRedactionRow(
 
   const image = await readOutgoingImage(page);
   const report = await analyzeRedaction(page, image, { viewport, masked });
-  return { report, masked, viewport, calls };
+  return { report, masked, viewport, calls, image };
 }
 
 test('PRV-02: JWT shape masks the whole text node — decoded bytes contain zero original pixels inside the rect and its 1-px boundary ring', async ({
@@ -1792,6 +1914,63 @@ test('PRV-03: a data-watchbug-sensitive element masks at the full element rect i
 });
 
 /* ------------------------------------------------------------------------- */
+/* S-7 / CR-03 — scanner reach: open shadow roots and same-origin frames        */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * The rect collection visits every root reachable from `document`: light DOM,
+ * OPEN shadow roots and same-origin frame documents. Closed shadow roots and
+ * cross-origin frames stay unreachable by construction (T-02-14 / AR-01) and
+ * are documented as integration limits.
+ *
+ * Both secrets ride ONE report. Each carries its own marker element in the
+ * light DOM, sized and placed at the secret's real laid-out rect (see
+ * `installSecrets`), so "zero original pixels inside the rect" is a real
+ * assertion here and not a tautology.
+ */
+test('S-7 / PRV-02: secrets inside an OPEN shadow root and a same-origin iframe mask in the decoded bytes — the scan visits every reachable root', async ({
+  page,
+  browserName,
+}) => {
+  const { report, image, viewport, calls } = await runRedactionRow(
+    page,
+    browserName,
+    [
+      {
+        id: 'wb-shadow-secret',
+        text: 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI0MiJ9.Um9ja2V0U2lnbmF0dXJlMTIzNDU2Nzg5',
+        left: 80,
+        top: 140,
+        marker: true,
+        root: 'shadow',
+      },
+      {
+        id: 'wb-frame-secret',
+        text: '4111 1111 1111 1111',
+        left: 120,
+        top: 300,
+        marker: true,
+        root: 'iframe',
+      },
+    ],
+  );
+  expect(calls, 'the gesture must send exactly one report').toHaveLength(1);
+
+  // `runRedactionRow` asserted the shadow secret; the frame secret rides the
+  // same encoded bytes and needs its own rect — measured in TOP-document space,
+  // i.e. including the fixture iframe's 40 x 60 content-box origin.
+  expect(report.width).toBe(640);
+  expectMaskedAndTargeted(report);
+
+  const frameRect = await readMaskRect(page, 'wb-frame-secret', 'text-node', 'iframe');
+  expect(
+    frameRect.left,
+    'the expected frame rect must be shifted into the top viewport',
+  ).toBeGreaterThanOrEqual(150);
+  expectMaskedAndTargeted(await analyzeRedaction(page, image, { viewport, masked: frameRect }));
+});
+
+/* ------------------------------------------------------------------------- */
 /* H-1 / P2-D-08 geometry rows — 02-04 Task 3                                   */
 /* ------------------------------------------------------------------------- */
 
@@ -1964,14 +2143,29 @@ test('fail-closed: a redaction scan error lands in the loud capture-failed state
   expect(failed.hint).toBe(CAPTURE_HINT);
   expect(failed.actionsVisible).toBe(true);
 
-  // Non-vacuity: the capture DID run (host observed hidden at stub time) and
-  // the scan provocation fired — the failure is redaction's, not capture's,
-  // and the flow must have short-circuited before encode/send.
-  const observation = await page.locator('html').getAttribute('data-wb-stub-observation');
-  expect(observation, 'the capture stub must have run before the scan failed').not.toBeNull();
+  // Non-vacuity: the scan provocation really fired -- so the failure is
+  // redaction's, not capture's -- and the flow short-circuited before
+  // encode/send.
+  //
+  // WR-01 moved rect collection into `beforeRead`, the same instant the pixels
+  // are read. On the SEAM tier that means a broken scan now fails BEFORE the
+  // stub's frame provider is ever reached: strictly earlier than before, never
+  // later. The `observation` probe is therefore tier-conditional, and the
+  // branches below state the ordering each tier now has instead of letting one
+  // of them silently stop meaning anything. On the media tier the stream has
+  // already produced a frame when `beforeRead` runs, so the probe still fires.
   expect(await page.locator('html').getAttribute('data-wb-stub-invoked')).toBe(
     'redaction-scan-failure',
   );
+  const observation = await page.locator('html').getAttribute('data-wb-stub-observation');
+  if (captureStubTier(browserName) === 'seam') {
+    expect(
+      observation,
+      'the scan must fail before the seam frame provider runs (WR-01 ordering)',
+    ).toBeNull();
+  } else {
+    expect(observation, 'the capture stub must have run before the scan failed').not.toBeNull();
+  }
   await expectNoRequest(page, calls);
 });
 
@@ -2379,4 +2573,90 @@ test('self-hosted: the widget makes zero third-party network requests — only t
     external,
     `no request may leave the Watchbug origin — destinations seen: ${destinations.join(', ')}`,
   ).toEqual([]);
+});
+
+/* ------------------------------------------------------------------ */
+/* S-8 — the report destination is never guessed                       */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The default endpoint is the DOCUMENT's origin. A bundle served from another
+ * origin (a CDN) cannot supply that default: guessing the script's own origin
+ * would post captures to a third party, and guessing the document's origin
+ * would silently file reports somewhere the integrator never chose. So
+ * `init()` refuses and asks for `endpoint` explicitly (S-8 / WR-02).
+ */
+test('S-8: a cross-origin loading script refuses to init without an explicit endpoint — the report destination is never guessed', async ({
+  page,
+  browserName,
+}) => {
+  await installCaptureStub(page, browserName);
+
+  // Every request the page makes, so the refusal can be shown to send nothing
+  // and the explicit endpoint can be shown to be the one that is used.
+  const destinations: string[] = [];
+  page.on('request', (request) => destinations.push(request.url()));
+
+  await openHostFixture(page, {
+    bundle: 'watchbug.e2e.js',
+    mode: 'iife',
+    // The document stays at FIXTURE_ORIGIN while the bundle is served from a
+    // DIFFERENT origin — the CDN delivery shape. `page.route` fulfils it, so no
+    // real second server is involved.
+    scriptOrigin: 'http://localhost:8080',
+    autoInit: false,
+  });
+
+  const calls = await interceptIncidentPosts(page, async () => ({
+    status: 201,
+    body: JSON.stringify({ id: INTERCEPTED_ID }),
+  }));
+
+  // The bundle booted (the IIFE global exists) but nothing is mounted.
+  await page.waitForFunction(
+    () => (window as unknown as { Watchbug?: unknown }).Watchbug !== undefined,
+    null,
+    { timeout: 10_000 },
+  );
+
+  const key = projectKey();
+  const refusal = await page.evaluate((projectKey) => {
+    try {
+      (window as unknown as { Watchbug: { init: (o: { projectKey: string }) => void } }).Watchbug.init({
+        projectKey,
+      });
+      return 'no-throw';
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error);
+    }
+  }, key);
+  expect(refusal, 'init() must refuse rather than default the endpoint to the script origin').toContain(
+    'pass `endpoint` explicitly',
+  );
+  expect(await page.locator('watchbug-host').count(), 'nothing may mount on a refused init').toBe(0);
+  await expectNoRequest(page, calls);
+
+  // With the destination stated explicitly the very same bundle mounts and
+  // files a real report — the refusal is about GUESSING, not about the bundle.
+  await page.evaluate(
+    (projectKey) => {
+      (window as unknown as {
+        Watchbug: { init: (o: { projectKey: string; endpoint: string }) => void };
+      }).Watchbug.init({ projectKey, endpoint: 'http://127.0.0.1:8080' });
+    },
+    key,
+  );
+  await waitForWidget(page);
+  await clickLauncher(page);
+  await waitForHeadline(page, 'Report sent ✓', 15_000);
+
+  expect(calls, 'the explicit endpoint is honoured').toHaveLength(1);
+  expect(
+    destinations,
+    'the report must go to the explicitly configured API base',
+  ).toContain('http://127.0.0.1:8080/api/incidents');
+  expect(
+    destinations,
+    'the report must never be posted to the loading script origin',
+  ).not.toContain('http://localhost:8080/api/incidents');
 });

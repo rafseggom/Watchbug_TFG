@@ -22,6 +22,16 @@ import type { Page } from '@playwright/test';
 
 const repoRoot = resolve(__dirname, '..', '..');
 const distDir = resolve(repoRoot, 'packages/sdk', 'dist');
+/** I-1: the open-shadow test bundles are emitted outside `dist/` itself. */
+const e2eDistDir = resolve(distDir, 'e2e');
+
+/**
+ * `watchbug.e2e.*` is the R-14 open-shadow build and lives under `dist/e2e/`;
+ * every other bundle is a shippable artifact sitting in `dist/`.
+ */
+function bundlePath(bundle: BundleName): string {
+  return resolve(bundle.startsWith('watchbug.e2e') ? e2eDistDir : distDir, bundle);
+}
 
 export const FIXTURE_ORIGIN = 'http://127.0.0.1:8080';
 export const FIXTURE_URL = `${FIXTURE_ORIGIN}/__e2e/host-fixture.html`;
@@ -44,7 +54,22 @@ export interface HostFixtureOptions {
   mode: FixtureMode;
   /** Defaults to the deploy stack's seeded key from `.env`. */
   projectKey?: string;
+  /**
+   * Absolute origin the loader script tag is served from (S-8 row): the fixture
+   * document stays at FIXTURE_ORIGIN while the bundle is loaded from somewhere
+   * else — exactly the cross-origin script delivery shape. `page.route` fulfils
+   * it, so no real second server is needed.
+   */
+  scriptOrigin?: string;
+  /**
+   * Defaults to `true`: the loader calls `init()` on script load. Set `false`
+   * to call `Watchbug.init(...)` from the test instead (S-8 refusal row).
+   */
+  autoInit?: boolean;
 }
+
+/** The canonical seeded key shape (`scripts/gen-key.mjs`, DEP-02). */
+const PROJECT_KEY_SHAPE = /^wkbt_[0-9A-Za-z]{32}$/;
 
 /** The deploy stack's seeded project key — the same file the api reads. */
 export function projectKey(): string {
@@ -54,6 +79,16 @@ export function projectKey(): string {
   const key = match[1].trim();
   if (key === 'wkbt_00000000000000000000000000000000') {
     throw new Error('.env still holds the placeholder key — generate a real one with npm run key:gen');
+  }
+  // S-9: this key is interpolated into a single-quoted JS literal inside a
+  // double-quoted HTML attribute. Validate it against its canonical shape
+  // FIRST, so no `.env` edit can break out of that literal and run script inside
+  // the fixture — the format guarantee belongs to this file, not to the API's
+  // boot check.
+  if (!PROJECT_KEY_SHAPE.test(key)) {
+    throw new Error(
+      `.env WATCHBUG_PROJECT_KEY is not a wkbt_ key (expected ${PROJECT_KEY_SHAPE}) — run npm run key:gen`,
+    );
   }
   return key;
 }
@@ -77,20 +112,32 @@ const AFTER_SCRIPT = `<script>window.addEventListener('load', function () {
   document.documentElement.setAttribute('data-wb-after', ${SNAPSHOT_EXPRESSION});
 });</script>`;
 
-function loaderMarkup(mode: FixtureMode, bundle: BundleName, key: string): string {
+function loaderMarkup(
+  mode: FixtureMode,
+  bundle: BundleName,
+  key: string,
+  options: HostFixtureOptions,
+): string {
+  const src = `${options.scriptOrigin ?? ''}/__e2e/bundles/${bundle}`;
+  const autoInit = options.autoInit !== false;
   if (mode === 'esm') {
     return `<script type="module">
-  import { init } from '/__e2e/bundles/${bundle}';
-  init({ projectKey: ${JSON.stringify(key)} });
+  import { init } from '${src}';
+${autoInit ? `  init({ projectKey: ${JSON.stringify(key)} });` : ''}
 </script>`;
   }
-  // Single async script tag — the INT-01 integration shape. The key is a
-  // well-formed `wkbt_` token, so a single-quoted JS literal inside the
-  // attribute cannot break out of it.
-  return `<script async src="/__e2e/bundles/${bundle}" onload="Watchbug.init({ projectKey: '${key}' })"></script>`;
+  // Single async script tag — the INT-01 integration shape. `projectKey()`
+  // validates the key against its canonical form (S-9), so a single-quoted JS
+  // literal inside the attribute cannot break out of it.
+  return `<script async src="${src}"${autoInit ? ` onload="Watchbug.init({ projectKey: '${key}' })"` : ''}></script>`;
 }
 
-function fixtureMarkup(mode: FixtureMode, bundle: BundleName, key: string): string {
+function fixtureMarkup(
+  mode: FixtureMode,
+  bundle: BundleName,
+  key: string,
+  options: HostFixtureOptions,
+): string {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -100,7 +147,7 @@ ${BEFORE_SCRIPT}
 </head>
 <body>
 <h1 id="host-heading">Host page</h1>
-${loaderMarkup(mode, bundle, key)}
+${loaderMarkup(mode, bundle, key, options)}
 ${AFTER_SCRIPT}
 </body>
 </html>`;
@@ -121,7 +168,7 @@ export async function openHostFixture(page: Page, options: HostFixtureOptions): 
   const key = options.projectKey ?? projectKey();
   await serveBundle(page, options.bundle);
 
-  const html = fixtureMarkup(options.mode, options.bundle, key);
+  const html = fixtureMarkup(options.mode, options.bundle, key, options);
   await page.route(FIXTURE_ROUTE, async (route) => {
     await route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: html });
   });
@@ -131,12 +178,12 @@ export async function openHostFixture(page: Page, options: HostFixtureOptions): 
 
 /** Serve one dist bundle from the panel origin under `/__e2e/bundles/`. */
 async function serveBundle(page: Page, bundle: BundleName): Promise<Buffer> {
-  const bundlePath = resolve(distDir, bundle);
+  const bundleBytesPath = bundlePath(bundle);
   let bundleBytes: Buffer;
   try {
-    bundleBytes = readFileSync(bundlePath);
+    bundleBytes = readFileSync(bundleBytesPath);
   } catch {
-    throw new Error(`missing ${bundlePath} — run "npm run build" before the e2e suite`);
+    throw new Error(`missing ${bundleBytesPath} — run "npm run build" before the e2e suite`);
   }
 
   await page.route(BUNDLE_ROUTE, async (route) => {

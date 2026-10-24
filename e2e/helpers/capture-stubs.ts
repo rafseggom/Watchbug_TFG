@@ -338,13 +338,19 @@ function seamStub(config: FrameStubConfig): string {
         recordObservation('seam');
         const width = ${widthExpr};
         const height = ${heightExpr};
+
+        // IN-01: the oversize early-return must run BEFORE any canvas exists --
+        // on an engine whose getContext() returns null above its area cap,
+        // allocating first would throw and land the row in the capture-failed
+        // state instead of the blank state it asserts.
+        ${beyondCapReturn}
+
         const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
         const context = canvas.getContext('2d');
         if (context === null) throw new Error('capture seam: a 2D canvas is unavailable');
 
-        ${beyondCapReturn}
         ${uniformPaint}
 
         const scaleX = width / Math.max(1, window.innerWidth);
