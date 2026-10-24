@@ -1626,3 +1626,128 @@ test('PRV-02: a JWT lookalike outside the eyJ shape stays visible — its origin
   expect(report.width).toBe(640);
   expectStillVisible(report);
 });
+
+test('PRV-01: an input[type=password] value masks at the full element rect — decoded bytes carry zero original pixels inside the rect and its 1-px ring', async ({
+  page,
+  browserName,
+}) => {
+  const { report } = await runRedactionRow(
+    page,
+    browserName,
+    [
+      {
+        id: 'wb-password-input',
+        tag: 'input',
+        attrs: { type: 'password' },
+        value: 'hunter2-super-secret-value',
+        left: 80,
+        top: 140,
+        marker: true,
+        style: 'width:320px;height:34px;box-sizing:border-box;',
+      },
+    ],
+  );
+  expect(report.width).toBe(640);
+  expectMaskedAndTargeted(report);
+});
+
+test('PRV-02: a bearer-token shape masks the containing text node in the decoded bytes', async ({
+  page,
+  browserName,
+}) => {
+  const { report } = await runRedactionRow(
+    page,
+    browserName,
+    [
+      {
+        id: 'wb-bearer-secret',
+        text: "const auth = { headers: { Authorization: 'Bearer sk_live_51AbCdEfGhIjKlMn' } };",
+        left: 80,
+        top: 140,
+        marker: true,
+      },
+    ],
+  );
+  expect(report.width).toBe(640);
+  expectMaskedAndTargeted(report);
+});
+
+test('PRV-02: key=/token=/secret=/password= assignments mask the containing text node in the decoded bytes', async ({
+  page,
+  browserName,
+}) => {
+  const { report } = await runRedactionRow(
+    page,
+    browserName,
+    [
+      {
+        id: 'wb-assignment-secret',
+        text: "const login = { password: correctHorseBattery9, api_key: wbt_live_7f3a9c21 }",
+        left: 80,
+        top: 140,
+        marker: true,
+      },
+    ],
+  );
+  expect(report.width).toBe(640);
+  expectMaskedAndTargeted(report);
+});
+
+test('PRV-02: a Luhn-valid card sequence masks while its Luhn-invalid lookalike stays visible in the decoded bytes', async ({
+  page,
+  browserName,
+}) => {
+  await installCaptureStub(page, browserName);
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+  await installSecrets(page, [
+    { id: 'wb-card-valid', text: '4111111111111111', left: 80, top: 140 },
+    // The negative sub-assertion (P2-D-07): the same shape, one digit off the
+    // Luhn checksum — deliberately NOT masked, and the marker proves its
+    // pixels survive through the decode.
+    { id: 'wb-card-invalid', text: '4242424242424241', left: 80, top: 200, marker: true },
+  ]);
+  const validRect = await readMaskRect(page, 'wb-card-valid', 'text-node');
+  const invalidRect = await readMaskRect(page, 'wb-card-invalid', 'text-node');
+  const size = page.viewportSize();
+  if (size === null) throw new Error('card row: no viewport');
+  const viewport: CssRect = { left: 0, top: 0, right: size.width, bottom: size.height };
+
+  const calls = await interceptIncidentPosts(page, async () => ({
+    status: 201,
+    body: JSON.stringify({ id: INTERCEPTED_ID }),
+  }));
+  await clickLauncher(page);
+  await waitForHeadline(page, 'Report sent ✓', 20_000);
+  expect(calls, 'the gesture must send exactly one report').toHaveLength(1);
+
+  const image = await readOutgoingImage(page);
+  const maskedReport = await analyzeRedaction(page, image, { viewport, masked: validRect });
+  expect(maskedReport.width).toBe(640);
+  expectMaskedAndTargeted(maskedReport);
+
+  const controlReport = await analyzeRedaction(page, image, { viewport, masked: invalidRect });
+  expectStillVisible(controlReport);
+});
+
+test('PRV-03: a data-watchbug-sensitive element masks at the full element rect in the decoded bytes', async ({
+  page,
+  browserName,
+}) => {
+  const { report } = await runRedactionRow(
+    page,
+    browserName,
+    [
+      {
+        id: 'wb-sensitive-element',
+        attrs: { 'data-watchbug-sensitive': '' },
+        text: 'SSN 123-45-6789 (internal)',
+        left: 80,
+        top: 140,
+        marker: true,
+      },
+    ],
+  );
+  expect(report.width).toBe(640);
+  expectMaskedAndTargeted(report);
+});
