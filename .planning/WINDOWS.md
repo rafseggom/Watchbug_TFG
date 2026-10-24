@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 2
+open_count: 3
 waived_count: 0
 fixed_count: 2
-total_count: 4
-last_updated: 2026-10-24T11:31:55.926Z
+total_count: 5
+last_updated: 2026-10-24T14:39:50.992Z
 ---
 
 # Broken Windows Ledger
@@ -19,6 +19,7 @@ last_updated: 2026-10-24T11:31:55.926Z
 | 2 | 01 | fixme | apps/api/src/routes/incidents.ts | 104 | meta part sent with Content-Type application/json stringifies to [object Object] and 400s (pre-existing from 01-01; would break P1-D-07's onboarding curl) - see 01-contracts-ingest-slice/deferred-items.md | open |  | 2026-10-12T19:00:15.843Z |  |
 | 3 | 02 | stub | packages/sdk/src/index.ts | 114 | enterFlow() restores the host instead of running the capture pipeline; seam 02-02 Task 1 fills | fixed |  | 2026-10-23T20:36:46.302Z | 2026-10-24T11:31:55.361Z |
 | 4 | 02 | stub | packages/sdk/src/widget/status-panel.ts | 176 | render(view) contract complete but only idle is rendered at mount; state callback + Escape/auto-dismiss land in 02-02 Task 2 | fixed |  | 2026-10-23T20:36:55.379Z | 2026-10-24T11:31:55.926Z |
+| 5 | 02 | unmet-truth | .planning/REQUIREMENTS.md | 38 | Release-criteria wording still claims webkit exercises the WebP->PNG fallback; A-14 (02-05) records that this platform encodes real WebP and the plan was not authorised to edit R-12/REQUIREMENTS wording - owner wording delta open | open |  | 2026-10-24T14:39:50.992Z |  |
 
 ````json
 [
@@ -72,6 +73,19 @@ last_updated: 2026-10-24T11:31:55.926Z
     "reason": "",
     "recorded_at": "2026-10-23T20:36:55.379Z",
     "resolved_at": "2026-10-24T11:31:55.926Z",
+    "milestone": null
+  },
+  {
+    "id": 5,
+    "kind": "unmet-truth",
+    "phase": "02",
+    "file": ".planning/REQUIREMENTS.md",
+    "line": 38,
+    "description": "Release-criteria wording still claims webkit exercises the WebP->PNG fallback; A-14 (02-05) records that this platform encodes real WebP and the plan was not authorised to edit R-12/REQUIREMENTS wording - owner wording delta open",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-10-24T14:39:50.992Z",
+    "resolved_at": null,
     "milestone": null
   }
 ]

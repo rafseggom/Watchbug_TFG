@@ -81,8 +81,8 @@ A requirement is **Complete** when:
 - [x] **PRV-02**: Credential, token and payment-card patterns are redacted automatically
 - [x] **PRV-03**: Elements marked `data-watchbug-sensitive` are redacted automatically
 - [ ] **PRV-04**: A masked region is destroyed at the pixel level and is unrecoverable from the encoded image
-- [ ] **PRV-05**: The SDK never reads or transmits host cookies, storage or auth headers
-- [ ] **PRV-06**: URL query strings and fragments are stripped before transmission
+- [x] **PRV-05**: The SDK never reads or transmits host cookies, storage or auth headers
+- [x] **PRV-06**: URL query strings and fragments are stripped before transmission
 - [ ] **PRV-07**: An end user can review and edit the capture before it is sent
 
 ### Payload & Enrichment
@@ -141,10 +141,10 @@ A requirement is **Complete** when:
 
 ### Performance Budget
 
-- [ ] **PRF-01**: The injected script is ≤ 45 KB gzipped; the build fails otherwise (RNF-01)
+- [x] **PRF-01**: The injected script is ≤ 45 KB gzipped; the build fails otherwise (RNF-01)
 - [ ] **PRF-02**: Each lazy chunk is ≤ 25 KB gzipped (R-01)
 - [ ] **PRF-03**: Total runtime client payload is ≤ 80 KB gzipped (R-01)
-- [ ] **PRF-04**: The client SDK ships zero runtime npm dependencies (R-01)
+- [x] **PRF-04**: The client SDK ships zero runtime npm dependencies (R-01)
 - [ ] **PRF-05**: Injecting Watchbug lowers Lighthouse performance by ≤ 2 points (CA-03)
 
 ---
@@ -238,8 +238,8 @@ Which phases cover which requirements. **Updated during roadmap creation** — e
 | PRV-02 | Phase 2 | Complete |
 | PRV-03 | Phase 2 | Complete |
 | PRV-04 | Phase 3 | Pending |
-| PRV-05 | Phase 2 | Pending |
-| PRV-06 | Phase 2 | Pending |
+| PRV-05 | Phase 2 | Complete |
+| PRV-06 | Phase 2 | Complete |
 | PRV-07 | Phase 3 | Pending |
 | ENR-01 | Phase 4 | Pending |
 | ENR-02 | Phase 4 | Pending |
@@ -277,10 +277,10 @@ Which phases cover which requirements. **Updated during roadmap creation** — e
 | DEP-02 | Phase 1 | Complete |
 | DEP-03 | Phase 5 | Pending |
 | DEP-04 | Phase 7 | Pending |
-| PRF-01 | Phase 2 | Pending |
+| PRF-01 | Phase 2 | Complete |
 | PRF-02 | Phase 3 | Pending |
 | PRF-03 | Phase 3 | Pending |
-| PRF-04 | Phase 2 | Pending |
+| PRF-04 | Phase 2 | Complete |
 | PRF-05 | Phase 7 | Pending |
 
 **Coverage:**

@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 02
 current_phase_name: "SDK Tracer Bullet: Widget, Capture & Auto-Redaction"
 status: executing
-stopped_at: Completed 02-04-PLAN.md
-last_updated: "2026-10-24T13:39:17.772Z"
+stopped_at: Completed 02-05-PLAN.md
+last_updated: "2026-10-24T14:43:30.696Z"
 last_activity: 2026-10-24
 last_activity_desc: Phase 02 execution started
-state_head: 03f53b08cfd78214ca95a1d169ba8819afe7e006
+state_head: 09e729791fef82d56e7bc8945145bf1423075271
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 9
-  completed_plans: 8
+  completed_plans: 9
   percent: 14
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-13)
 ## Current Position
 
 Phase: 02 (SDK Tracer Bullet: Widget, Capture & Auto-Redaction) — EXECUTING
-Plan: 4 of 5
+Plan: 5 of 5
 Status: Ready to execute
 Last activity: 2026-10-24 — Phase 02 execution started
 
@@ -64,6 +64,7 @@ Progress: [█░░░░░░░░░] 14%
 | Phase 02 P02 | 6h00m | 3 tasks | 13 files |
 | Phase 02 P03 | 40min | 3 tasks | 6 files |
 | Phase 02 P04 | 50min | 3 tasks | 6 files |
+| Phase 02 P05 | 60min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -112,6 +113,10 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-04: H-1 rows capture at frame = viewport x DPR (1/1.25/2/3), dpr3 clamped to 2560x1440 by the ladder; the dpr-1 row pins deviceScaleFactor explicitly because Desktop Safari defaults to DSF 2
 - [Phase 02]: 02-04: assignment regex has no leading word boundary (api_key must match as key=) - recall over precision per P2-D-09; Luhn-invalid digit runs deliberately stay visible
 - [Phase 02]: 02-04: Task 2 produced no RED - the four-group catalog shipped in Task 1 GREEN (plan-split deviation documented in SUMMARY; tdd.md fail-fast, no RED fabricated)
+- [Phase 02]: 02-05: buildMeta truncates the auto-title by CODE POINTS ([...title].slice(0,200).join) to match Zod 4 .max semantics - RED proven on the wire (150 vs 200 code points for a 300-code-point emoji title)
+- [Phase 02]: 02-05: PRV-05 sentinel scan covers every request byte on two surfaces - intercepted multipart buffer plus the fetch-boundary image blob - because Playwright WebKit reports 0-byte blob parts in postDataBuffer and exposes no cookie header at all (probe 2026-10-24), so the cookie provocation asserts on chromium/firefox
+- [Phase 02]: 02-05: OQ-2 closed as resolution-record note A-14 - this platform WebKit encodes real WebP (probe 2026-10-17), M-3 coverage comes from the forced-PNG stub, magic-byte sniffing is the authority; R-12 untouched and the REQUIREMENTS wording delta flagged in WINDOWS ledger (kind unmet-truth)
+- [Phase 02]: 02-05: deploy.spec DEP-01/S-4 heading assertions use exact:true - the shared stack holds real incidents whose titles contain Watchbug, so substring locators failed strict mode (cross-row interference fixed under Task 3 mandate, scope note recorded)
 
 ### Pending Todos
 
@@ -156,6 +161,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-24T13:39:17.650Z
-Stopped at: Completed 02-04-PLAN.md
+Last session: 2026-10-24T14:43:06.808Z
+Stopped at: Completed 02-05-PLAN.md
 Resume file: None
