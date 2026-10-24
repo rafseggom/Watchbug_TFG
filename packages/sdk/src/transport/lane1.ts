@@ -146,6 +146,9 @@ async function postOnce(options: SendOptions): Promise<AttemptOutcome> {
       },
       body: form,
       credentials: 'omit',
+      // R-08: the query string must not leave the browser in a *header* either —
+      // the host page's Referrer-Policy is untrusted input (TB-1).
+      referrerPolicy: 'no-referrer',
       signal: controller.signal,
     });
   } catch (error) {

@@ -37,6 +37,13 @@ const INTERCEPTED_ID = '11111111-1111-4111-8111-111111111111';
 
 interface PostCall {
   headers: Record<string, string>;
+  /**
+   * The complete header map from `request.allHeaders()` — unlike `headers()`
+   * this surfaces every browser-composed header, including `referer`
+   * (CR-01's PRV-06 assertion reads it here so the referrer check can never
+   * pass by silently reading a map that omits the header).
+   */
+  allHeaders: Record<string, string>;
   body: string;
   /** The raw request bytes — multipart parts are binary, never utf8-safe. */
   buffer: Buffer;
@@ -116,6 +123,7 @@ async function interceptIncidentPosts(
     const buffer = request.postDataBuffer() ?? Buffer.alloc(0);
     const call: PostCall = {
       headers: request.headers(),
+      allHeaders: await request.allHeaders(),
       body: buffer.toString('utf8'),
       buffer,
     };
@@ -1963,6 +1971,11 @@ const SENTINELS = {
  * set was put on the request by page or SDK code, so PRV-05 requires that the
  * remainder is exactly the two contract headers. `cookie` and `authorization`
  * are deliberately absent from the set: their mere presence fails the row.
+ *
+ * `referer` is deliberately absent too (review CR-01): it is browser-composed,
+ * but the SDK pins `referrerPolicy: 'no-referrer'` on the report POST, so its
+ * mere presence on the intercepted report now fails the row below — the host
+ * page's URL (and its query string) must not ride the request either (R-08).
  */
 const BROWSER_STANDARD_HEADERS = new Set([
   'accept',
@@ -1976,7 +1989,6 @@ const BROWSER_STANDARD_HEADERS = new Set([
   'origin',
   'pragma',
   'priority',
-  'referer',
   'sec-ch-ua',
   'sec-ch-ua-mobile',
   'sec-ch-ua-platform',
@@ -2104,6 +2116,19 @@ test('PRV-05: the intercepted report carries no host cookie, storage or auth mat
   expect(sent.headers['authorization']).toBeUndefined();
   expect(sent.headers['cookie']).toBeUndefined();
 
+  // (2b) No Referer either (review CR-01): `referrerPolicy: 'no-referrer'`
+  // pins the report's referrer at the fetch init, so the host page's URL —
+  // and any `?token=` query it carries — never rides the request in a header.
+  // `sent.headers` comes from `request.allHeaders()`, which does surface
+  // browser-composed headers, so this proves absence rather than merely
+  // screening the value: a regression to the browser default
+  // (`strict-origin-when-cross-origin`, full URL on same-origin) fails here,
+  // in the header allowlist (3), and in PRV-06's query-string assertion.
+  expect(
+    sent.headers['referer'],
+    'the report POST must carry no referer header at all (R-08 / CR-01)',
+  ).toBeUndefined();
+
   // (3) Beyond the browser's own headers, exactly the two contract headers ride.
   const nonBrowserHeaders = Object.keys(sent.headers)
     .filter((name) => !BROWSER_STANDARD_HEADERS.has(name))
@@ -2181,6 +2206,31 @@ test('PRV-06: meta.url is path-only — the query string and fragment never ente
     document.title = 'PRV-06 path-only report';
   });
 
+  // Non-vacuity for the CR-01 header assertion: this document's URL carries
+  // `?token=secret`, and a plain same-origin fetch under the browser's DEFAULT
+  // referrer policy does put that full URL in `referer` — proving both that
+  // the query string really would leave in a header without the SDK's
+  // `referrerPolicy: 'no-referrer'` pin, and that the route handler can
+  // observe the header on this engine. If this probe passed vacuously (header
+  // unobservable), the report assertion below would prove nothing.
+  const probe: { headers: Record<string, string> }[] = [];
+  await page.route(/\/api\/health$/, async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.continue();
+      return;
+    }
+    probe.push({ headers: await route.request().allHeaders() });
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '{"status":"ok"}' });
+  });
+  const probeBody = await page.evaluate(() => fetch('/api/health').then((r) => r.json()));
+  expect(probeBody).toEqual({ status: 'ok' });
+  expect(probe, 'the referrer probe request must have been intercepted').toHaveLength(1);
+  expect(
+    probe[0].headers['referer'] ?? '',
+    'non-vacuity: a browser-default same-origin request must leak ?token=secret in its referer, so the header is observable here',
+  ).toContain('token=secret');
+  await page.unroute(/\/api\/health$/);
+
   const calls = await interceptIncidentPosts(page, async () => ({
     status: 201,
     body: JSON.stringify({ id: INTERCEPTED_ID }),
@@ -2189,6 +2239,14 @@ test('PRV-06: meta.url is path-only — the query string and fragment never ente
   await clickLauncher(page);
   await waitForHeadline(page, 'Report sent ✓', 15_000);
   expect(calls, 'the gesture must send exactly one report').toHaveLength(1);
+
+  // CR-01: with the same document URL and the same same-origin destination,
+  // the SDK's report must carry NO referer header at all — the query string
+  // must not leave the browser in a header (R-08). `allHeaders()` surfaces
+  // browser-composed headers, so an absent entry is genuine absence.
+  const reportReferer = calls[0].allHeaders['referer'];
+  expect(reportReferer, 'the report POST must send no referer header (R-08 / CR-01)').toBeUndefined();
+  expect(reportReferer ?? '').not.toContain('token=secret');
 
   const meta = interceptedMeta(calls[0]);
   // The raw wire value: path only — no query, no fragment, no origin.
