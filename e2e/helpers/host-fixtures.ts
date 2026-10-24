@@ -94,6 +94,21 @@ export function projectKey(): string {
 }
 
 /**
+ * The key that gets interpolated into a loader literal (S-9 / FX-04). An
+ * explicitly supplied `options.projectKey` is validated exactly like the one
+ * read from `.env`: the "cannot break out of the literal" guarantee is about
+ * the SHAPE of the value, so it has to hold for every caller and not only for
+ * `projectKey()`.
+ */
+function fixtureKey(options: HostFixtureOptions): string {
+  const key = options.projectKey ?? projectKey();
+  if (!PROJECT_KEY_SHAPE.test(key)) {
+    throw new Error(`HostFixtureOptions.projectKey is not a wkbt_ key (expected ${PROJECT_KEY_SHAPE})`);
+  }
+  return key;
+}
+
+/**
  * Snapshot of `window`'s own property names plus the own properties of the four
  * prototypes WDG-04 names. Serialised into an attribute, never onto `window`.
  */
@@ -165,7 +180,7 @@ export interface GlobalSnapshot {
  * Routes are page-scoped, so every row starts from a clean intercept set.
  */
 export async function openHostFixture(page: Page, options: HostFixtureOptions): Promise<void> {
-  const key = options.projectKey ?? projectKey();
+  const key = fixtureKey(options);
   await serveBundle(page, options.bundle);
 
   const html = fixtureMarkup(options.mode, options.bundle, key, options);
@@ -238,7 +253,7 @@ const HOSTILE_FIXTURE_PATH = resolve(repoRoot, 'e2e', 'fixtures', 'hostile-host.
  * (so `/api/incidents` stays same-origin) without nginx's CSP (Pitfall 4).
  */
 export async function openHostileFixture(page: Page, options: HostileFixtureOptions): Promise<void> {
-  const key = options.projectKey ?? projectKey();
+  const key = fixtureKey(options);
   const template = readFileSync(HOSTILE_FIXTURE_PATH, 'utf8');
 
   const variantMatch = new RegExp(

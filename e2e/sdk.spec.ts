@@ -1970,6 +1970,94 @@ test('S-7 / PRV-02: secrets inside an OPEN shadow root and a same-origin iframe 
   expectMaskedAndTargeted(await analyzeRedaction(page, image, { viewport, masked: frameRect }));
 });
 
+/**
+ * FX-02: the frame map is a pure translation only when the frame path carries
+ * no CSS transform. A rotated/scaled frame would put the mask on the wrong
+ * pixels, so the scan REFUSES it and the flow fails closed -- the same policy
+ * `capture-source.ts` applies to a window/screen capture whose DOM-to-bitmap
+ * registration cannot be verified (OQ-1 / T-02-05).
+ */
+test('S-7 guard: a transformed same-origin frame is refused loudly — nothing is sent rather than masked at the wrong pixels (FX-02)', async ({
+  page,
+  browserName,
+}) => {
+  await installCaptureStub(page, browserName);
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+
+  await page.evaluate(() => {
+    const frame = document.createElement('iframe');
+    frame.id = 'wb-transformed-frame';
+    frame.style.cssText =
+      'position:absolute;left:40px;top:60px;width:1100px;height:420px;border:0;margin:0;' +
+      'transform:rotate(4deg);';
+    document.body.appendChild(frame);
+    const inner = frame.contentDocument;
+    if (inner === null) throw new Error('S-7 guard: the fixture frame is not same-origin');
+    inner.documentElement.style.margin = '0';
+    inner.body.style.cssText = 'margin:0;';
+    const secret = inner.createElement('div');
+    secret.id = 'wb-transformed-secret';
+    secret.textContent = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI0MiJ9.Um9ja2V0U2lnbmF0dXJlMTIzNDU2Nzg5';
+    secret.style.cssText =
+      'position:absolute;left:80px;top:140px;white-space:nowrap;font:600 16px/1 monospace;';
+    inner.body.appendChild(secret);
+  });
+
+  const calls = await interceptIncidentPosts(page, async () => ({
+    status: 201,
+    body: JSON.stringify({ id: INTERCEPTED_ID }),
+  }));
+
+  await clickLauncher(page);
+  await waitForHeadline(page, "Couldn't capture the screen.", 10_000);
+  await expectNoRequest(page, calls);
+});
+
+/**
+ * FX-01: the no-CSPRNG exit is a new path created by the WR-03 fix. The
+ * launcher hides the host in its OWN click handler, so a failure state
+ * rendered without restoring it is invisible and kills the widget -- the one
+ * thing M-6 forbids. Nothing else covered this path.
+ */
+test('WR-03 guard: with no CSPRNG the flow fails visibly and leaves the widget usable — never a guessable key (FX-01)', async ({
+  page,
+  browserName,
+}) => {
+  await page.addInitScript({
+    content: `(() => {
+  const c = globalThis.crypto;
+  if (c === undefined) return;
+  Object.defineProperty(c, 'randomUUID', { value: undefined, configurable: true });
+  Object.defineProperty(c, 'getRandomValues', { value: undefined, configurable: true });
+})();`,
+  });
+  await installCaptureStub(page, browserName);
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+
+  const calls = await interceptIncidentPosts(page, async () => ({
+    status: 201,
+    body: JSON.stringify({ id: INTERCEPTED_ID }),
+  }));
+
+  await clickLauncher(page);
+  await waitForHeadline(page, "Couldn't capture the screen.", 10_000);
+
+  const failed = await probeWidget(page);
+  expect(failed.headlineRole).toBe('alert');
+  expect(failed.hint).toBe(CAPTURE_HINT);
+
+  // The host must be visible again, or the "loud terminal state" is invisible.
+  const hostDisplay = await page.evaluate(() => {
+    const host = document.querySelector('watchbug-host');
+    return host === null ? 'missing' : getComputedStyle(host).display;
+  });
+  expect(hostDisplay, 'the widget host must be restored after a failure (FX-01)').not.toBe('none');
+
+  await expectNoRequest(page, calls);
+});
+
 /* ------------------------------------------------------------------------- */
 /* H-1 / P2-D-08 geometry rows — 02-04 Task 3                                   */
 /* ------------------------------------------------------------------------- */
@@ -2635,6 +2723,25 @@ test('S-8: a cross-origin loading script refuses to init without an explicit end
   );
   expect(await page.locator('watchbug-host').count(), 'nothing may mount on a refused init').toBe(0);
   await expectNoRequest(page, calls);
+
+  // FX-03: `endpoint: null` (the shape a JSON config produces) is a hard
+  // error, NOT "absent". Treated as absent it would slip past the refusal
+  // above and silently fall back to the document origin.
+  const nullEndpoint = await page.evaluate((projectKey) => {
+    try {
+      (window as unknown as { Watchbug: { init: (o: Record<string, unknown>) => void } }).Watchbug.init({
+        projectKey,
+        endpoint: null,
+      });
+      return 'no-throw';
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error);
+    }
+  }, key);
+  expect(nullEndpoint, 'endpoint: null must be a hard error (FX-03)').toContain(
+    'must be an absolute http(s) URL',
+  );
+  expect(await page.locator('watchbug-host').count(), 'endpoint: null must not mount').toBe(0);
 
   // With the destination stated explicitly the very same bundle mounts and
   // files a real report — the refusal is about GUESSING, not about the bundle.

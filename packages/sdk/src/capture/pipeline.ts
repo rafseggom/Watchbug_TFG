@@ -205,10 +205,14 @@ export function createCaptureFlow(deps: CaptureFlowDeps): CaptureFlow {
 
       // WR-03 / I-2: minted BEFORE the capture, so a missing CSPRNG is a loud
       // visible failure here and never a request carrying a guessable key.
+      // The launcher already hid the host in its own click handler, so this
+      // exit MUST put it back: a failure panel rendered into a `display:none`
+      // host is not the visible terminal state M-6 requires (FX-01).
       let idempotencyKey: string;
       try {
         idempotencyKey = newIdempotencyKey();
       } catch {
+        host.restore();
         onView({ kind: 'failed', failure: 'capture' });
         return;
       }

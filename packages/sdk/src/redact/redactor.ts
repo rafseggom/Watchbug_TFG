@@ -1,17 +1,17 @@
 /**
- * `Redactor` (SEC-01/SEC-02, R-13, A-01, P2-D-08/09) â€” the destructive half
+ * `Redactor` (SEC-01/SEC-02, R-13, A-01, P2-D-08/09) — the destructive half
  * of the privacy contract.
  *
  * Three detection routes, one primitive:
  *
- *  - **structural elements** â€” `input[type="password"]` (secret by
+ *  - **structural elements** — `input[type="password"]` (secret by
  *    declaration) and `[data-watchbug-sensitive]` (the integrator's opt-in):
  *    masked at the full element rect;
- *  - **form-control values** â€” the P2-D-07 catalog matched against
+ *  - **form-control values** — the P2-D-07 catalog matched against
  *    `input`/`textarea` values: masked at the full element rect;
- *  - **text nodes** â€” the P2-D-07 catalog matched over text nodes with a
+ *  - **text nodes** — the P2-D-07 catalog matched over text nodes with a
  *    `TreeWalker`, each match masking the rect of the **whole containing text
- *    node** (`range.getClientRects()` unioned â€” never just the matched
+ *    node** (`range.getClientRects()` unioned — never just the matched
  *    substring: P2-D-08 granularity, over-masking is the safe direction).
  *
  * Every rect goes through `geometry.ts` `toBitmapRect()` (outward rounding)
@@ -21,7 +21,7 @@
  *
  * Fail closed (T-02-10): no step here swallows an error. A scan or geometry
  * failure propagates to `pipeline.ts`, which short-circuits the flow into a
- * loud terminal state before encode/send â€” falling open to unredacted bytes
+ * loud terminal state before encode/send — falling open to unredacted bytes
  * is the one failure mode the core value forbids.
  *
  * Uncertainty resolves to the larger rect (P2-D-09): a multi-line inline
@@ -42,6 +42,9 @@ const UNRENDERED_PARENTS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE']);
 
 /** The fill colour. Flat, opaque, and the only masking primitive (R-13). */
 const MASK_RGB = { r: 0, g: 0, b: 0 } as const;
+
+/** A CSS transform matrix that is a pure translation (see `isUntransformedPath`). */
+const PURE_TRANSLATE = /^matrix\(\s*1\s*,\s*0\s*,\s*0\s*,\s*1\s*,/;
 
 /**
  * The R-02 port: destructive, in place, nothing encoded in or out.
@@ -100,20 +103,55 @@ function pushRect(
 }
 
 /**
+ * True when `element` and every ancestor up to the document is free of CSS
+ * transforms and renders at its own layout size.
+ *
+ * A rotation, skew, scale or zoom makes the frame's client-to-viewport map a
+ * non-translation, and a mask computed against the wrong map lands on the
+ * wrong pixels -- the silent fall-open SEC-01 forbids. Rather than guess, the
+ * caller REFUSES such a frame, the same way `capture-source.ts` refuses a
+ * window/screen capture whose DOM-to-bitmap registration cannot be verified
+ * (OQ-1 / T-02-05). A pure translation is fine: `getBoundingClientRect()` is
+ * exact for it (FX-02).
+ */
+function isUntransformedPath(element: HTMLElement): boolean {
+  for (let node: Element | null = element; node !== null; node = node.parentElement) {
+    const matrix = getComputedStyle(node).transform;
+    // `matrix(1, 0, 0, 1, e, f)` is a pure translation. Anything else --
+    // `matrix3d`, a rotation, a scale, a skew -- is refused.
+    if (matrix !== 'none' && !PURE_TRANSLATE.test(matrix)) return false;
+  }
+  const box = element.getBoundingClientRect();
+  return (
+    Math.abs(box.width - element.offsetWidth) <= 0.5 &&
+    Math.abs(box.height - element.offsetHeight) <= 0.5
+  );
+}
+
+/**
  * Every scanning root reachable from `doc` (S-7): the document's own light DOM,
  * every **open** shadow root, and every same-origin frame document.
  *
  * Closed shadow roots are unreachable by construction, and a cross-origin
  * frame exposes neither `shadowRoot` content nor `contentDocument` -- both are
- * documented integration limits (T-02-14 / AR-01), not scanner choices. A
- * traversal error is NOT swallowed here: it propagates and the pipeline turns
- * it into a loud no-send (T-02-10).
+ * documented integration limits (T-02-14 / AR-01), not scanner choices.
+ *
+ * Nothing here is swallowed. A traversal error, a transformed frame (FX-02) and
+ * a nesting overflow (FX-06) all THROW, and the pipeline turns that into a
+ * loud no-send before encode (T-02-10). What must never happen is a subtree
+ * being quietly skipped: that is exactly the hole S-7 closed.
  */
 export function collectScanRoots(doc: Document, maxDepth = MAX_SCAN_DEPTH): ScanRoot[] {
   const roots: ScanRoot[] = [];
 
   const visit = (root: Document | ShadowRoot, dx: number, dy: number, depth: number): void => {
-    if (depth > maxDepth) return;
+    if (depth > maxDepth) {
+      // Not a silent skip (FX-06). `MAX_SCAN_DEPTH` bounds ROOT NESTING, never
+      // DOM height -- eight nested shadow roots or frames is not a real page --
+      // but if it is ever reached the safe answer is no-send, not a partial
+      // scan whose unvisited subtree ships unmasked.
+      throw new Error(`redaction scan exceeded the nesting bound of ${MAX_SCAN_DEPTH} roots`);
+    }
     roots.push({ root, dx, dy });
 
     for (const element of Array.from(root.querySelectorAll('*'))) {
@@ -126,8 +164,14 @@ export function collectScanRoots(doc: Document, maxDepth = MAX_SCAN_DEPTH): Scan
       // `contentDocument` is null for a cross-origin frame (T-02-14 / AR-01).
       const inner = (frame as HTMLIFrameElement).contentDocument;
       if (inner === null) continue;
-      const box = frame.getBoundingClientRect();
-      visit(inner, dx + box.left + frame.clientLeft, dy + box.top + frame.clientTop, depth + 1);
+      const frameElement = frame as HTMLElement;
+      if (!isUntransformedPath(frameElement)) {
+        throw new Error(
+          'a same-origin frame is scaled or transformed: its client rects cannot be mapped to the captured pixels (refusing to mask the wrong region)',
+        );
+      }
+      const box = frameElement.getBoundingClientRect();
+      visit(inner, dx + box.left + frameElement.clientLeft, dy + box.top + frameElement.clientTop, depth + 1);
     }
   };
 

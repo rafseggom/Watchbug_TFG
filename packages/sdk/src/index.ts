@@ -107,6 +107,14 @@ function defaultEndpoint(): string {
  * default to make and the integrator must say where the API is.
  */
 function resolveEndpoint(endpoint: string | undefined): string {
+  // A non-string `endpoint` -- `null` out of a JSON config is the realistic
+  // case -- is a hard error, NOT "absent". Treating it as absent would let it
+  // slip past the cross-origin refusal below and silently fall back to the
+  // document origin (FX-03), and would also lose the TypeError the API has
+  // always thrown for a malformed `endpoint`.
+  if (endpoint !== undefined && typeof endpoint !== 'string') {
+    throw new TypeError('Watchbug.init: `endpoint` must be an absolute http(s) URL.');
+  }
   if (endpoint === undefined) {
     const scriptOrigin = loadingScriptOrigin();
     if (scriptOrigin !== null && scriptOrigin !== location.origin) {
@@ -115,8 +123,7 @@ function resolveEndpoint(endpoint: string | undefined): string {
       );
     }
   }
-  const raw: unknown = endpoint ?? defaultEndpoint();
-  const resolved = typeof raw === 'string' ? raw.replace(/\/+$/, '') : '';
+  const resolved = (endpoint ?? defaultEndpoint()).replace(/\/+$/, '');
   if (!isAbsoluteHttpUrl(resolved)) {
     throw new TypeError('Watchbug.init: `endpoint` must be an absolute http(s) URL.');
   }
