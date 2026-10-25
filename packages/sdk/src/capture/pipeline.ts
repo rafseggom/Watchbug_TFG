@@ -32,9 +32,6 @@ import type { StatusView } from '../widget/status-panel.ts';
 import type { Launcher } from '../widget/launcher.ts';
 import type { WatchbugHost } from '../widget/host.ts';
 
-/** Grid side for the 9-sample blank probe (3×3 = 9 distributed pixels). */
-export const BLANK_PROBE_GRID = 3;
-
 /** Thrown by the pipeline's own invariant hook; never swallowed. */
 export class PipelineInvariantError extends Error {
   constructor(message: string) {
@@ -49,10 +46,20 @@ export interface BlankProbeResult {
 }
 
 /**
- * P2-D-12: 9 distributed samples across the frame. A frame whose samples are
- * all byte-identical carries no content, and sending it would produce a report
- * the developer cannot reproduce from. A frame beyond the supported canvas cap
- * is refused for the same reason — loudly, never silently.
+ * P2-D-12: a frame carries no content when **every pixel is byte-identical**.
+ * Sending such a frame would produce a report the developer cannot reproduce
+ * from, so it is refused — loudly, never silently. A frame beyond the supported
+ * canvas cap is refused for the same reason.
+ *
+ * The check is dense on purpose. An earlier version sampled a fixed 3×3 grid at
+ * 25/50/75 % and called the frame blank when those nine samples matched, which
+ * refused legitimate sparse pages: the manual UAT fixture (a white page with a
+ * single heading in the top-left corner) was rejected as `blank` because none
+ * of the nine points landed on the heading. A real page differs from its first
+ * pixel somewhere — a glyph, a border, a band — so the dense scan only trips on
+ * a genuinely uniform bitmap (the failed-canvas / blank-capture case). The
+ * worst-case cost is one linear pass over the frame, paid once per capture,
+ * and it is dwarfed by the encode that follows.
  */
 export function blankProbe(image: ImageData): BlankProbeResult {
   const area = image.width * image.height;
@@ -60,27 +67,14 @@ export function blankProbe(image: ImageData): BlankProbeResult {
   if (area > MAX_IMAGE_PIXELS) return { blank: true, reason: 'oversize' };
 
   const { data } = image;
-  const xs: number[] = [];
-  const ys: number[] = [];
-  for (let step = 1; step <= BLANK_PROBE_GRID; step += 1) {
-    xs.push(Math.min(image.width - 1, Math.floor((image.width * step) / (BLANK_PROBE_GRID + 1))));
-    ys.push(Math.min(image.height - 1, Math.floor((image.height * step) / (BLANK_PROBE_GRID + 1))));
-  }
+  const red = data[0];
+  const green = data[1];
+  const blue = data[2];
+  const alpha = data[3];
 
-  const first = (ys[0] * image.width + xs[0]) * 4;
-  const reference = [data[first], data[first + 1], data[first + 2], data[first + 3]];
-
-  for (const y of ys) {
-    for (const x of xs) {
-      const at = (y * image.width + x) * 4;
-      if (
-        data[at] !== reference[0] ||
-        data[at + 1] !== reference[1] ||
-        data[at + 2] !== reference[2] ||
-        data[at + 3] !== reference[3]
-      ) {
-        return { blank: false };
-      }
+  for (let at = 4; at < data.length; at += 4) {
+    if (data[at] !== red || data[at + 1] !== green || data[at + 2] !== blue || data[at + 3] !== alpha) {
+      return { blank: false };
     }
   }
 

@@ -18,9 +18,11 @@ import type { Page } from '@playwright/test';
  * WDG-04 global-surface rows must stay true, so the stub itself may not leak a
  * global while it is installed.
  *
- * Frames are deliberately **non-uniform**: `blankProbe()` samples a 3×3 grid
- * and refuses a frame whose samples are byte-identical, so a solid-colour stub
- * would exercise the blank failure state instead of the tracer.
+ * Frames are deliberately **non-uniform**: `blankProbe()` refuses a frame whose
+ * pixels are all byte-identical, so a solid-colour stub would exercise the blank
+ * failure state instead of the tracer. The `sparse` option covers the opposite
+ * regression: a real page that is white almost everywhere with one detail in a
+ * corner must still be accepted.
  */
 
 /** The canvas frame the media tier serves (CSS-pixel viewport → bitmap scale). */
@@ -49,6 +51,7 @@ const PAINT_FRAME = String(function paintFrame(
   canvas: HTMLCanvasElement,
   marker: { left: number; top: number; right: number; bottom: number } | null,
   uniform: boolean,
+  sparse: boolean,
 ): void {
   const context = canvas.getContext('2d');
   if (context === null) throw new Error('capture stub: a 2D canvas is unavailable');
@@ -56,10 +59,22 @@ const PAINT_FRAME = String(function paintFrame(
   const height = canvas.height;
 
   if (uniform) {
-    // P2-D-12: one colour everywhere — the 9-sample probe must abort this
+    // P2-D-12: one colour everywhere — the dense uniformity scan must abort this
     // frame before any encode or request. No dot, no marker, no gradient.
     context.fillStyle = '#808080';
     context.fillRect(0, 0, width, height);
+    return;
+  }
+
+  if (sparse) {
+    // P2-D-12 regression: a legitimate but sparse page — white everywhere with
+    // one 4x4 dark block at (2,2). The block sits OUTSIDE the old 3x3 sample
+    // points (25/50/75 %), so the old fixed-grid probe called this frame blank;
+    // the dense scan must accept it and let the report through.
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, width, height);
+    context.fillStyle = '#1b1f26';
+    context.fillRect(2, 2, 4, 4);
     return;
   }
 
@@ -181,6 +196,12 @@ export interface CaptureStubOptions {
   /** Paint one solid colour: the uniform frame P2-D-12 must reject. */
   uniform?: boolean;
   /**
+   * Paint a legitimate but sparse page: white everywhere plus one small dark
+   * block outside the old 3×3 sample grid. The dense probe must ACCEPT it
+   * (regression for the blank-probe false positive found in manual UAT).
+   */
+  sparse?: boolean;
+  /**
    * Provocation instead of a frame:
    *  - `prompt-rejected` — `getDisplayMedia` rejects with `NotAllowedError`
    *  - `non-tab-surface` — a track reporting `displaySurface: 'window'`
@@ -249,6 +270,8 @@ interface FrameStubConfig {
   frame?: CaptureStubFrame;
   /** Paint a single solid colour (P2-D-12 uniform probe). */
   uniform: boolean;
+  /** Paint a white page with one corner detail (P2-D-12 sparse regression). */
+  sparse: boolean;
   /** Return an ImageData straight over MAX_IMAGE_PIXELS (P2-D-12 oversize). */
   beyondCap: boolean;
 }
@@ -274,14 +297,14 @@ function mediaStub(config: FrameStubConfig): string {
     const canvas = document.createElement('canvas');
     canvas.width = ${frame.width};
     canvas.height = ${frame.height};
-    paintFrame(canvas, markerRect(), ${config.uniform});
+    paintFrame(canvas, markerRect(), ${config.uniform}, ${config.sparse});
 
     const stream = canvas.captureStream(30);
     const track = stream.getVideoTracks()[0];
 
     // Repaint on a short interval: the frame stays current, and the stream
     // keeps producing decoded frames for the <video> the adapter creates.
-    const timer = window.setInterval(() => paintFrame(canvas, markerRect(), ${config.uniform}), 80);
+    const timer = window.setInterval(() => paintFrame(canvas, markerRect(), ${config.uniform}, ${config.sparse}), 80);
     if (track !== undefined && track !== null) {
       track.addEventListener('ended', () => window.clearInterval(timer));
     }
@@ -322,6 +345,13 @@ function seamStub(config: FrameStubConfig): string {
       '        context.fillRect(0, 0, width, height);\n' +
       '        return context.getImageData(0, 0, width, height);'
     : '';
+  const sparsePaint = config.sparse
+    ? "context.fillStyle = '#ffffff';\n" +
+      '        context.fillRect(0, 0, width, height);\n' +
+      "        context.fillStyle = '#1b1f26';\n" +
+      '        context.fillRect(2, 2, 4, 4);\n' +
+      '        return context.getImageData(0, 0, width, height);'
+    : '';
   return String.raw`(() => {
   ${RECORD_OBSERVATION}
 
@@ -352,6 +382,7 @@ function seamStub(config: FrameStubConfig): string {
         if (context === null) throw new Error('capture seam: a 2D canvas is unavailable');
 
         ${uniformPaint}
+        ${sparsePaint}
 
         const scaleX = width / Math.max(1, window.innerWidth);
         const scaleY = height / Math.max(1, window.innerHeight);
@@ -414,6 +445,7 @@ export async function installCaptureStub(
   const config: FrameStubConfig = {
     frame: options.frame ?? (beyondCap ? BEYOND_CAP_FRAME : undefined),
     uniform: options.uniform === true,
+    sparse: options.sparse === true,
     beyondCap,
   };
   const tier = options.tier ?? captureStubTier(browserName);

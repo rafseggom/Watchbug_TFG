@@ -141,6 +141,13 @@ export function mountHost(css: string): WatchbugHost {
 
   const content = document.createElement('div');
   content.className = 'wrap';
+  // F-08: `all: initial` clears the inherited `lang`, so without this the widget
+  // copy would be annotated with the host page's (or the user's default)
+  // language — e.g. English strings pronounced with Spanish phonetics on a
+  // `lang="es"` page. The copy is English-only until Phase 3 ships the locale
+  // resolver, so the declared language is pinned to `en` here; that resolver
+  // replaces this literal with the resolved locale, not the mechanism.
+  content.setAttribute('lang', 'en');
   root.appendChild(content);
 
   let hidden = false;

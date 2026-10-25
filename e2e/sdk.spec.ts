@@ -241,6 +241,29 @@ test('INT-01: the one-gesture launcher renders 48x48 inside the open-mode shadow
   expect(rendered.liveMode).toBe('polite');
 });
 
+test('F-08: the widget content declares lang="en" so assistive tech does not inherit the host language', async ({ page }) => {
+  // The open-mode build differs from production only in SHADOW_MODE (R-14), so
+  // this is the shipped markup. `all: initial` clears the inherited `lang`, and
+  // without the attribute an English message on a `lang="es"` page would be
+  // pronounced with the page's phonetics.
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+
+  const languages = await page.evaluate(() => {
+    const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
+    const wrap = root?.querySelector('.wrap') as HTMLElement | null;
+    const launcher = root?.querySelector('button.launcher') as HTMLElement | null;
+    return {
+      content: wrap?.getAttribute('lang') ?? null,
+      // What assistive tech actually resolves for the launcher: the nearest
+      // ancestor in the shadow tree that declares a language.
+      launcher: launcher?.closest('[lang]')?.getAttribute('lang') ?? null,
+    };
+  });
+
+  expect(languages.content).toBe('en');
+  expect(languages.launcher).toBe('en');
+});
+
 test('WDG-04: the IIFE lane adds exactly one global, the ESM lane adds none, and native prototypes are untouched', async ({ page, context }) => {
   // --- IIFE lane: one `Watchbug` property, nothing else -------------------
   await openHostFixture(page, { bundle: 'watchbug.js', mode: 'iife' });
@@ -746,6 +769,25 @@ test('P2-D-12: a uniform capture aborts to the blank state before any request', 
   expect(failed.retryVisible).toBe(true);
   expect(failed.dismissVisible).toBe(true);
   await expectNoRequest(page, calls);
+});
+
+test('P2-D-12: a sparse but real page (white with one corner detail) is not blank — the report is sent', async ({ page, browserName }) => {
+  // Seam tier on every engine: the frame is white except a 4x4 block at (2,2),
+  // deliberately outside the old 25/50/75 % sample points. The dense uniformity
+  // scan must find it and let the report through; a fixed-grid probe called this
+  // frame blank and blocked a legitimate page (manual UAT, 2026-10-25).
+  await installCaptureStub(page, browserName, { tier: 'seam', sparse: true });
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+
+  const calls = await interceptIncidentPosts(page, async () => ({
+    status: 201,
+    body: JSON.stringify({ id: INTERCEPTED_ID }),
+  }));
+
+  await clickLauncher(page);
+  await waitForHeadline(page, 'Report sent ✓', 20_000);
+  expect(calls).toHaveLength(1);
 });
 
 test('P2-D-12: a frame beyond the supported canvas cap aborts to the blank state', async ({ page, browserName }) => {
