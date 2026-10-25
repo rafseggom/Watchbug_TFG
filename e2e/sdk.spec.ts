@@ -1726,7 +1726,7 @@ test('PRV-02: JWT shape masks the whole text node — decoded bytes contain zero
     [
       {
         id: 'wb-jwt-secret',
-        text: 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI0MiJ9.Um9ja2V0U2lnbmF0dXJlMTIzNDU2Nzg5',
+        text: 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI0MiJ9.Um9ja2V0U2lnbmF0dXJlMTIzNDU2Nzg5',  // gitleaks:allow
         left: 80,
         top: 140,
         marker: true,
@@ -1794,7 +1794,7 @@ test('PRV-02: a bearer-token shape masks the containing text node in the decoded
     [
       {
         id: 'wb-bearer-secret',
-        text: "const auth = { headers: { Authorization: 'Bearer sk_live_51AbCdEfGhIjKlMn' } };",
+        text: "const auth = { headers: { Authorization: 'Bearer sk_live_51AbCdEfGhIjKlMn' } };",  // gitleaks:allow
         left: 80,
         top: 140,
         marker: true,
@@ -1815,7 +1815,7 @@ test('PRV-02: key=/token=/secret=/password= assignments mask the containing text
     [
       {
         id: 'wb-assignment-secret',
-        text: "const login = { password: correctHorseBattery9, api_key: wbt_live_7f3a9c21 }",
+        text: "const login = { password: correctHorseBattery9, api_key: wbt_live_7f3a9c21 }",  // gitleaks:allow
         left: 80,
         top: 140,
         marker: true,
@@ -1938,7 +1938,7 @@ test('S-7 / PRV-02: secrets inside an OPEN shadow root and a same-origin iframe 
     [
       {
         id: 'wb-shadow-secret',
-        text: 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI0MiJ9.Um9ja2V0U2lnbmF0dXJlMTIzNDU2Nzg5',
+        text: 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI0MiJ9.Um9ja2V0U2lnbmF0dXJlMTIzNDU2Nzg5',  // gitleaks:allow
         left: 80,
         top: 140,
         marker: true,
@@ -1998,7 +1998,7 @@ test('S-7 guard: a transformed same-origin frame is refused loudly — nothing i
     inner.body.style.cssText = 'margin:0;';
     const secret = inner.createElement('div');
     secret.id = 'wb-transformed-secret';
-    secret.textContent = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI0MiJ9.Um9ja2V0U2lnbmF0dXJlMTIzNDU2Nzg5';
+    secret.textContent = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI0MiJ9.Um9ja2V0U2lnbmF0dXJlMTIzNDU2Nzg5';  // gitleaks:allow
     secret.style.cssText =
       'position:absolute;left:80px;top:140px;white-space:nowrap;font:600 16px/1 monospace;';
     inner.body.appendChild(secret);
@@ -2064,7 +2064,7 @@ test('WR-03 guard: with no CSPRNG the flow fails visibly and leaves the widget u
 
 /** The same known secret, so every DPR row masks the identical DOM rect. */
 const HIDPI_SECRET_TEXT =
-  'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI0MiJ9.Um9ja2V0U2lnbmF0dXJlMTIzNDU2Nzg5';
+  'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI0MiJ9.Um9ja2V0U2lnbmF0dXJlMTIzNDU2Nzg5';  // gitleaks:allow
 
 /**
  * One H-1 row body: capture at an explicit frame of `viewport × dpr` (what a
