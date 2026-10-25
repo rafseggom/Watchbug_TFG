@@ -8,7 +8,12 @@
 [extend]
 useDefault = true
 
-[[allowlists]]
+# The CI runner pins gitleaks 8.24.3 (gitleaks-action downloads a fixed
+# version), so the global allowlist uses the singular `[allowlist]` table.
+# `[[allowlists]]` only exists from v8.25.0 and is silently ignored before it --
+# which is how the first attempt at this file changed nothing.
+# See: https://github.com/gitleaks/gitleaks/blob/v8.24.3/README.md#configuration
+[allowlist]
 description = """
 Synthetic redaction fixtures in e2e/sdk.spec.ts -- documented as
 documentation/phase2/02-INFORME-ANALISIS.md section 4.3, "vectores de prueba
