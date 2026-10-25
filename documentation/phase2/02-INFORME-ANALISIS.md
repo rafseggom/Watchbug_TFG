@@ -26,6 +26,11 @@
 | **Modo (remediación)** | `/gsd-code-review 02 --fix` — correcciones aplicadas y verificadas en dos tandas; ver **§8** |
 | **Ejecución (tras remediación)** | `npm run verify` **309/309** (chromium + firefox + webkit) · `lint` · `check:size` · `gate.mjs` · `check:compose` · `stopthatslop --pack ts` **0 findings / exit 0** — todo en verde |
 | **Hallazgos del code review** | `02-REVIEW.md` (9: 3 critical · 3 warning · 3 info) **y** `02-REVIEW-FIX.md` (6: 2 critical · 2 warning · 2 info, el pase de regresión sobre la remediación) → **`02-REVIEW-DISPOSITION.md` 15/15 resueltos** |
+| **Fecha (comprobación de cierre)** | 2026-10-25 |
+| **HEAD (comprobación de cierre)** | `91e71d6` — *chore: desactiva preview builds de cloudflare* |
+| **Alcance (recalculado)** | **20 ficheros** filtrados de **57** crudos (+3 desde `9c0c089`: `.gitleaks.toml`, `02-REVIEW-FIX.md` y este informe — los dos últimos quedan fuera del filtro) |
+| **Ejecución (comprobación de cierre)** | `npm run verify` **315/315** (105 por motor) · `npm run lint` · `npm run check:size` (core **9,3 KB gz**, runtime 10,0) · `node scripts/gate.mjs` **3/3** · `npm run check:compose` · `stopthatslop` **0 findings / exit 0** — todo en verde |
+| **Veredicto de cierre** | ✅ **Cerrado.** La UAT real encontró un falso «blank» (sonda de 9 muestras), corregido con barrido denso + fila de regresión; F-08 (`lang`) y `WINDOWS.md` #5 resueltos. Detalle en **§9** |
 
 ---
 
@@ -46,6 +51,8 @@
 5. **P3 — Test-only**: la clave de proyecto se concatena en un literal JS/HTML sin validar su formato (`host-fixtures.ts:50-59`).
 
 > **Estado (2026-10-24, tras remediación `12a5049`):** este resumen describe el análisis original sobre `9c0c089`. **Todo lo prioritario está corregido** — S-7, S-8, I-2, S-9, I-1 y los tres focos de complejidad C-4/C-5/C-6 están **resueltos**, y los tres focos `15+` de código de producto bajaron a CC 6 / 2 / 7 (hoy ninguna función de producto está por encima de CC 10). Además `/gsd-code-review 02 --fix` cerró los **7 hallazgos abiertos de `02-REVIEW.md`** (CR-03, WR-01, WR-02, WR-03, IN-01, IN-02, IN-03) **y** los 6 que un pase de regresión encontró en la propia remediación (`02-REVIEW-FIX.md`, FX-01…FX-06): **15/15 resueltos**. Quedan abiertos únicamente 8 `needs_validation` de despliegue (§4.2) y los focos 6-10 que no se tocaron (C-7). Detalle, evidencia y verificación en **§8**.
+
+> **Comprobación de cierre (2026-10-25, HEAD `91e71d6`).** Re-ejecutados en esta sesión la suite completa y todos los gates: **`npm run verify` 309/309**, `lint`, `check:size`, `gate.mjs`, `check:compose` y `stopthatslop` en verde. Desde `12a5049` **no se ha tocado una sola línea de código de producto**: los nueve commits posteriores son documentación, un allowlist de CI para los tres fixtures sintéticos de redacción y tres commits vacíos de disparo de CI (§9.1). **En ese momento no había ningún hallazgo abierto ni regresión en código.** Lo que quedaba eran comprobaciones humanas y dos deudas ya registradas (§9.3). **Actualización posterior:** la UAT real encontró un falso «blank» en páginas legítimamente escasas; se corrigió con un barrido denso y una fila de regresión, y las comprobaciones humanas cerraron **5/5** (**§9.4–§9.6**).
 
 ---
 
@@ -634,5 +641,94 @@ El mismo pase declaró **sano el resto de la remediación**: traducción y corre
 
 ---
 
+## 9. Comprobación de cierre (2026-10-25, HEAD `91e71d6`)
+
+> §9 es la pasada de cierre sobre el estado **actual** de la rama. No reescribe §0–§8: comprueba que lo que §8 declara sigue siendo cierto y añade lo ocurrido después. Todo lo que sigue se ejecutó en esta sesión o se leyó directamente del árbol en `91e71d6`.
+
+### 9.1 Qué cambió desde `12a5049`
+
+**Nueve commits, cinco ficheros, `+511 / −36`** (`git diff --stat 12a5049..HEAD`). **Ninguno toca código de producto**: ni un fichero de `packages/sdk/src/`, ni la suite en su comportamiento.
+
+| Commit | Tipo | Qué hizo |
+|---|---|---|
+| `02be839` | docs | Registra el pase de regresión (`02-REVIEW-FIX.md`) y sus seis correcciones |
+| `c65c6d8` | docs | Ejecuta los `needs_validation` de despliegue y registra las dos decisiones del propietario (S-8 estricto, FX-02 backlog) |
+| `1964597` | test | Añade `// gitleaks:allow` a **6 líneas** de `e2e/sdk.spec.ts` — sólo comentarios; los tres fixtures sintéticos siguen siendo los mismos literales |
+| `0c33a21` | ci | Crea la allowlist por cadena exacta para esos tres fixtures |
+| `4ae5921` | ci | Renombra a `.gitleaks.toml` (con punto: es el nombre que gitleaks carga por precedencia) |
+| `4a1e007` | ci | Usa `[allowlist]` singular — `[[allowlists]]` sólo existe desde gitleaks 8.25.0 y el runner fija 8.24.3 |
+| `843686c`, `fde1762`, `91e71d6` | chore | **Commits vacíos** (`git show --stat` sin ficheros): sólo disparan CI. El último anuncia desactivar preview builds de Cloudflare, pero **no hay cambio de árbol** |
+
+**Consecuencia para el alcance:** `git diff --name-only origin/develop...HEAD` pasa de **54 a 57** crudos. Los tres nuevos son `.gitleaks.toml` (entra en el alcance: es configuración de CI, no código), `02-REVIEW-FIX.md` y este informe (los dos últimos quedan fuera del filtro). **Alcance recalculado: 20 ficheros.**
+
+**El único fichero nuevo con contenido operativo es `.gitleaks.toml`.** Extiende el ruleset por defecto (`[extend] useDefault = true`) y exime **por cadena exacta, no por ruta**, tres literales sintéticos de la suite — el JWT de las filas PRV-02, `sk_live_…` del bearer y `wbt_live_…` de las asignaciones. Cualquier clave real, cualquier otro JWT o esos mismos literales en otro fichero siguen fallando CI. No introduce dependencias ni afecta al bundle.
+
+### 9.2 Evidencia fresca (ejecutada en esta sesión sobre `91e71d6`)
+
+| Comando | Resultado | Comparación con §8.9 (`12a5049`) |
+|---|---|---|
+| `npm run verify` | ✅ **315 passed** en **7,2 min** — chromium + firefox + webkit, 105 filas por motor | +6 filas (F-08 y la regresión de la sonda) |
+| `npm run lint` | ✅ limpio — `tsc -p tsconfig.json` en los 4 workspaces | idéntico |
+| `npm run check:size` | ✅ `core 9,3 · lazy 0,3 · adapter 0,3 · runtime 10,0 KB gz` sobre topes 45 / 25 / 14 / 80 | −0,1 KB (el barrido denso es más pequeño que la rejilla) |
+| `node scripts/gate.mjs` | ✅ **3 passed, 0 failed, 0 skipped** (`sdk-runtime-deps`, `sdk-no-host-storage`, `sdk-single-encode-sink`) | idéntico |
+| `npm run check:compose` | ✅ exactamente tres servicios (`db`, `api`, `panel`) + volumen de adjuntos sólo en `api` | idéntico |
+| `stopthatslop check --pack ts` | ✅ `passed: true`, `finding_count: 0`, `gate_finding_count: 0`, `exit 0` | idéntico |
+| `git status --porcelain` | cambios de cierre sin commit en `.planning/` (UAT, SECURITY, REQUIREMENTS, WINDOWS), `documentation/phase2/`, `packages/sdk/src/{capture/pipeline,widget/host}.ts` y `e2e/`; más el ruido preexistente `schema/report.schema.json` y `watchbugus-fun/` | nuevos cambios de cierre |
+
+**Veredicto:** la remediación de §8 **sigue vigente** y la fase queda cerrada tras corregir el falso «blank» que encontró la UAT real (§9.6). Ningún gate ha empeorado y ninguna fila e2e ha desaparecido.
+
+### 9.3 Artefactos de planificación desfasados (no son defectos de código)
+
+La remediación de `0c6565f`/`12a5049` es **posterior** a la verificación formal de la fase. Al iniciar la comprobación de cierre, estos artefactos describían el estado anterior:
+
+| Artefacto | Al comprobar (2026-10-25) | Estado final |
+|---|---|---|
+| `02-VERIFICATION.md` | `status: human_needed` · **297/297** · `CR-03` abierto · bundles e2e en `dist/` | **`passed`** · 38/38 · **315/315** · CR-03 cerrado · `dist/e2e/` (I-1) |
+| `02-UAT.md` | `status: testing` · 5 pendientes | **`complete`** · **5/5** (CR-03, captura real, pase visual, F-08, #5) |
+| `02-SECURITY.md` | 15/15, `threats_open: 0`, sin `collectScanRoots`, cifras 8,5 / 9,1 KB | 15/15, `threats_open: 0`, mitigación de CR-03 registrada, cifras **9,3 / 10,0 KB** |
+| `.planning/STATE.md` | `status: executing`, 14 % | Fase 02 sellada; 2/7 fases (29 %) |
+| `.planning/ROADMAP.md` | `- [ ] Phase 2` sin marcar | `- [x]` con fecha de cierre 2026-10-25 |
+
+**Actualización (2026-10-25).** Las comprobaciones humanas se ejecutaron y los artefactos se cerraron con sus propias herramientas: `02-UAT.md` (5/5, con la captura real en chromium y firefox), `02-SECURITY.md` (mitigación de CR-03 reconciliada), `REQUIREMENTS.md` + `gsd-tools windows fixed 5` (redacción del criterio de release), y la corrección de F-08 (`lang="en"`). La UAT encontró además **un defecto real que la suite no veía**; se corrigió y se cubrió con una fila e2e nueva (**§9.6**).
+
+### 9.4 Estado final de las comprobaciones humanas
+
+| # | Ítem | Resultado |
+|---|---|---|
+| 1 | **Captura real sin stub** (UAT #1) | ✅ **pasada** (2026-10-25, chromium + firefox): selector del SO, frame real, host oculto, 201, fila en el panel y máscaras negras planas en el informe |
+| 2 | **Pase visual vs `02-UI-SPEC.md`** (UAT #2) | ✅ **pasada**: manual idle/`Capturing…`/`Sending…`/`Report sent ✓` + máscaras; matriz completa de estados en `02-UI-REVIEW.md` (**22/24 PASS**, 0 BLOCK) |
+| 3 | **`CR-03`** (UAT #3) | ✅ **resuelto por código**, no diferido: sombras abiertas e iframes de mismo origen entran en el escaneo |
+| 4 | **`F-08` — atributo `lang`** (UAT #4) | ✅ **corregido**: `lang="en"` en la raíz de contenido del widget + fila e2e `F-08` |
+| 5 | **`WINDOWS.md` #5** (UAT #5) | ✅ **cerrado**: redacción del criterio de release corregida en `REQUIREMENTS.md` y `gsd-tools windows fixed 5` |
+
+**Siguen siendo del operador, no de la fase:** repetir la sonda de cookie de WebKit en otro host (§4.2 #3); escribir la guía de integración, que no existe todavía (§4.2 #5, entregable de la fase 5+); comprobar si otro entorno antepone una capa CSP a nginx (§4.2 #11).
+
+### 9.5 Conclusión
+
+- **Código: cerrado tras una corrección.** 18/18 requisitos, 38/38 verdades, **15/15 hallazgos de review resueltos**, **315/315** filas e2e en tres motores, todos los gates en verde y **cero dependencias runtime**. La UAT encontró un defecto real que la suite no veía (§9.6); se corrigió y se cubrió con una fila de regresión. El núcleo quedó en **9,3 KB gz** y el runtime en **10,0 KB**.
+- **Seguridad: sin cambio de veredicto.** `threats_open: 0`, 15/15 amenazas cerradas, AR-01 sigue siendo el único riesgo aceptado (iframes de origen cruzado) y es *más estrecho* que antes: las sombras abiertas e iframes de mismo origen ya se escanean.
+- **Documentación: cerrada.** `02-UAT.md` (5/5), `02-SECURITY.md` (mitigación de CR-03 reconciliada), `02-VERIFICATION.md` (`passed`, 38/38), `WINDOWS.md` #5 `fixed`, `REQUIREMENTS.md` corregido y los ocho documentos consolidados de `documentation/phase2/` alineados con la implementación final.
+- **Cierre formal: `passed`.** No quedan comprobaciones humanas bloqueantes.
+
+### 9.6 Hallazgo de la UAT y corrección (2026-10-25)
+
+**Qué pasó.** La primera prueba manual real —página blanca con un único `<h1>` arriba a la izquierda— abortó con `The capture came back blank.` La sonda de blanco (`blankProbe`) muestreaba **9 puntos fijos** al 25/50/75 % del ancho y alto y declaraba «blank» si los nueve eran idénticos. El widget se oculta antes de leer los píxeles, así que el frame era blanco liso y ninguno de los nueve puntos tocaba el título.
+
+**Por qué importa.** No era un fallo de captura: era un **falso positivo funcional**. Cualquier página legítimamente escasa (una pantalla de carga, un formulario casi vacío, un modal sobre fondo blanco) podía quedar bloqueada. La suite no lo veía porque todos sus frames sintéticos son deliberadamente ricos en color; el supuesto A9 del research («umbral ajustado para que pantallas legítimamente planas pasen») nunca se había verificado con una página real.
+
+**Corrección.**
+
+| Cambio | Detalle |
+|---|---|
+| `packages/sdk/src/capture/pipeline.ts` | `blankProbe` pasa de rejilla fija 3×3 a **barrido denso de uniformidad**: el frame sólo es «blank» si **todos** sus píxeles coinciden con el primero. Coste peor caso medido: ~47 ms para 16 MP (una sola pasada, una vez por captura, despreciable frente al encode). Se conservan las salidas `empty` y `oversize` |
+| `e2e/helpers/capture-stubs.ts` | Nueva opción `sparse`: frame blanco con un bloque de 4×4 en `(2,2)`, fuera de los antiguos puntos de muestreo |
+| `e2e/sdk.spec.ts` | Fila `P2-D-12: a sparse but real page … is not blank` (se envía el informe) + fila `F-08` (`lang="en"` en el contenido y resuelto para el lanzador) |
+| `packages/sdk/src/widget/host.ts` | `lang="en"` en `.wrap` (F-08); la Fase 3 sustituirá el literal por el locale resuelto, no el mecanismo |
+
+**Evidencia de no regresión:** las filas `P2-D-12: a uniform capture aborts…` y `P2-D-12: a frame beyond the supported canvas cap…` siguen verdes en los tres motores, así que un frame realmente uniforme se sigue rechazando; la fila nueva demuestra que una página escasa pero real ya no se confunde con uno. La repetición manual de la captura pasó en chromium y firefox con las máscaras correctas.
+
+---
+
 *Análisis generado el 2026-10-24 sobre `9c0c089` (rama `gsd/phase-2-sdk-tracer-bullet`, base `origin/develop` = `2686e15`).*
-*Remediación aplicada el 2026-10-24 en dos tandas (`0c6565f` y `12a5049`) — estado actual en **§8**.*
+*Remediación aplicada el 2026-10-24 en dos tandas (`0c6565f` y `12a5049`) — estado en **§8**.*
+*Comprobación de cierre ejecutada el 2026-10-25 sobre `91e71d6`, seguida de la UAT real y de la corrección del falso «blank» — estado final en **§9**.*
