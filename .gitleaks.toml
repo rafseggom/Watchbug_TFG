@@ -1,5 +1,6 @@
-# Gitleaks configuration -- automatically detected by gitleaks-action at the
-# repo root (https://github.com/gitleaks/gitleaks#load-configuration).
+# Gitleaks configuration. Gitleaks loads <target>/.gitleaks.toml automatically
+# (https://github.com/gitleaks/gitleaks#load-configuration, precedence 4) -- the
+# DOT matters, which is why this file is .gitleaks.toml and not gitleaks.toml.
 #
 # This file EXTENDS the default rule set; it does not replace it. Every default
 # rule keeps working, and exactly three synthetic strings are exempted below.
