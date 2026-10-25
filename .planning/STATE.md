@@ -1,19 +1,19 @@
 ---
 gsd_state_version: "1.0"
-current_phase: 02
-current_phase_name: "SDK Tracer Bullet: Widget, Capture & Auto-Redaction"
-status: executing
-stopped_at: Completed 02-05-PLAN.md
-last_updated: "2026-10-24T14:43:30.696Z"
-last_activity: 2026-10-24
-last_activity_desc: Phase 02 execution started
-state_head: 09e729791fef82d56e7bc8945145bf1423075271
+current_phase: 03
+current_phase_name: "Report Composer & Annotation Editor (lazy)"
+status: planning
+stopped_at: Phase 02 verified and closed (2026-10-25)
+last_updated: "2026-10-25T15:20:00.000Z"
+last_activity: 2026-10-25
+last_activity_desc: "Phase 02 closed: UAT 5/5, verification passed, blank-probe fix, F-08 and WINDOWS #5 resolved"
+state_head: 91e71d6f201bc2da6f92613da5add2a48ccd29b8
 progress:
   total_phases: 7
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 9
   completed_plans: 9
-  percent: 14
+  percent: 29
 ---
 
 # Project State
@@ -23,21 +23,21 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-13)
 
 **Core value:** When a bug report lands, the developer can reproduce the bug from it — and neither the report nor its screenshot ever leaves the developer's own infrastructure.
-**Current focus:** Phase 02 — SDK Tracer Bullet: Widget, Capture & Auto-Redaction
+**Current focus:** Phase 03 — Report Composer & Annotation Editor (lazy) — next to plan
 
 ## Current Position
 
-Phase: 02 (SDK Tracer Bullet: Widget, Capture & Auto-Redaction) — EXECUTING
+Phase: 02 (SDK Tracer Bullet: Widget, Capture & Auto-Redaction) — COMPLETE (verified 2026-10-25)
 Plan: 5 of 5
-Status: Ready to execute
-Last activity: 2026-10-24 — Phase 02 execution started
+Status: Phase closed — ready for `/gsd-plan-phase 3`
+Last activity: 2026-10-25 — UAT 5/5, verification `passed`, blank-probe fix, F-08 and WINDOWS #5 resolved
 
-Progress: [█░░░░░░░░░] 14%
+Progress: [██░░░░░░░░] 29%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
+- Total plans completed: 9
 - Average duration: —
 - Total execution time: 0 hours
 
@@ -46,6 +46,7 @@ Progress: [█░░░░░░░░░] 14%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01 | 4 | - | - |
+| 02 | 5 | - | - |
 
 **Recent Trend:**
 - Last 5 plans: none yet
@@ -117,6 +118,10 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-05: PRV-05 sentinel scan covers every request byte on two surfaces - intercepted multipart buffer plus the fetch-boundary image blob - because Playwright WebKit reports 0-byte blob parts in postDataBuffer and exposes no cookie header at all (probe 2026-10-24), so the cookie provocation asserts on chromium/firefox
 - [Phase 02]: 02-05: OQ-2 closed as resolution-record note A-14 - this platform WebKit encodes real WebP (probe 2026-10-17), M-3 coverage comes from the forced-PNG stub, magic-byte sniffing is the authority; R-12 untouched and the REQUIREMENTS wording delta flagged in WINDOWS ledger (kind unmet-truth)
 - [Phase 02]: 02-05: deploy.spec DEP-01/S-4 heading assertions use exact:true - the shared stack holds real incidents whose titles contain Watchbug, so substring locators failed strict mode (cross-row interference fixed under Task 3 mandate, scope note recorded)
+- [Phase 02 · cierre 2026-10-25]: the manual real-picker UAT found a blank-probe false positive (9 fixed samples missed a white page with one heading); blankProbe is now a dense uniformity scan (blank only when every pixel matches) with regression row P2-D-12 sparse, and the core dropped 0.1 KB
+- [Phase 02 · cierre 2026-10-25]: F-08 fixed - lang="en" on the widget content root + F-08 e2e row (Phase 3 replaces the literal with the resolved locale)
+- [Phase 02 · cierre 2026-10-25]: WINDOWS #5 fixed - REQUIREMENTS release criteria now state webkit covers engine-divergent rendering + CaptureSource seam, M-3 via forced-PNG stub (A-14), firefox the no-ImageCapture path
+- [Phase 02 · cierre 2026-10-25]: owner decisions confirmed - S-8 strict throw for a cross-origin script without endpoint (soft fallback rejected and closed); FX-02 fail-closed frame transform kept as deliberate backlog
 
 ### Pending Todos
 
@@ -130,7 +135,7 @@ None yet.
 
 - ⚠ **Q-07 (Phase 5 planning must resolve — NOT execution):** key rotation semantics for PRJ-04 — grace period vs instant cut-off for a `public_key` embedded in already-shipped host script initialisations. Security-sensitive; decide at `/gsd-plan-phase 5`.
 - **Q-05 (release gate):** degree-awarding institution's IP policy must be confirmed before the repo is public (R-07 Apache-2.0 + NOTICE).
-- **UNVERIFIED at first build:** ~~`@fastify/multipart` ↔ Fastify 5 mapping~~ ✓ Phase 1 (e2e 132/132 green); ~~TS 7.x tooling ecosystem~~ ✓ Phase 1 (Q-08 gate PASS under typescript 7.0.2, no 6.x fallback); `preferCurrentTab` Firefox/Safari — still treat Chromium-only, resolves in Phase 2 capture work; `@node-rs/argon2` option names — resolves in Phase 5 (auth).
+- **UNVERIFIED at first build:** ~~`@fastify/multipart` ↔ Fastify 5 mapping~~ ✓ Phase 1 (e2e 132/132 green); ~~TS 7.x tooling ecosystem~~ ✓ Phase 1 (Q-08 gate PASS under typescript 7.0.2, no 6.x fallback); ~~`preferCurrentTab` Firefox/Safari~~ ✓ Phase 2 (Chromium-only confirmed; `displaySurface` policy accepts `browser`/`undefined`, refuses `window`/`screen`); `@node-rs/argon2` option names — resolves in Phase 5 (auth).
 - **A-12/M-2 size arithmetic:** worst case 45+25+14 = 84 KB > 80 KB — multi-artifact `check:size` scenario lives in Phase 1; resolve against real numbers in Phase 7 (v1 ships core+editor = ≤70 KB; DOM-serialize adapter is v2).
 - **Node 24 → 26 re-pin** scheduled after 2026-10-28 (one re-pin).
 - **GDPR claims (M-1)** need legal/supervisor review before any public compliance statement.
@@ -161,6 +166,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-24T14:43:06.808Z
-Stopped at: Completed 02-05-PLAN.md
-Resume file: None
+Last session: 2026-10-25T15:20:00.000Z
+Stopped at: Phase 02 verified and closed (UAT 5/5, `passed`)
+Resume file: .planning/phases/02-sdk-tracer-bullet-widget-capture-auto-redaction/02-VERIFICATION.md

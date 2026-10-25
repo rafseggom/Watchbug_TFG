@@ -25,7 +25,7 @@ Seven vertical MVP slices take Watchbug from an empty repository to a shippable,
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Contracts & Ingest Slice** - Monorepo, official schema + constant set, 3-service compose, and a hardened ingest endpoint that stores a synthetic report and renders it in a minimal panel (completed 2026-10-13)
-- [ ] **Phase 2: SDK Tracer Bullet: Widget, Capture & Auto-Redaction** - One script tag, isolated widget, tab capture with destructive auto-redaction (T1), first real report in the panel
+- [x] **Phase 2: SDK Tracer Bullet: Widget, Capture & Auto-Redaction** - One script tag, isolated widget, tab capture with destructive auto-redaction (T1), first real report in the panel (completed 2026-10-25)
 - [ ] **Phase 3: Report Composer & Annotation Editor (lazy)** - Report form, capture fallback chain, pen/arrow/rect/text/mask editor with irreversible masking (T2/T3), review-before-send, en/es
 - [ ] **Phase 4: Report Payload & Enrichment** - Console ring buffer, env metadata, host context and identity privacy completing the RF-01/RF-02 payload
 - [ ] **Phase 5: Secure Admin Access & Projects** - Single-admin JWT auth, 401 enforcement, project CRUD + key rotation, authenticated blob serving
@@ -209,7 +209,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Contracts & Ingest Slice | 4/4 | Complete    | 2026-10-13 |
-| 2. SDK Tracer Bullet: Widget, Capture & Auto-Redaction | 5/5 | In Progress|  |
+| 2. SDK Tracer Bullet: Widget, Capture & Auto-Redaction | 5/5 | Complete    | 2026-10-25 |
 | 3. Report Composer & Annotation Editor (lazy) | 0/TBD | Not started | - |
 | 4. Report Payload & Enrichment | 0/TBD | Not started | - |
 | 5. Secure Admin Access & Projects | 0/TBD | Not started | - |

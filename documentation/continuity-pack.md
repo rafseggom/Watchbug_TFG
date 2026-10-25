@@ -2,7 +2,44 @@
 
 State preserved across session resets. Read this at the start of every session (ASE §4D, *Anti-Amnesia*).
 
-**Last updated:** 2026-10-15 — INFORME-ANALISIS remediation batch `261014-m3u` landed on `gsd/phase-1-contracts-ingest` (§9).
+**Last updated:** 2026-10-25 — Phase 2 closed (UAT 5/5, verification `passed`, 315/315).
+
+---
+
+## 10. Phase 2 closure (2026-10-25)
+
+| Item | State |
+|---|---|
+| Plans | 5/5 executed; phase marked complete in `ROADMAP.md` / `STATE.md` |
+| Verification | `02-VERIFICATION.md` → `passed`, 38/38 truths, 18/18 requirements |
+| Suite | `npm run verify` **315/315** (chromium + firefox + webkit, 105 each) |
+| Budget | core **9.3 KB gz** / 45 · runtime **10.0 KB gz** / 80 · zero runtime deps |
+| UAT | `02-UAT.md` → `complete`, **5/5** (real OS picker passed in chromium + firefox) |
+| Findings | 15/15 review findings fixed; `WINDOWS.md` #5 fixed |
+
+**Corrections made at close:**
+
+1. **Blank-probe false positive (found by the real-picker UAT).** The probe
+   sampled 9 fixed points at 25/50/75 %. A legitimate white page with one
+   heading was rejected as `The capture came back blank.` because no sample
+   landed on the heading. `blankProbe()` is now a **dense uniformity scan**
+   (blank only when every pixel is byte-identical) with regression row
+   `P2-D-12: a sparse but real page … is not blank`. The uniform-frame and
+   beyond-cap rejection rows still pass, so the guarantee is unchanged.
+2. **F-08** — `lang="en"` on the widget content root, asserted by an e2e row.
+3. **`WINDOWS.md` #5** — `REQUIREMENTS.md` release criteria corrected (webkit
+   covers engine-divergent rendering and the `CaptureSource` seam; M-3 comes
+   from the forced-PNG stub, A-14; firefox the no-`ImageCapture` path).
+
+**Dead-end recorded for future manual UAT:** do not use the minimal
+`openHostFixture` page for a real capture check — it is deliberately sparse and
+was the trigger of the blank false positive. Use a content-rich page (the
+temporary harness used for this closure did exactly that).
+
+**Not done, by design:** the phase branch is **not merged to `develop`** (the
+owner merges the PR by hand, §6.6); GitHub sync (milestone 7, epic #46, issues
+#11–#16) is done on request (§6.5); `Gantt-Actual.md` is created when the
+milestone is closed. Next action: `/gsd-plan-phase 3`.
 
 ---
 

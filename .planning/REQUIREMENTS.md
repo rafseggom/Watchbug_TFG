@@ -35,7 +35,7 @@ A requirement is **Complete** when:
 3. Its security-sensitive behaviour is verified at the **artifact level** (encoded bytes, HTTP response, stored row), not at a function boundary.
 4. It is committed, and the change is reflected in `.planning/ROADMAP.md` traceability.
 
-**Release criteria:** `npm run check:size` passes · the e2e suite passes CA-01…CA-05 on all three Playwright browser projects (chromium, firefox, **webkit** — webkit exercises the WebP→PNG fallback, firefox the no-`ImageCapture` path) · `docker-compose up` brings up three working services from a clean machine using only `.env.example` as a guide · no secret exists in the repository.
+**Release criteria:** `npm run check:size` passes · the e2e suite passes CA-01…CA-05 on all three Playwright browser projects (chromium, firefox, **webkit** — webkit covers engine-divergent rendering and the `CaptureSource`-seam capture tier; the silent WebP→PNG fallback is covered by the forced-PNG stub because this platform's WebKit encodes real WebP (A-14); firefox covers the no-`ImageCapture` path) · `docker-compose up` brings up three working services from a clean machine using only `.env.example` as a guide · no secret exists in the repository.
 
 ---
 
