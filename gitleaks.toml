@@ -1,0 +1,31 @@
+# Gitleaks configuration -- automatically detected by gitleaks-action at the
+# repo root (https://github.com/gitleaks/gitleaks#load-configuration).
+#
+# This file EXTENDS the default rule set; it does not replace it. Every default
+# rule keeps working, and exactly three synthetic strings are exempted below.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = """
+Synthetic redaction fixtures in e2e/sdk.spec.ts -- documented as
+documentation/phase2/02-INFORME-ANALISIS.md section 4.3, "vectores de prueba
+sinteticos ... ninguno es una credencial real".
+
+Each string exists ONLY because it must match the redaction family its row
+asserts, so it cannot be reworded without weakening the test:
+
+  sk_live_51AbCdEfGhIjKlMn      not a Stripe token -- alphabet soup, wrong shape
+  wbt_live_7f3a9c21             made-up prefix for the reset-token row
+  eyJhbGciOiJIUzI1NiJ9...g5     the synthetic JWT every PRV-02 row reuses
+
+Allowlisted by EXACT string, not by file path: a real key of any other value,
+a real JWT, or the same strings anywhere else still fails CI.
+"""
+regexTarget = "line"
+regexes = [
+  '''sk_live_51AbCdEfGhIjKlMn''',
+  '''wbt_live_7f3a9c21''',
+  '''eyJhbGciOiJIUzI1NiJ9\.eyJzdWIiOiI0MiJ9\.Um9ja2V0U2lnbmF0dXJlMTIzNDU2Nzg5''',
+]
