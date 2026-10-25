@@ -102,6 +102,25 @@ found six defects **introduced by the fixes**. All six are closed in `12a5049`. 
 
 **Status: 6 / 6 resolved.** Combined with the first ledger: **15 / 15 resolved.**
 
+## Owner decisions (2026-10-25)
+
+Two questions the remediation deliberately left open were put to the owner. Both are
+decisions, not fixes — nothing in the code changed.
+
+| ID | Question | Decision | Effect |
+|----|----------|----------|--------|
+| **S-8 / WR-02** | Keep `init()` throwing for a cross-origin script with no `endpoint`, or soften to a warning that falls back to `location.origin`? | **Keep the strict throw.** Not a warning. Throwing is the correct, secure behaviour for a cross-origin script without an explicit endpoint. | The public-interface consultation trigger opened by the fix is **closed**. The soft alternative is rejected and should not be reopened. |
+| **FX-02** | Refuse a scaled/rotated same-origin frame, or map it with full transform matrices? | **Confirmed as deliberate backlog.** The current fail-closed refusal is strict but safe; the owner does not want the complexity of full matrix transformations right now. | Recorded in `02-INFORME-ANALISIS.md` §8.11-6. Not an oversight, not a regression. |
+
+## `needs_validation` run (2026-10-25)
+
+All eight deployment-fact checks from `02-INFORME-ANALISIS.md` §4.2 were executed with
+their safe commands. Results and per-item evidence: **§8.8 of that report**. Summary —
+**9 of 11 closed**, 2 limited to the operator's deployment (#11 an external layer in
+front of nginx elsewhere; #3 repeating the WebKit cookie probe on another host), 1 an
+integration-doc deliverable for phase 5 (#5, `README.md` does not exist yet). **No check
+returned a failure.**
+
 Known scope decision recorded by the FX-02 fix: the frame map supports **pure translation
 only**. A scaled or rotated same-origin frame is refused loudly rather than mapped — correct
 and fail-closed, but stricter than strictly necessary for pure `scale`, which *could* be mapped

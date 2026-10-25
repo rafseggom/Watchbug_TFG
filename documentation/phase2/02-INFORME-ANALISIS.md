@@ -499,7 +499,9 @@ Se aplicó la lectura estricta de la invariant del análisis (*"el endpoint por 
 - **Cuando el origen del script difiere del del documento y no se pasa `endpoint`, `init()` lanza** un `TypeError` con mensaje accionable (`… pass \`endpoint\` explicitly`) en lugar de adivinar. Es la variante *ruidosa* que pide M-6, no el aviso silencioso.
 - **La lane ESM queda correcta por definición.** `document.currentScript` es `null` en un módulo, así que `loadingScriptOrigin()` devuelve `null` y no dispara la excepción: ahí el origen del documento **es** el destino correcto, que era exactamente la contradicción que señalaba WR-02 respecto al comentario de la API pública.
 
-> ⚠️ **Cambio de comportamiento de la interfaz pública.** `window.Watchbug.init()` deja de funcionar sin `endpoint` en la configuración IIFE + script de origen cruzado. Es deliberado: esa configuración **no funcionaba** — publicaba la captura hacia un tercero — y ahora falla en voz alta en lugar de hacerlo en silencio. Es un disparador de consulta de `AGENTS.md` («cambiar la interfaz pública del SDK») ejecutado bajo petición explícita de esta remediación; queda registrado aquí para su revisión. El comentario de `WatchbugInitOptions.endpoint` documenta ya la nueva regla.
+> ⚠️ **Cambio de comportamiento de la interfaz pública.** `window.Watchbug.init()` deja de funcionar sin `endpoint` en la configuración IIFE + script de origen cruzado. Es deliberado: esa configuración **no funcionaba** — publicaba la captura hacia un tercero — y ahora falla en voz alta en lugar de hacerlo en silencio. Es un disparador de consulta de `AGENTS.md` («cambiar la interfaz pública del SDK»); queda registrado aquí para su revisión. El comentario de `WatchbugInitOptions.endpoint` documenta ya la nueva regla.
+>
+> ✅ **Decisión del propietario (2026-10-25).** Se mantiene el comportamiento estricto: **`init()` lanza.** No se sustituye por un aviso que caiga a `location.origin`. Una excepción es el comportamiento correcto y seguro para un origen cruzado sin `endpoint` explícito. **La opción blanda descartada queda cerrada y no debe reabrirse.**
 
 **Evidencia e2e (fila nueva `S-8`, 3 motores):** el documento se sirve de `127.0.0.1:8080` y el bundle de `localhost:8080` (la forma «script desde un CDN», resuelta por `page.route` sin segundo servidor). Se afirma que **(a)** `init()` sin `endpoint` lanza nombrando la corrección, **(b)** no se monta nada y no sale ninguna petición, y **(c)** el mismo bundle con `endpoint` explícito monta y publica **exactamente** en esa base — nunca en el origen del script.
 
@@ -556,20 +558,27 @@ Los 26 focos `vigilar` (CC 6-10) son, salvo los que esta remediación tocó por 
 
 ### 8.8 V-1 — los `needs_validation`
 
-De los 11 hechos de §4.2, **tres eran comprobables en código y quedan cerrados**; los ocho restantes viven fuera del repositorio y siguen abiertos por naturaleza (son comprobaciones de despliegue, no defectos).
+De los 11 hechos de §4.2, **tres eran comprobables en código** y quedaron cerrados en `0c6565f`. **Los otros ocho se ejecutaron el 2026-10-25** con sus comprobaciones seguras: **cinco se cierran con evidencia**, **dos quedan limitados a su despliegue** y **uno sigue siendo un entregable de documentación**. Ninguno es un defecto de código abierto.
 
-| # | Hecho | Estado | Evidencia |
+| # | Hecho | Comprobación ejecutada | Resultado |
 |---|---|---|---|
-| 1 | ¿`MASK_ALPHA_OPAQUE` es 255? | ✅ **cerrado** | `packages/contracts/src/constants.ts:62` — `export const MASK_ALPHA_OPAQUE = 255;` |
-| 2 | ¿`scripts/gate.mjs` corre en CI? | ✅ **cerrado** | `.github/workflows/ci.yml`, job `gates`: `node scripts/gate.mjs`. Las reglas `sdk-no-host-storage` y `sdk-single-encode-sink` están dentro (verificado leyendo `gate.mjs`) |
-| 8 | Guard `NaN` en `toBitmapRect` | ✅ **cerrado** | `geometry.ts` — `allFinite(rect)` y **throw** si no es finito. Con `NaN` el guard de área degenerada no se dispara (`right <= left` es `false`) y la máscara no se pintaba: ahora propaga y el pipeline corta en el estado ruidoso (T-02-10). Las filas H-1 se re-ejecutaron en verde |
-| 3, 4, 5, 6, 7, 9, 10, 11 | cabecera `cookie` en WebKit · copia de `dist/` en la imagen · docs del endpoint · plegado de la costura · CORS · `mode:"closed"` en lanes futuras · `global-setup.ts` · CSP externa | ⏸ **abiertos** | siguen siendo comprobaciones del despliegue real; #4 y #5 quedan **parcialmente** aliviados por I-1 y S-8 |
+| 1 | ¿`MASK_ALPHA_OPAQUE` es 255? | `grep` en `packages/contracts/src` | ✅ **cerrado** — `constants.ts:62` → `export const MASK_ALPHA_OPAQUE = 255;` |
+| 2 | ¿`scripts/gate.mjs` corre en CI? | leer `.github/workflows/ci.yml` + `gate.mjs` | ✅ **cerrado** — job `gates` ejecuta `node scripts/gate.mjs`; `sdk-no-host-storage` y `sdk-single-encode-sink` están dentro |
+| 8 | Guard `NaN` en `toBitmapRect` | código + filas H-1 | ✅ **cerrado** — `allFinite(rect)` y **throw** si no es finito. Con `NaN` el guard de área degenerada no se disparaba (`right <= left` es `false`) y la máscara no se pintaba: ahora propaga y el pipeline corta en el estado ruidoso (T-02-10). Filas H-1 re-ejecutadas en verde |
+| 10 | ¿Existe `e2e/global-setup.ts` y verifica `/api/health`? | `Test-Path` + lectura | ✅ **cerrado** — existe. Espera hasta 30 × 1 s y lanza un error con acción concreta si el stack no responde (`body.status === 'ok'`). Era 02-VERIFICATION en verde |
+| 7 | ¿La CORS acepta `X-Project-Key`/`Idempotency-Key` sin credenciales? | preflight `OPTIONS` en vivo (origen permitido y no permitido) + `plugins/cors.ts` + `.env` | ✅ **cerrado** — origen listado → `access-control-allow-origin: <origen>` y `access-control-allow-headers: x-project-key,idempotency-key` con **`access-control-allow-credentials` AUSENTE**; origen no listado → **sin** `access-control-allow-origin`. `.env`: `WATCHBUG_CORS_ORIGINS` sólo orígenes propios y `WATCHBUG_TRUST_PROXY=127.0.0.1/8,::1/128,172.16.0.0/12` — **lista explícita, nunca `true`** (también cierra el #2 de §4.2 de la fase 1) |
+| 4 | ¿La imagen desplegada contiene `watchbug.e2e.*`? | `docker run --rm --entrypoint sh <imagen> -c "find / -name 'watchbug.e2e.*'"` en `api` y `panel` + `ls` de la raíz | ✅ **cerrado** — ambas: **`none`**. La API nunca copia `packages/sdk` (sólo `packages/contracts` + `apps/api`) y el panel sólo recibe `/app/apps/panel/dist`. `I-1` además ya movió los bundles de test a `dist/e2e/` |
+| 6 | ¿La costura sigue plegada en cada build? | `node` sobre los 6 bundles de `dist/` | ✅ **cerrado** — producción: `De="__watchbugCaptureFrame";function Ne(e){return null}` (**plegada**); `dist/e2e/watchbug.e2e.js`: `function Ne(e){let t=e[De];return typeof t=="function"?t:null}` (**control positivo vivo**) |
+| 9 | ¿Ningún lane futuro rompe `mode:"closed"`? | barrido `mode:closed` / `mode:open` sobre los 8 bundles | ✅ **cerrado** — `mode:"open"` en el `dist/` desplegable: **NONE**; `mode:closed=1` en el core, `0` en `annotator`/`dom-serialize` (no son widgets). El gate **es la aserción de `build.mjs`** introducida por I-1, que corre en el job `build` de CI (y `gate.mjs` no puede cubrirlo: corre antes de generar `dist/`) |
+| 11 | ¿Alguna capa de despliegue añade CSP delante de nginx? | `Invoke-WebRequest http://127.0.0.1:8080/` | 🟡 **cerrado en este despliegue** — el documento sí lleva `Content-Security-Policy: default-src 'self'; img-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'`, más `X-Content-Type-Options` y `Referrer-Policy`, y lo sirve el **propio** nginx del panel (`Server: nginx/1.30.5`, fase 1 S-4). No hay ninguna capa externa delante aquí; en otro entorno sigue siendo comprobación del operador |
+| 3 | WebKit no expone la cabecera `cookie` | sonda ya documentada en el código + `npm ls @playwright/test` | 🟡 **parcial** — la sonda (*probe 2026-10-24*) está **documentada en la propia fila** (`e2e/sdk.spec.ts:2372-2377`) y la mitad `cookie` de PRV-05 se afirma **explícitamente** en chromium/firefox y se omite con comentario en WebKit — nunca en verde vacío. La garantía del SDK (`credentials:'omit'`) queda respaldada por `gate.mjs sdk-no-host-storage`. **Repetir la sonda en otro host o versión de Playwright no es posible desde esta máquina** — queda como comprobación del operador |
+| 5 | ¿La documentación de integración advierte del endpoint por defecto con CDN? | `grep -rn endpoint README.md documentation/` | ⏸ **sigue abierto** — **`README.md` no existe**; `documentation/` tiene 38 menciones de `endpoint`, ninguna en una guía de integración. El riesgo ya está **cerrado por código** (S-8 exige `endpoint`) y documentado en el JSDoc de `WatchbugInitOptions.endpoint` y en §8.3, pero la guía como tal es un entregable de la fase 5+
 
-> Sobre **#5** (*¿la documentación de integración advierte del endpoint por defecto con CDN?*): el código ahora **exige** `endpoint` en esa configuración y el JSDoc de `WatchbugInitOptions.endpoint` lo documenta. Lo que aún no existe es una guía de integración aparte — es trabajo de documentación de la fase 5+, no del SDK.
+> **Balance:** 9 de los 11 cerrados, **2 limitados al despliegue** (#11: una capa externa ante nginx en otro entorno; #3: repetir la sonda de WebKit en otro host) y **1 entregable de documentación** (#5). Ninguna comprobación devolvió un fallo.
 
 ### 8.9 Verificación de la remediación
 
-Todo en verde sobre `0c6565f`, evidencia fresca ejecutada en esta sesión:
+Todo en verde sobre `12a5049`, evidencia fresca ejecutada en esta sesión:
 
 | Comando | Resultado |
 |---|---|
@@ -617,9 +626,10 @@ El mismo pase declaró **sano el resto de la remediación**: traducción y corre
 1. **Los 8 `needs_validation` de despliegue** (§8.8) siguen abiertos: son comprobaciones sobre un stack real, no sobre el repositorio.
 2. **Refactors 6-10 no ejecutados** (C-7): 26 focos en banda *vigilar*, por la regla de §3.4-4.
 3. **Dos focos de test por encima de CC 10** (`readControlProof` 19, `attachSecret` 11), fuera del plan por convención (§8.7).
-4. **Cambio de la interfaz pública** en S-8 (§8.3): registrado como disparador de consulta, pendiente de confirmación del propietario.
+4. ~~**Cambio de la interfaz pública** en S-8 (§8.3): registrado como disparador de consulta, pendiente de confirmación del propietario.~~ → ✅ **resuelto el 2026-10-25**: se confirma el comportamiento estricto (lanzar). Ver §8.3.
 5. **`collectTextRects` quedó en CC 8** (era 17): dentro del objetivo de §3.4 (< 10), pero es la pieza más densa de las nuevas. Si se vuelve a tocar, `textMatchesFamily` + el filtro `UNRENDERED_PARENTS` son el siguiente corte natural.
-6. **El mapa de marcos soporta sólo traslación pura** (§8.10, FX-02): un marco con `scale`/`zoom` se rechaza en voz alta aunque podría mapearse exactamente con `box.width / offsetWidth`. Es la extensión natural si un integrador lo necesita.
+6. **El mapa de marcos soporta sólo traslación pura** (§8.10, FX-02): un marco con `scale`/`zoom` se rechaza en voz alta aunque podría mapearse exactamente con `box.width / offsetWidth`.
+   ✅ **Confirmado como backlog deliberado (2026-10-25).** La aproximación *fail-closed* es estricta pero segura y **no se añade ahora la complejidad de las matrices de transformación completas**. El *backlog* queda formal: si algún integrador lo necesita, el paso es `scale = box.width / offsetWidth` más una guardia para escala no uniforme. **No es un olvido y no debe tratarse como regresión.**
 7. **El informe no cubre** lo que §1.3 ya declaraba fuera: nada se ejecutó durante el análisis; esta remediación **sí** ejecutó la suite completa y los gates, pero sigue sin ser una auditoría de seguridad en vivo ni una prueba de penetración.
 
 ---
