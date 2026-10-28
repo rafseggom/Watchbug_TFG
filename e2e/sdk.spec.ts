@@ -1249,6 +1249,7 @@ for (const variant of ['display', 'fontsize', 'unset', 'transform'] as const) {
     // And one launcher gesture still files a report through the same pipeline.
     await answerCreated(page);
     await clickLauncher(page);
+    await completeComposer(page);
     await waitForHeadline(page, 'Report sent ✓', 15_000);
   });
 }
@@ -1345,6 +1346,7 @@ test('WDG-03: init and a full report flow leak zero styles, classes or custom pr
 
   await answerCreated(page);
   await clickLauncher(page);
+  await completeComposer(page);
   await waitForHeadline(page, 'Report sent ✓', 15_000);
 
   const afterFlow = await scan();
@@ -1372,6 +1374,7 @@ test('WDG-05: the widget wins the stacking contest over a hostile max-z-index mo
   // And a real trusted click at those coordinates drives a real report.
   await answerCreated(page);
   await clickLauncher(page);
+  await completeComposer(page);
   await waitForHeadline(page, 'Report sent ✓', 15_000);
 });
 
@@ -1394,6 +1397,7 @@ test('WDG-05: a hostile element painted at the widget coordinates neither captur
 
   await answerCreated(page);
   await clickLauncher(page);
+  await completeComposer(page);
   await waitForHeadline(page, 'Report sent ✓', 15_000);
 });
 
@@ -1416,6 +1420,7 @@ test('WDG-05: an empty host page still renders the launcher at 24 px insets and 
 
   await answerCreated(page);
   await clickLauncher(page);
+  await completeComposer(page);
   await waitForHeadline(page, 'Report sent ✓', 15_000);
 });
 
