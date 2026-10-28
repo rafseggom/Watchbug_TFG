@@ -2548,6 +2548,7 @@ test('PRV-05: the intercepted report carries no host cookie, storage or auth mat
   });
 
   await clickLauncher(page);
+  await completeComposer(page);
   await waitForHeadline(page, 'Report sent ✓', 15_000);
 
   expect(report, 'the gesture must have sent a report').not.toBeNull();
@@ -2697,6 +2698,7 @@ test('PRV-06: meta.url is path-only — the query string and fragment never ente
   }));
 
   await clickLauncher(page);
+  await completeComposer(page);
   await waitForHeadline(page, 'Report sent ✓', 15_000);
   expect(calls, 'the gesture must send exactly one report').toHaveLength(1);
 
