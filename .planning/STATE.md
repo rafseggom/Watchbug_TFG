@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 03
 current_phase_name: Report Composer & Annotation Editor (lazy)
 status: executing
-stopped_at: Completed 03-05-PLAN.md
-last_updated: "2026-10-28T20:18:02.637Z"
+stopped_at: Completed 03-06-PLAN.md
+last_updated: "2026-10-28T21:23:55.391Z"
 last_activity: 2026-10-28
 last_activity_desc: Phase 03 execution started
-state_head: 948178b42ed08bb97ece36b09660e913aff86cae
+state_head: d185c36ec0324bf06221c1664fab24740f6ca429
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 16
-  completed_plans: 14
+  completed_plans: 15
   percent: 29
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-13)
 ## Current Position
 
 Phase: 03 (Report Composer & Annotation Editor (lazy)) — EXECUTING
-Plan: 6 of 7
+Plan: 7 of 7
 Status: Ready to execute
 Last activity: 2026-10-28 — Phase 03 execution started
 
@@ -71,6 +71,7 @@ Progress: [███░░░░░░░] 29%
 | Phase 03 P02 | 17min | 3 tasks | 12 files |
 | Phase 03 P04 | 48min | 3 tasks | 11 files |
 | Phase 03 P05 | 82 min | 3 tasks | 15 files |
+| Phase 03 P03-06 | 56 min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -146,6 +147,9 @@ Recent decisions affecting current work:
 - [Phase 03]: 03-05: one-bitmap editor model - open() mutates and resolves the draft's OWN ImageData, flattens committed vector strokes into base.data at Done via one readback; no createImageBitmap in the lane; undo = pop + redraw from base (C-2/A-04 true by construction)
 - [Phase 03]: 03-05: editor locale/ink/maskConfirm are core-resolved and passed in AnnotatorOpenOptions - the chunk carries no dictionary and no colour literal; EDITOR_CSS appends exactly once to the data-wb-core style element (one shadow stylesheet, no adoptedStyleSheets)
 - [Phase 03]: 03-05: check-size lazy lane gates max(.js,.mjs) <= 25 KB with a >= 2 KB anti-inline floor on BOTH twins (min-twin, stronger than floor-on-max); gate.mjs sdk-lazy-lane-purity fails value/side-effect/literal-dynamic core imports of the lane, allows the single type-only crossing in widget/loader.ts
+- [Phase 03]: 03-06: mask bake writes destroyed pixels into the draft own buffer (bakeMask) and stores only the post-mask patch; rebakeMasks replays patches after strokes in every redraw and encodeFinal replays patches before the T1 re-run (T3) - undo/ink cannot resurrect a region because no pre-mask copy exists (C-2/A-04 by construction)
+- [Phase 03]: 03-06: e2e mask drags dispatch whole-CSS-pixel coordinates and assert the helper-predicted committed rect - Firefox/WebKit truncate fractional page.mouse coords to int CSS (measured probe); at DPR 1.25/2/3 fractional dispatch would land the mask 1-3 bitmap px inside the asked rect
+- [Phase 03]: 03-06: pixelate proof asserts the mechanism on a forced-PNG artifact (per-block byte uniformity is unsatisfiable lossy); fill rows keep the real WebP path and reuse analyzeRedaction/expectMaskedAndTargeted unchanged
 
 ### Pending Todos
 
@@ -190,6 +194,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-28T20:17:44.275Z
-Stopped at: Completed 03-05-PLAN.md
+Last session: 2026-10-28T21:23:54.716Z
+Stopped at: Completed 03-06-PLAN.md
 Resume file: None

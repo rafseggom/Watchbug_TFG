@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 1
+open_count: 0
 waived_count: 0
-fixed_count: 8
+fixed_count: 9
 total_count: 9
-last_updated: 2026-10-28T20:20:59.087Z
+last_updated: 2026-10-28T21:19:43.898Z
 ---
 
 # Broken Windows Ledger
@@ -23,7 +23,7 @@ last_updated: 2026-10-28T20:20:59.087Z
 | 6 | 03 | stub | packages/sdk/src/widget/composer.ts |  | composer annotate/replace buttons have no wired handler yet (optional-handler mount points; wired by 03-05 with the lazy editor) | fixed |  | 2026-10-28T16:47:16.734Z | 2026-10-28T20:18:55.287Z |
 | 7 | 03 | stub | packages/sdk/src/widget/composer.ts |  | composer attach/continue-text-only buttons have no wired handler yet (degraded/text-only composer mounts in 03-04) | fixed |  | 2026-10-28T16:47:17.791Z | 2026-10-28T20:19:39.916Z |
 | 8 | 03 | stub | packages/sdk/src/capture/pipeline.ts |  | Draft.captureNote is stored but not rendered yet; the degraded composer consumes it in 03-04 (capture failures still show the status panel) | fixed |  | 2026-10-28T16:47:18.578Z | 2026-10-28T20:20:59.087Z |
-| 9 | 03 | stub | packages/sdk/src/annotator/canvas-layer.ts |  | mask rail button renders but selecting it is inert (rail layout + aria-pressed + i18n complete); 03-06 wires the drag/bake/confirm and the maskConfirm round-trip | open |  | 2026-10-28T20:18:56.001Z |  |
+| 9 | 03 | stub | packages/sdk/src/annotator/canvas-layer.ts |  | mask rail button renders but selecting it is inert (rail layout + aria-pressed + i18n complete); 03-06 wires the drag/bake/confirm and the maskConfirm round-trip | fixed |  | 2026-10-28T20:18:56.001Z | 2026-10-28T21:19:43.898Z |
 
 ````json
 [
@@ -138,10 +138,10 @@ last_updated: 2026-10-28T20:20:59.087Z
     "file": "packages/sdk/src/annotator/canvas-layer.ts",
     "line": null,
     "description": "mask rail button renders but selecting it is inert (rail layout + aria-pressed + i18n complete); 03-06 wires the drag/bake/confirm and the maskConfirm round-trip",
-    "status": "open",
+    "status": "fixed",
     "reason": "",
     "recorded_at": "2026-10-28T20:18:56.001Z",
-    "resolved_at": null,
+    "resolved_at": "2026-10-28T21:19:43.898Z",
     "milestone": null
   }
 ]

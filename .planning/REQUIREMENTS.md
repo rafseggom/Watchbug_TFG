@@ -72,15 +72,15 @@ A requirement is **Complete** when:
 - [x] **ANN-02**: An end user can draw arrows
 - [x] **ANN-03**: An end user can draw rectangles
 - [x] **ANN-04**: An end user can add text labels
-- [ ] **ANN-05**: An end user can mask a region with an opaque fill
-- [ ] **ANN-06**: An end user can undo annotation strokes (masks are deliberately irreversible)
+- [x] **ANN-05**: An end user can mask a region with an opaque fill
+- [x] **ANN-06**: An end user can undo annotation strokes (masks are deliberately irreversible)
 
 ### Privacy & Masking
 
 - [x] **PRV-01**: `input[type=password]` values are excluded from the capture automatically
 - [x] **PRV-02**: Credential, token and payment-card patterns are redacted automatically
 - [x] **PRV-03**: Elements marked `data-watchbug-sensitive` are redacted automatically
-- [ ] **PRV-04**: A masked region is destroyed at the pixel level and is unrecoverable from the encoded image
+- [x] **PRV-04**: A masked region is destroyed at the pixel level and is unrecoverable from the encoded image
 - [x] **PRV-05**: The SDK never reads or transmits host cookies, storage or auth headers
 - [x] **PRV-06**: URL query strings and fragments are stripped before transmission
 - [x] **PRV-07**: An end user can review and edit the capture before it is sent
@@ -232,12 +232,12 @@ Which phases cover which requirements. **Updated during roadmap creation** — e
 | ANN-02 | Phase 3 | Complete |
 | ANN-03 | Phase 3 | Complete |
 | ANN-04 | Phase 3 | Complete |
-| ANN-05 | Phase 3 | Pending |
-| ANN-06 | Phase 3 | Pending |
+| ANN-05 | Phase 3 | Complete |
+| ANN-06 | Phase 3 | Complete |
 | PRV-01 | Phase 2 | Complete |
 | PRV-02 | Phase 2 | Complete |
 | PRV-03 | Phase 2 | Complete |
-| PRV-04 | Phase 3 | Pending |
+| PRV-04 | Phase 3 | Complete |
 | PRV-05 | Phase 2 | Complete |
 | PRV-06 | Phase 2 | Complete |
 | PRV-07 | Phase 3 | Complete |

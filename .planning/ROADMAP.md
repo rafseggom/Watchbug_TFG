@@ -110,7 +110,7 @@ Plans:
   4. An end user can mask a region with an opaque fill that is destroyed at the pixel level and is unrecoverable from the encoded image — undecipherable even by later annotation strokes — while undo removes annotation strokes only (masks are deliberately irreversible).
   5. An end user reviews and edits the capture before sending and uses the whole widget form and editor in English or Spanish (auto-matched to browser language, manual override), while the lazy editor chunk stays ≤ 25 KB gzipped and the total runtime payload ≤ 80 KB.
 
-**Plans:** 5/7 plans executed
+**Plans:** 6/7 plans executed
 **UI hint**: yes
 
 Plans:
@@ -126,7 +126,7 @@ Plans:
 - [x] 03-05-PLAN.md — Lazy annotation editor: on-demand chunk loader, freehand/arrow/rect/text, undo, editor i18n, laziness + size-floor gates (ANN-01…04, ANN-06, WDG-06, PRF-02)
 
 **Wave 4** *(blocked on Wave 3)*
-- [ ] 03-06-PLAN.md — Destructive masks + CA-02: post-mask patches, T2 bake, T3 replay-last, once-per-session confirm, opt-in pixelate, DPR matrix (ANN-05, ANN-06, PRV-04)
+- [x] 03-06-PLAN.md — Destructive masks + CA-02: post-mask patches, T2 bake, T3 replay-last, once-per-session confirm, opt-in pixelate, DPR matrix (ANN-05, ANN-06, PRV-04)
 
 **Wave 5** *(blocked on Wave 4)*
 - [ ] 03-07-PLAN.md — Suite migration (~30 rows through one helper) + budget closure on real chunks + five static gates, full verify on three engines (PRF-02, PRF-03)
@@ -229,7 +229,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 |-------|----------------|--------|-----------|
 | 1. Contracts & Ingest Slice | 4/4 | Complete    | 2026-10-13 |
 | 2. SDK Tracer Bullet: Widget, Capture & Auto-Redaction | 5/5 | Complete    | 2026-10-25 |
-| 3. Report Composer & Annotation Editor (lazy) | 5/7 | In Progress | - |
+| 3. Report Composer & Annotation Editor (lazy) | 6/7 | In Progress | - |
 | 4. Report Payload & Enrichment | 0/TBD | Not started | - |
 | 5. Secure Admin Access & Projects | 0/TBD | Not started | - |
 | 6. Triage & Data Lifecycle | 0/TBD | Not started | - |
