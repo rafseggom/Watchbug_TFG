@@ -2,17 +2,17 @@
 gsd_state_version: "1.0"
 current_phase: 03
 current_phase_name: Report Composer & Annotation Editor (lazy)
-status: planning
-stopped_at: Phase 03 UI-SPEC approved
-last_updated: "2026-10-28T14:33:31.276Z"
-last_activity: 2026-10-25
-last_activity_desc: "Phase 02 closed: UAT 5/5, verification passed, blank-probe fix, F-08 and WINDOWS #5 resolved"
-state_head: 15eae91a6211e0bf3360e63fce70e25ee937b500
+status: executing
+stopped_at: Completed 03-01-PLAN.md
+last_updated: "2026-10-28T15:14:20.853Z"
+last_activity: 2026-10-28
+last_activity_desc: Phase 03 execution started
+state_head: 4a7b8b01dfd0ce75f91a4b42c6476550093d72a5
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 16
-  completed_plans: 9
+  completed_plans: 10
   percent: 29
 ---
 
@@ -23,14 +23,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-13)
 
 **Core value:** When a bug report lands, the developer can reproduce the bug from it — and neither the report nor its screenshot ever leaves the developer's own infrastructure.
-**Current focus:** Phase 03 — Report Composer & Annotation Editor (lazy) — next to plan
+**Current focus:** Phase 03 — Report Composer & Annotation Editor (lazy)
 
 ## Current Position
 
-Phase: 03 (Report Composer & Annotation Editor (lazy)) — READY TO EXECUTE
-Plan: 5 of 5
-Status: Phase closed — ready for `/gsd-plan-phase 3`
-Last activity: 2026-10-25 — UAT 5/5, verification `passed`, blank-probe fix, F-08 and WINDOWS #5 resolved
+Phase: 03 (Report Composer & Annotation Editor (lazy)) — EXECUTING
+Plan: 2 of 7
+Status: Ready to execute
+Last activity: 2026-10-28 — Phase 03 execution started
 
 Progress: [███░░░░░░░] 29%
 
@@ -66,6 +66,7 @@ Progress: [███░░░░░░░] 29%
 | Phase 02 P03 | 40min | 3 tasks | 6 files |
 | Phase 02 P04 | 50min | 3 tasks | 6 files |
 | Phase 02 P05 | 60min | 3 tasks | 6 files |
+| Phase 03 P01 | 25min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -123,6 +124,9 @@ Recent decisions affecting current work:
 - [Phase 02 · cierre 2026-10-25]: F-08 fixed - lang="en" on the widget content root + F-08 e2e row (Phase 3 replaces the literal with the resolved locale)
 - [Phase 02 · cierre 2026-10-25]: WINDOWS #5 fixed - REQUIREMENTS release criteria now state webkit covers engine-divergent rendering + CaptureSource seam, M-3 via forced-PNG stub (A-14), firefox the no-ImageCapture path
 - [Phase 02 · cierre 2026-10-25]: owner decisions confirmed - S-8 strict throw for a cross-origin script without endpoint (soft fallback rejected and closed); FX-02 fail-closed frame transform kept as deliberate backlog
+- [Phase 03]: ﻿03-01: owner-approved migration shape executed - ONE drizzle-kit artifact 0001 carries nullable storage_key/content_type AND the image/jpeg CHECK widening (P3-D-14); decision 'approve' recorded in 03-01-SUMMARY before Task 2
+- [Phase 03]: ﻿03-01: e2e postIncident contract flipped - bytes===undefined now omits the image part entirely (reaching the route's imageless branch); the 8 pre-existing omission callers pinned with bytes: png so no existing row changed shape
+- [Phase 03]: ﻿03-01: one ext-MIME allowlist read in both directions - CONTENT_TYPE_BY_EXT typed Record<ImageExt,string> plus derived EXT_BY_CONTENT_TYPE inverse; blob route 404s on a null key BEFORE any Storage call (Pitfall 8 ternaries eliminated; 03-02 adds the jpeg arm to the same map)
 
 ### Pending Todos
 
@@ -167,6 +171,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-28T13:17:31.289Z
-Stopped at: Phase 03 UI-SPEC approved
-Resume file: E:/Proyectos Github/Watchbug_TFG/.planning/phases/03-report-composer-annotation-editor-lazy/03-UI-SPEC.md
+Last session: 2026-10-28T15:14:20.478Z
+Stopped at: Completed 03-01-PLAN.md
+Resume file: None
