@@ -3996,13 +3996,19 @@ test('ANN-04: a text label is click-typed-confirmed without a modal', async ({
     await typeLabel(page, [60, 250], 'borrador', 'escape');
     const stillOpen = await probeWidget(page);
     expect(stillOpen.editorOpen, 'Escape in the label input does not close the editor').toBe(true);
-    // No modal was created by the label flow (P3-D-08): the only surface the
-    // walk touched is the inline input.
+    // No modal was OPENED by the label flow (P3-D-08): the only surface the
+    // walk touched is the inline input. The census counts OPEN modals only —
+    // 03-06's once-per-session mask confirm is permanently mounted with
+    // data-shown="false" (the same visibility hook the ANN-05 rows assert
+    // on), so a mounted-but-hidden dialog belonging to another tool is not
+    // a modal the text tool opened.
     const modals = await page.evaluate(
       () =>
         document
           .querySelector('watchbug-host')
-          ?.shadowRoot?.querySelectorAll('[role="dialog"], [role="alertdialog"]').length ?? 0,
+          ?.shadowRoot?.querySelectorAll(
+            '[role="dialog"][data-shown="true"], [role="alertdialog"][data-shown="true"]',
+          ).length ?? 0,
     );
     expect(modals, 'the text tool opens no modal').toBe(0);
   });
