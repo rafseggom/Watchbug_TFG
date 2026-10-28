@@ -16,9 +16,11 @@
  * names the canvas encode API (the `sdk-single-encode-sink` gate counts text,
  * comments included).
  *
- * Masks bake destructively and are never undoable (T2): this slice declares
- * the round-trip; the mask lane lands with 03-06. Strokes are vector records;
- * undo is a redraw (P3-D-11/12).
+ * Masks bake destructively and are never undoable (T2): 03-06 wired the bake —
+ * `open()` seeds the editor from `options.masks` (a Review -> Edit round trip
+ * keeps them) and returns the accumulated patches alongside the mutated base.
+ * Strokes are vector records; undo is a redraw (P3-D-11/12) that never pops a
+ * mask, and every redraw re-bakes the patches last (T3).
  */
 
 import { createEditor } from './annotator/canvas-layer.ts';
@@ -51,8 +53,9 @@ export interface AnnotatorOpenOptions {
   };
 }
 
-/** What one editor session returns: the mutated base + the (unchanged, until
- * 03-06 bakes into it) mask list. `img` IS `options.base` — same instance. */
+/** What one editor session returns: the mutated base + every mask baked in
+ *  this session (post-mask patches only, creation order). `img` IS
+ *  `options.base` — same instance. */
 export interface AnnotatorResult {
   img: ImageData;
   masks: readonly MaskPatch[];

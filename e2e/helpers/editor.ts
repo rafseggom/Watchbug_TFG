@@ -137,6 +137,185 @@ export async function dragOnBitmap(
   await page.mouse.up();
 }
 
+/**
+ * The mask drag (03-06): the same trusted pointer walk, named for the tool
+ * it drives. Endpoints are BITMAP points of the draft (the editor canvas's
+ * own backing-store pixels); the viewport mapping is the INDEPENDENT formula
+ * above — `box = canvas.getBoundingClientRect(); scaleX = canvas.width /
+ * box.width; viewportX = box.left + bitmapX / scaleX` — never the SDK's
+ * `transformFor`. If the SDK's mapping and this one ever disagree, the mask
+ * lands where the row's expected rect is not and the CA-02 assertions fail:
+ * two derivations, one assertion (non-vacuity).
+ */
+export async function dragMaskOnBitmap(
+  page: Page,
+  from: BitmapPoint,
+  to: BitmapPoint,
+): Promise<void> {
+  await dragOnBitmap(page, from, to, 8);
+}
+
+export interface BitmapRectLike {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+/**
+ * The expected BITMAP rect of a captured CSS-space rect: outward rounding
+ * (floor the origin, ceil the extent) against the frame/viewport scale,
+ * clamped to the frame — written out independently of `redact/geometry.ts`
+ * and byte-for-byte the formula the capture stub used to paint the magenta
+ * marker (PAINT_FRAME's floor/ceil mapping), which is what makes a mask row
+ * assert on where the marker IS rather than where the SDK guessed it to be.
+ */
+export function frameBitmapRect(
+  rect: BitmapRectLike,
+  frame: { width: number; height: number },
+  viewport: { width: number; height: number },
+): BitmapRectLike {
+  const scaleX = frame.width / Math.max(1, viewport.width);
+  const scaleY = frame.height / Math.max(1, viewport.height);
+  return {
+    left: Math.max(0, Math.floor(rect.left * scaleX)),
+    top: Math.max(0, Math.floor(rect.top * scaleY)),
+    right: Math.min(frame.width, Math.ceil(rect.right * scaleX)),
+    bottom: Math.min(frame.height, Math.ceil(rect.bottom * scaleY)),
+  };
+}
+
+/**
+ * Snap a bitmap rect OUTWARD to the pixelation block grid — the independent
+ * twin of the SDK's `snapOutward` (03-06 pixelate row): floor left/top, ceil
+ * right/bottom to multiples of `blockPx`, grid origin at the bitmap's (0, 0).
+ */
+export function snapOutwardExpected(
+  rect: BitmapRectLike,
+  blockPx: number,
+): BitmapRectLike {
+  return {
+    left: Math.floor(rect.left / blockPx) * blockPx,
+    top: Math.floor(rect.top / blockPx) * blockPx,
+    right: Math.ceil(rect.right / blockPx) * blockPx,
+    bottom: Math.ceil(rect.bottom / blockPx) * blockPx,
+  };
+}
+
+/**
+ * The pixelate row's independent block-size oracle: mirrors the SDK's
+ * measurement discipline (assign the 15 px label font with the read-back
+ * fallback, `measureText('H').actualBoundingBoxAscent`,
+ * `max(8, ceil(2 * cap))`) without importing any SDK module. The SAME engine
+ * that paints the mask answers this probe, so the grid the row checks is the
+ * grid the tool computed, derived twice.
+ */
+export async function measureBlockSize(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1;
+    canvas.height = 1;
+    const ctx = canvas.getContext('2d');
+    if (ctx === null) throw new Error('measureBlockSize: a 2D canvas is unavailable');
+    ctx.font = '15px system-ui, sans-serif';
+    if (!ctx.font.includes('15px')) ctx.font = '15px sans-serif';
+    const ascent = ctx.measureText('H').actualBoundingBoxAscent;
+    const cap = Number.isFinite(ascent) && ascent > 0 ? ascent : 15;
+    return Math.max(8, Math.ceil(2 * cap));
+  });
+}
+
+/** Select the mask style on the `.mask-mode` mini-toggle (03-06, P3-D-10). */
+export async function setMaskMode(page: Page, mode: 'fill' | 'pixelate'): Promise<void> {
+  await page.evaluate((which) => {
+    const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
+    const button = root?.querySelector(
+      `button.mask-mode-btn[data-wb-mask="${which}"]`,
+    ) as HTMLButtonElement | null;
+    if (button === null) throw new Error(`setMaskMode: no [data-wb-mask=${which}] button`);
+    button.click();
+  }, mode);
+}
+
+export interface MaskConfirmationState {
+  /** The alertdialog is open. */
+  visible: boolean;
+  /** `role="alertdialog"` on the dialog. */
+  role: string;
+  /** `aria-modal="true"` on the dialog. */
+  ariaModal: string;
+  /** Focus currently sits on the `Mask` action button. */
+  focusOnAction: boolean;
+  /** Focus currently sits on the mask tool button (returned after close). */
+  focusOnMaskTool: boolean;
+}
+
+/**
+ * Read the mask-confirmation dialog state (P3-D-09, T-03-26): visibility,
+ * the alertdialog semantics, and where focus sits. Waits for the dialog when
+ * `visible` is true; when false it polls until it is gone (or absent).
+ */
+export async function expectMaskConfirmation(
+  page: Page,
+  visible: boolean,
+  timeout = 5_000,
+): Promise<MaskConfirmationState> {
+  await page.waitForFunction(
+    (want) => {
+      const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
+      const dialog = root?.querySelector('div.mask-dialog');
+      const shown = dialog?.getAttribute('data-shown') === 'true';
+      return want === shown;
+    },
+    visible,
+    { timeout },
+  );
+  return page.evaluate(() => {
+    const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
+    const dialog = root?.querySelector('div.mask-dialog') as HTMLElement | null;
+    const action = dialog?.querySelector('button.mask-dialog-action') ?? null;
+    const maskTool = root?.querySelector('button.tool[data-wb-tool="mask"]') ?? null;
+    const active = root?.activeElement ?? null;
+    return {
+      visible: dialog?.getAttribute('data-shown') === 'true',
+      role: dialog?.getAttribute('role') ?? '',
+      ariaModal: dialog?.getAttribute('aria-modal') ?? '',
+      focusOnAction: action !== null && active === action,
+      focusOnMaskTool: maskTool !== null && active === maskTool,
+    };
+  });
+}
+
+/** Whether the `.mask-mode` toggle is currently visible, and what is pressed. */
+export async function maskModeState(
+  page: Page,
+): Promise<{ visible: boolean; pressed: string }> {
+  return page.evaluate(() => {
+    const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
+    const group = root?.querySelector('.mask-mode') as HTMLElement | null;
+    const shown = group !== null && group.getBoundingClientRect().width > 0;
+    const pressed =
+      root?.querySelector('button.mask-mode-btn[aria-pressed="true"]')?.getAttribute('data-wb-mask') ??
+      '';
+    return { visible: shown, pressed };
+  });
+}
+
+/** Click a mask-confirmation dialog button (`action` = Mask, `cancel` = Not now). */
+export async function clickMaskDialogButton(
+  page: Page,
+  which: 'action' | 'cancel',
+): Promise<void> {
+  await page.evaluate((kind) => {
+    const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
+    const button = root?.querySelector(
+      `button.mask-dialog-${kind}`,
+    ) as HTMLButtonElement | null;
+    if (button === null) throw new Error(`clickMaskDialogButton: no .mask-dialog-${kind}`);
+    button.click();
+  }, which);
+}
+
 /** A trusted click at a BITMAP point (text-tool anchoring). */
 export async function clickOnBitmap(page: Page, at: BitmapPoint): Promise<void> {
   const box = await canvasBox(page);

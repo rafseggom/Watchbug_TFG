@@ -13,12 +13,13 @@
  *
  * ONE working bitmap (C-2 / A-04, plan-flagged decision): the redraw source is
  * `options.base` — the draft's own `ImageData` — mutated in place. There is no
- * second copy: a redraw is `putImageData(base)` + replay of the committed
- * vector strokes, so a pre-mask or per-stroke pixel snapshot never exists
- * (Pitfall 4) and the memory at the 16 MP ceiling stays ~64 MB instead of
- * ~128 MB. `createImageBitmap` on the base is deliberately NOT used: an
- * immutable second copy held for the session is exactly the offscreen base
- * layer C-2 forbids.
+ * second copy: a redraw is `rebakeMasks` — `putImageData(base)` + replay of the
+ * committed vector strokes + replay of every mask patch LAST (T3) — so a
+ * pre-mask or per-stroke pixel snapshot never exists (Pitfall 4) and the
+ * memory at the 16 MP ceiling stays ~64 MB instead of ~128 MB.
+ * `createImageBitmap` on the base is deliberately NOT used: an immutable
+ * second copy held for the session is exactly the offscreen base layer C-2
+ * forbids.
  *
  * Pointer discipline (Pitfall 5): `setPointerCapture` on `pointerdown`,
  * release on `pointerup`/`pointercancel`; a cancel ABORTS the in-progress
@@ -26,9 +27,11 @@
  */
 
 import { transformFor } from '../redact/geometry.ts';
+import type { MaskPatch } from '../redact/masks.ts';
 import { setEditorLocale } from '../strings.editor.ts';
 import type { AnnotatorOpenOptions, AnnotatorResult } from '../annotator.ts';
 import { createEditorShell, injectEditorCss, type ToolName } from './editor-dom.ts';
+import { bakeMask, blockSizeFor, capHeightPx, rebakeMasks } from './masks.ts';
 import {
   drawFreehandSegment,
   drawStroke,
@@ -79,10 +82,16 @@ export function createEditor(options: AnnotatorOpenOptions): Promise<AnnotatorRe
     // ---- committed strokes: vector records only, never pixel snapshots ----
     const strokes: Stroke[] = [];
 
+    // ---- baked masks: append-only post-mask patches (T2 / P3-D-12) ----
+    // Seeded from the previous round-trip (Review -> Edit -> Annotate must not
+    // lose masks) and returned by `finish()`. This array is NEVER pushed onto
+    // the stroke stack and the undo stack never pops it: a mask is irreversible
+    // by construction, not by convention (C-2, ANN-06). The only pixel data it
+    // holds is destroyed bytes (research Pitfall 4).
+    const masks: MaskPatch[] = Array.from(options.masks);
+
     const redraw = (): void => {
-      context.setTransform(1, 0, 0, 1, 0, 0);
-      context.putImageData(base, 0, 0);
-      for (const stroke of strokes) drawStroke(context, stroke);
+      rebakeMasks(context, base, strokes, masks);
     };
     redraw();
 
@@ -127,15 +136,14 @@ export function createEditor(options: AnnotatorOpenOptions): Promise<AnnotatorRe
     type PendingDrag =
       | { tool: 'freehand'; points: number[] }
       | { tool: 'arrow'; from: [number, number]; to: [number, number] }
-      | { tool: 'rectangle'; from: [number, number]; to: [number, number] };
+      | { tool: 'rectangle'; from: [number, number]; to: [number, number] }
+      | { tool: 'mask'; from: [number, number]; to: [number, number] };
     let pending: PendingDrag | null = null;
 
     const commitStrokeWidth = (): number => LOGICAL_STROKE_PX * canvasTransform().scaleX;
 
     const onPointerDown = (event: PointerEvent): void => {
       if (event.pointerType === 'mouse' && event.button !== 0) return;
-      // The mask tool is inert until 03-06 bakes it.
-      if (activeTool === 'mask') return;
       // The text tool anchors a label on `click`, NOT on `pointerdown`: the
       // same click's mousedown would otherwise steal focus from the freshly
       // opened input and its blur-commit would close it empty. `labelDown`
@@ -181,19 +189,45 @@ export function createEditor(options: AnnotatorOpenOptions): Promise<AnnotatorRe
         list.push(point.x, point.y);
         return;
       }
-      // arrow/rectangle preview: the SAME one-bitmap path as a commit — the
-      // base is restored and every committed stroke replayed, then the shape
-      // in progress draws on top. No second bitmap, no snapshot (Pitfall 4).
+      // arrow/rectangle/mask preview: the SAME one-bitmap path as a commit —
+      // the base is restored, every committed stroke replayed and every mask
+      // patch re-baked, then the shape in progress draws on top. No second
+      // bitmap, no snapshot (Pitfall 4). The mask previews as a plain rect
+      // outline; the destruction itself lands only on commit.
       if (point.x === pending.to[0] && point.y === pending.to[1]) return;
       pending.to = [point.x, point.y];
       redraw();
       drawStroke(context, {
-        tool: pending.tool,
+        tool: pending.tool === 'mask' ? 'rectangle' : pending.tool,
         from: pending.from,
         to: pending.to,
         width: commitStrokeWidth(),
         ink: options.ink,
       });
+    };
+
+    /**
+     * Bake the dragged rect into the canvas and the shared base (T2). The
+     * confirmation gate wraps THIS call (Task 2) — the bake itself stays one
+     * function. FAIL CLOSED: a geometry throw or a degenerate rect ABORTS the
+     * mask (nothing baked, drag discarded, the next redraw restores the
+     * preview) — never fill an approximate region while the real one stays
+     * visible.
+     */
+    const commitMask = (from: [number, number], to: [number, number]): void => {
+      const rect = {
+        left: Math.min(from[0], to[0]),
+        top: Math.min(from[1], to[1]),
+        right: Math.max(from[0], to[0]) + 1,
+        bottom: Math.max(from[1], to[1]) + 1,
+      };
+      try {
+        // Append-only: the patch is destroyed pixels only, and it NEVER
+        // touches the stroke stack (ANN-06 / Pitfall 4).
+        masks.push(bakeMask(base, context, rect, 'fill', 0));
+      } catch {
+        // Aborted — fail closed, the region stays as it was.
+      }
     };
 
     const onPointerUp = (event: PointerEvent): void => {
@@ -220,6 +254,10 @@ export function createEditor(options: AnnotatorOpenOptions): Promise<AnnotatorRe
             width: commitStrokeWidth(),
             ink: options.ink,
           });
+        } else if (dragged.tool === 'mask') {
+          const moved =
+            dragged.to[0] !== dragged.from[0] || dragged.to[1] !== dragged.from[1];
+          if (moved) commitMask(dragged.from, dragged.to);
         } else if (
           dragged.tool === 'arrow' ||
           dragged.tool === 'rectangle'
@@ -238,8 +276,9 @@ export function createEditor(options: AnnotatorOpenOptions): Promise<AnnotatorRe
         }
       }
       // The replay (width resolved once at commit) replaces the incremental
-      // preview pixels on either branch, so the canvas always ends a drag in
-      // exactly the committed state.
+      // preview pixels on either branch — base + strokes + every mask patch,
+      // patches LAST — so the canvas always ends a drag in exactly the
+      // committed state, ink never above a mask (T3).
       redraw();
     };
 
@@ -327,7 +366,6 @@ export function createEditor(options: AnnotatorOpenOptions): Promise<AnnotatorRe
     // ---- rail wiring: tools are aria-pressed toggles; undo is an action ----
     for (const [name, button] of shell.tools) {
       button.addEventListener('click', () => {
-        if (name === 'mask') return; // inert until 03-06 wires the drag/bake
         selectTool(name);
       });
     }
@@ -369,8 +407,9 @@ export function createEditor(options: AnnotatorOpenOptions): Promise<AnnotatorRe
       document.removeEventListener('keydown', onKeyDown);
       shell.root.remove();
       // C-2/A-04: the SAME instance that came in — mutated in place. The
-      // masks round-trip unchanged in this slice (03-06 adds the bake).
-      resolve({ img: base, masks: options.masks });
+      // masks array carries every baked patch (destroyed pixels only) back
+      // to the draft, so a Review -> Edit -> Annotate round trip keeps them.
+      resolve({ img: base, masks });
     };
 
     shell.done.addEventListener('click', finish);

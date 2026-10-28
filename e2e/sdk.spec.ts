@@ -50,6 +50,8 @@ import {
   clickOnBitmap,
   done,
   dragOnBitmap,
+  frameBitmapRect,
+  dragMaskOnBitmap,
   openEditor,
   selectTool,
   typeLabel,
@@ -4096,4 +4098,116 @@ test.describe('WDG-06 editor', () => {
     expect(chrome.canvasLabel).toBe('Captura con anotaciones');
     expect(chrome.undoTitle, 'the title attribute re-renders with the aria-label').toBe('Deshacer');
   });
+});
+
+/* ------------------------------------------------------------------------- */
+/* PRV-04 — the user mask, proven at artifact level (03-06 Task 1, CA-02)     */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * An unmatched JWT-lookalike (the exact text the PRV-02 lookalike row proves
+ * T1 leaves visible). The stub paints the magenta marker over its rect, so
+ * the ONLY thing in this walk that can destroy those pixels is the user's own
+ * mask — the destruction the CA-02 row asserts is the mask's, not the
+ * redactor's (non-vacuity by fixture, exactly as the T1 artifact rows do).
+ */
+const MASK_LOOKALIKE_TEXT = 'xJhdXRv.NExhbWVfaWRlbnRpdHlfOTk5OTk5.SGNyZWRzX3NpZ25hdHVyZV8xMjM0';
+
+/** The default two-tier stub frame (02-02): the geometry the PRV-02 rows run on. */
+const MASK_FRAME = { width: 640, height: 360 };
+
+/**
+ * One mask drag over the marker's expected bitmap rect: from its top-left
+ * pixel to its bottom-right pixel (both inclusive), so the SDK's committed
+ * rect is the marker's painted rect EXACTLY — the ring assertion then proves
+ * the destruction landed where the independently-computed formula says it
+ * did, instead of hiding a mapping error behind a generous drag.
+ */
+async function maskDrag(
+  page: Page,
+  rect: { left: number; top: number; right: number; bottom: number },
+): Promise<void> {
+  await dragMaskOnBitmap(page, [rect.left, rect.top], [rect.right - 1, rect.bottom - 1]);
+}
+
+/**
+ * The shared mask walk: stub frame + marker, composer, `Annotate image`,
+ * mask tool, `steps` (which see the expected bitmap rect), `Done`, review,
+ * send. Returns the outgoing bytes with the marker's CSS rect and the
+ * viewport — `analyzeRedaction` consumes them unchanged.
+ */
+async function maskAndSend(
+  page: Page,
+  browserName: string,
+  steps: (bitmap: { left: number; top: number; right: number; bottom: number }) => Promise<void>,
+  options: { frame?: { width: number; height: number }; dprCheck?: number } = {},
+): Promise<{
+  image: Buffer;
+  masked: CssRect;
+  bitmap: { left: number; top: number; right: number; bottom: number };
+  viewport: CssRect;
+}> {
+  const frame = options.frame ?? MASK_FRAME;
+  if (options.dprCheck !== undefined) {
+    // Non-vacuity: the context really runs at this device pixel ratio first
+    // (the H-1 rows' discipline — Desktop Safari defaults to 2, so `dpr 1`
+    // must be pinned per-row rather than assumed).
+    expect(await page.evaluate(() => window.devicePixelRatio)).toBe(options.dprCheck);
+  }
+  await installCaptureStub(page, browserName, options.frame ? { frame } : {});
+  await page.route(INCIDENT_POST_RE, async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.continue();
+      return;
+    }
+    void route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({ id: INTERCEPTED_ID }),
+    });
+  });
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+  await installSecrets(page, [
+    { id: 'wb-mask-secret', text: MASK_LOOKALIKE_TEXT, left: 80, top: 140, marker: true },
+  ]);
+  const masked = await readMaskRect(page, 'wb-mask-secret', 'element');
+  const size = page.viewportSize();
+  if (size === null) throw new Error('mask row: no viewport');
+  const viewport: CssRect = { left: 0, top: 0, right: size.width, bottom: size.height };
+  const bitmap = frameBitmapRect(masked, frame, { width: size.width, height: size.height });
+
+  await clickLauncher(page);
+  await waitForComposer(page);
+  await openEditor(page);
+  await selectTool(page, 'mask');
+  await steps(bitmap);
+  await done(page);
+
+  await clickComposerReview(page);
+  await waitForReview(page);
+  await clickReviewSend(page);
+  await waitForHeadline(page, 'Report sent ✓', 20_000);
+  const image = await readOutgoingImage(page);
+  return { image, masked, bitmap, viewport };
+}
+
+test('PRV-04 CA-02: a user mask destroys the region and its boundary ring — zero original pixels inside the mask rect and on its 1-px ring, flat opaque fill inside, control region untouched', async ({
+  page,
+  browserName,
+}) => {
+  const { image, masked, viewport } = await maskAndSend(page, browserName, async (bitmap) => {
+    await maskDrag(page, bitmap);
+  });
+  // The default tracer frame reaches the wire unscaled — the mask rows
+  // exercise the same 640x360 geometry the PRV-02 artifact rows assert on.
+  expect(image.length, 'an image left the browser').toBeGreaterThan(0);
+  const report = await analyzeRedaction(page, image, {
+    viewport,
+    masked,
+    control: REDACTION_CONTROL_RECT,
+  });
+  expect(report.width).toBe(640);
+  expect(report.height).toBe(360);
+  expectMaskedAndTargeted(report);
 });

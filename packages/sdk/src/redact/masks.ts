@@ -1,14 +1,15 @@
 /**
- * The mask-patch vocabulary (C-2 / T2 / T3) and the **single** definition of
- * the flat fill colour (R-13 / R-18).
+ * The mask-patch vocabulary (C-2 / T2 / T3), the destructive pixel primitives
+ * both masking lanes share, and the **single** definition of the flat fill
+ * colour (R-13 / R-18).
  *
  * This is a LEAF module on purpose: it imports only `BitmapRect` from
  * `./geometry.ts` and `MASK_ALPHA_OPAQUE` from the contracts' Zod-free
  * constants — nothing that reaches `patterns.ts`. The lazy mask lane imports
- * the fill colour from here; importing it from `redactor.ts` would drag the
- * whole T1 detection catalogue into the ≤ 25 KB chunk (RNF-01, PRF-02).
- * `redactor.ts` imports and re-exports `MASK_RGB` so every T1 call site keeps
- * its existing path (one definition, not two — R-18).
+ * the fill colour and these primitives from here; importing them through
+ * `redactor.ts` would drag the whole T1 detection catalogue into the ≤ 25 KB
+ * chunk (RNF-01, PRF-02). `redactor.ts` imports and re-exports `MASK_RGB` so
+ * every T1 call site keeps its existing path (one definition, not two — R-18).
  */
 import { MASK_ALPHA_OPAQUE } from '@watchbug/contracts/constants';
 import type { BitmapRect } from './geometry.ts';
@@ -84,5 +85,116 @@ export function putPatch(target: ImageData, patch: MaskPatch): void {
       row[at] = MASK_ALPHA_OPAQUE;
     }
     target.data.set(row, (rect.top + y) * target.width * 4 + rect.left * 4);
+  }
+}
+
+/** Validate a rect for the destructive primitives (S-3, mirrors `putPatch`). */
+function assertPaintRect(rect: BitmapRect, who: string): void {
+  if (
+    !Number.isFinite(rect.left) ||
+    !Number.isFinite(rect.top) ||
+    !Number.isFinite(rect.right) ||
+    !Number.isFinite(rect.bottom)
+  ) {
+    throw new Error(`${who}: non-finite rect (refusing to guess a mask region)`);
+  }
+}
+
+/**
+ * The ONE automatic masking primitive (R-13 / A-01 / SEC-02): a flat opaque
+ * fill of `MASK_RGB` at `MASK_ALPHA_OPAQUE` over `rect` (image-local
+ * coordinates) — the exact triple T1 auto-redaction paints, so a user mask
+ * reads as the same redaction (UI-SPEC A-6). No CSS overlay, no feathering,
+ * no blur: every covered pixel is replaced.
+ */
+export function solidFillRegion(image: ImageData, rect: BitmapRect): void {
+  assertPaintRect(rect, 'solidFillRegion');
+  const left = Math.max(0, Math.floor(rect.left));
+  const top = Math.max(0, Math.floor(rect.top));
+  const right = Math.min(image.width, Math.ceil(rect.right));
+  const bottom = Math.min(image.height, Math.ceil(rect.bottom));
+  const { data, width } = image;
+  for (let y = top; y < bottom; y += 1) {
+    let index = (y * width + left) * 4;
+    for (let x = left; x < right; x += 1) {
+      data[index] = MASK_RGB.r;
+      data[index + 1] = MASK_RGB.g;
+      data[index + 2] = MASK_RGB.b;
+      data[index + 3] = MASK_ALPHA_OPAQUE;
+      index += 4;
+    }
+  }
+}
+
+/**
+ * Snap `rect` OUTWARD to the pixelation block grid (R-13 / P3-D-10): floor
+ * left/top, ceil right/bottom to multiples of `blockPx`. The grid origin is
+ * the bitmap's (0, 0), so a snapped rect's blocks always tile from a grid
+ * line; clamping to the frame (if needed) happens in the caller, which alone
+ * knows the bounds.
+ */
+export function snapOutward(rect: BitmapRect, blockPx: number): BitmapRect {
+  assertPaintRect(rect, 'snapOutward');
+  if (!Number.isFinite(blockPx) || blockPx < 1) {
+    throw new Error('snapOutward: block size must be a positive finite number');
+  }
+  return {
+    left: Math.floor(rect.left / blockPx) * blockPx,
+    top: Math.floor(rect.top / blockPx) * blockPx,
+    right: Math.ceil(rect.right / blockPx) * blockPx,
+    bottom: Math.ceil(rect.bottom / blockPx) * blockPx,
+  };
+}
+
+/**
+ * The opt-in pixelation primitive (R-13 / P3-D-10): replace every `blockPx`
+ * block of `rect` (image-local, blocks tiled from `rect`'s top-left — the
+ * caller grid-snaps first, so those coordinates sit on grid lines) with the
+ * block's mean colour at alpha 255. Block-average is a one-way many-to-one
+ * map: no invertible transform reconstructs it, which is why blur is banned
+ * and this is not. A partial edge block averages only its own pixels.
+ */
+export function pixelateRegion(image: ImageData, rect: BitmapRect, blockPx: number): void {
+  assertPaintRect(rect, 'pixelateRegion');
+  if (!Number.isFinite(blockPx) || blockPx < 1) {
+    throw new Error('pixelateRegion: block size must be a positive finite number');
+  }
+  const left = Math.max(0, Math.floor(rect.left));
+  const top = Math.max(0, Math.floor(rect.top));
+  const right = Math.min(image.width, Math.ceil(rect.right));
+  const bottom = Math.min(image.height, Math.ceil(rect.bottom));
+  const { data, width } = image;
+  for (let by = top; by < bottom; by += blockPx) {
+    const blockBottom = Math.min(bottom, by + blockPx);
+    for (let bx = left; bx < right; bx += blockPx) {
+      const blockRight = Math.min(right, bx + blockPx);
+      let sumR = 0;
+      let sumG = 0;
+      let sumB = 0;
+      let count = 0;
+      for (let y = by; y < blockBottom; y += 1) {
+        for (let x = bx; x < blockRight; x += 1) {
+          const at = (y * width + x) * 4;
+          sumR += data[at];
+          sumG += data[at + 1];
+          sumB += data[at + 2];
+          count += 1;
+        }
+      }
+      // Rounded means; alpha forced opaque (R-13 / A-01). Integer division of
+      // the fixed-point sum keeps every pixel of a block byte-identical.
+      const meanR = Math.round(sumR / count);
+      const meanG = Math.round(sumG / count);
+      const meanB = Math.round(sumB / count);
+      for (let y = by; y < blockBottom; y += 1) {
+        for (let x = bx; x < blockRight; x += 1) {
+          const at = (y * width + x) * 4;
+          data[at] = meanR;
+          data[at + 1] = meanG;
+          data[at + 2] = meanB;
+          data[at + 3] = MASK_ALPHA_OPAQUE;
+        }
+      }
+    }
   }
 }
