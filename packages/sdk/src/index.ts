@@ -32,6 +32,7 @@ import {
   type CaptureFlow,
   type Draft,
 } from './capture/pipeline.ts';
+import type { EncodedImage } from './image/encode.ts';
 import { HOST_CSS, mountHost, type WatchbugHost } from './widget/host.ts';
 import { createLauncher, LAUNCHER_CSS, type Launcher } from './widget/launcher.ts';
 import {
@@ -260,15 +261,36 @@ export function init(options: WatchbugInitOptions): void {
     const current = draft;
     if (current === null) return;
     if (screen !== 'composer' && screen !== 'review') return;
-    if (current.image !== null) {
+    // The encode is the one long await in this lane (the ladder runs up to
+    // eighteen passes) and every surface stays live during it: Discard, a new
+    // gesture and the editor can all move the machine underneath. Remember
+    // the generation this resolution belongs to and re-validate AFTER the
+    // await — the same guard `composer.runAnnotate` already applies (P3-D-13).
+    const screenAtStart = screen;
+    const imageAtStart = current.image;
+    if (imageAtStart !== null) {
+      let encoded: EncodedImage;
       try {
-        current.encoded = await encodeFinal(current.image, current.t1, current.masks);
+        encoded = await encodeFinal(imageAtStart, current.t1, current.masks);
       } catch {
+        // A stale failure surfaces nothing: the draft it belonged to is gone.
+        if (draft !== current || screen !== screenAtStart || current.image !== imageAtStart) {
+          return;
+        }
         // No sendable artifact (a fail-closed pixel replay or an engine that
         // will not encode): the loud capture-failure state, nothing sent (M-6).
         onView({ kind: 'failed', failure: 'capture' });
         return;
       }
+      // Generation check: a discard (`draft === null`), a replacement draft, a
+      // screen change or a swapped frame during the encode abandons this
+      // resolution entirely. Without it a stale artifact could flip the router
+      // to `review` over a dead draft (every surface hidden, launcher disabled
+      // — a soft lock), or land `encoded` on a draft the user never reviewed.
+      if (draft !== current || screen !== screenAtStart || current.image !== imageAtStart) {
+        return;
+      }
+      current.encoded = encoded;
     } else {
       // The composer only calls onReview outside the degraded state; belt
       // and braces, normalize an un-chosen draft to text-only here so no
