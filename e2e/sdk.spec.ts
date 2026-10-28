@@ -3946,6 +3946,11 @@ test('ANN-04: a text label is click-typed-confirmed without a modal', async ({
   const image = await drawAndSend(page, browserName, async () => {
     await typeLabel(page, [110, 90], 'primera', 'enter');
     await typeLabel(page, [110, 130], 'segunda', 'outside');
+    // Escape CANCELS: a third label typed then dismissed commits nothing —
+    // and it does NOT close the editor (the input owns Escape while open).
+    await typeLabel(page, [60, 250], 'borrador', 'escape');
+    const stillOpen = await probeWidget(page);
+    expect(stillOpen.editorOpen, 'Escape in the label input does not close the editor').toBe(true);
     // No modal was created by the label flow (P3-D-08): the only surface the
     // walk touched is the inline input.
     const modals = await page.evaluate(
@@ -3960,6 +3965,7 @@ test('ANN-04: a text label is click-typed-confirmed without a modal', async ({
     boxes: [
       { left: 104, top: 74, right: 230, bottom: 96 },
       { left: 104, top: 114, right: 230, bottom: 136 },
+      { left: 54, top: 234, right: 140, bottom: 256 },
     ],
   });
   expect(ink.boxes[0], 'the Enter-committed label rendered at its anchor').toBeGreaterThanOrEqual(8);
@@ -3967,6 +3973,7 @@ test('ANN-04: a text label is click-typed-confirmed without a modal', async ({
     ink.boxes[1],
     'the click-outside-committed label rendered at its anchor',
   ).toBeGreaterThanOrEqual(8);
+  expect(ink.boxes[2], 'the Escape-cancelled label drew nothing at its anchor').toBe(0);
 });
 
 test('ANN-04 empty: confirming an empty label draws nothing', async ({ page, browserName }) => {
