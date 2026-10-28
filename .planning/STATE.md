@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 03
 current_phase_name: Report Composer & Annotation Editor (lazy)
 status: executing
-stopped_at: Completed 03-03-PLAN.md
-last_updated: "2026-10-28T16:46:18.040Z"
+stopped_at: Completed 03-02-PLAN.md
+last_updated: "2026-10-28T17:54:18.775Z"
 last_activity: 2026-10-28
 last_activity_desc: Phase 03 execution started
-state_head: 01fe093445c5f59e27def407c60453a6ef313db3
+state_head: 3ac533023aef29a1f45237f9bcf7f4f86cb3988b
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 16
-  completed_plans: 11
+  completed_plans: 12
   percent: 29
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-13)
 ## Current Position
 
 Phase: 03 (Report Composer & Annotation Editor (lazy)) — EXECUTING
-Plan: 3 of 7
+Plan: 4 of 7
 Status: Ready to execute
 Last activity: 2026-10-28 — Phase 03 execution started
 
@@ -68,6 +68,7 @@ Progress: [███░░░░░░░] 29%
 | Phase 02 P05 | 60min | 3 tasks | 6 files |
 | Phase 03 P01 | 25min | 3 tasks | 9 files |
 | Phase 03 P03 | 84 min | 3 tasks | 14 files |
+| Phase 03 P02 | 17min | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -132,6 +133,10 @@ Recent decisions affecting current work:
 - [Phase 03]: 03-03: capture failures still route to the Phase-2 status panel (blank/oversize to the blank bucket, denied/no-api to the capture bucket) until 03-04 mounts the degraded composer; the failure rows stay green; 03-07 re-points them
 - [Phase 03]: 03-03: i18n split decided: core carries launcher/status/action/composer/review/mask-confirm/i18n copy in BOTH locales; the lazy chunk carries editor.* only (03-05); locale override is session-scoped in memory, never host storage (SEC-03 / UI-SPEC A-1)
 - [Phase 03]: 03-03: encoding happens at Review entry and the review canvas renders the DECODED outgoing blob — shown bytes are sent bytes; Send transmits that same blob with no re-encode (T-03-17)
+- [Phase 03]: 03-02: JPEG admitted on the 3-byte FF D8 FF prefix only — never the JFIF 4-byte form, because libvips output starts SOI-DQT (FF DB); proven by round-trip re-submission of the served bytes at artifact level, no unit test
+- [Phase 03]: 03-02: oversize decode-bomb fixture uses the plan-sanctioned synthetic-SOF route — a real 64x64 chromium JPEG with the SOFn re-declared 8000x8192 (both sides under MAX_IMAGE_DIM so the PIXELS arm is the one that answers); a 64 MP browser canvas is memory-flaky and never needed because the guard reads only the header
+- [Phase 03]: 03-02: validateStructure's JPEG arm passes bytes through UNCHANGED with the written rationale (no entropy-scan walker; the sharp root re-encode is the control; the header guard precedes it); every ingest stage is now an exhaustive switch(ext) with a never-guard default that fails closed — the three plan prohibitions are structurally enforced and flagged human-judgment for the verifier
+- [Phase 03]: 03-02: sharp autoOrient: true is mandatory and carries a never-remove rationale in the harden.ts docblock; the Orientation=6 fixture row proves it (80x40 stored as 40x80, no Exif substring in the served container)
 
 ### Pending Todos
 
@@ -176,6 +181,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-28T16:45:49.010Z
-Stopped at: Completed 03-03-PLAN.md
+Last session: 2026-10-28T17:54:18.027Z
+Stopped at: Completed 03-02-PLAN.md
 Resume file: None
