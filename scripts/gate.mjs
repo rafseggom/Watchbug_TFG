@@ -234,9 +234,13 @@ const RULES = [
           }
           // A LITERAL dynamic import is analyzable — esbuild would inline the
           // chunk into core (Pitfall 1). The loader's variable specifier is the
-          // only legal shape, and it names no path here.
-          const dyn = /\bimport\s*\(\s*['"]([^'"]+)['"]/.exec(line);
-          if (dyn && isLazySpec(dyn[1])) {
+          // only legal shape, and it names no path here. All three literal
+          // quote styles count: a backtick template with no substitution is
+          // constant-folded by esbuild exactly like a string literal, so a
+          // dynamic import written in backticks inlines the lane just the same
+          // (LW-04).
+          const dyn = /\bimport\s*\(\s*(['"`])((?:(?!\1)[^\\]|\\.)*)\1/.exec(line);
+          if (dyn && isLazySpec(dyn[2])) {
             offenders.push(`literal dynamic import inlines the lane →  ${at}`);
           }
           const from = /\bfrom\s+['"]([^'"]+)['"]/.exec(line);
