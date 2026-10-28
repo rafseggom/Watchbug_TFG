@@ -65,8 +65,16 @@ export interface ComposerHandlers {
   onReplace?: (draft: Draft) => void;
   onAttach?: (draft: Draft) => void;
   onContinueTextOnly?: (draft: Draft) => void;
-  /** The A-7 EN/ES pair; a locale change is a re-render, never a re-lookup. */
+  /** A locale change is a re-render, never a re-lookup. */
   onLocaleChange?: (locale: LocaleCode) => void;
+  /**
+   * A background lane (the file attach) mutated the draft the router is
+   * showing. The composer never re-shows itself directly: the router re-renders
+   * the CURRENT screen, so a surface that does not own the screen can never
+   * come back underneath another one (WR-01). Required, not optional: a
+   * mutation with no re-render would leave a stale preview on screen.
+   */
+  onDraftMutated: (draft: Draft) => void;
   /** Router transitions for the editor screen (03-05): the editor lives
    * between the composer opens and closes; `data-wb-screen` follows. */
   onEditorOpen?: (draft: Draft) => void;
@@ -613,11 +621,33 @@ export function createComposer(
    */
   const manualCapture = createManualFileCapture();
   let attaching = false;
+  /** The editor chunk fetch in flight (declared here so the busy matrix owns
+   * both lanes — one place decides which action may start). */
+  let annotating = false;
 
   const setAttaching = (busy: boolean): void => {
     attaching = busy;
     composer.setAttribute('data-wb-attaching', busy ? 'true' : 'false');
-    for (const button of [attachButton, noticeAttachButton, replaceButton]) {
+    updateBusyButtons();
+  };
+
+  /**
+   * ONE authority for the busy-lane disable matrix (WR-01). The attach decode
+   * and the annotate chunk fetch are both async and both rewrite
+   * `draft.image`, so no second lane may start while either runs — that
+   * includes `Review report`, whose encode would otherwise resolve into the
+   * review while a late attach re-showed the composer underneath it, leaving
+   * `Send report` to throw out of `pendingFor`.
+   */
+  const updateBusyButtons = (): void => {
+    const busy = attaching || annotating;
+    for (const button of [
+      attachButton,
+      noticeAttachButton,
+      replaceButton,
+      annotateButton,
+      reviewButton,
+    ]) {
       button.disabled = busy;
     }
   };
@@ -649,11 +679,9 @@ export function createComposer(
    * (T-03-21: never a dead button; the loader cleared its memo, so a retry
    * can succeed).
    */
-  let annotating = false;
-
   const setAnnotateLoading = (busy: boolean): void => {
     annotating = busy;
-    annotateButton.disabled = busy;
+    updateBusyButtons();
     if (busy) {
       annotateButton.setAttribute('data-wb-loading', 'true');
       annotateButton.textContent = '';
@@ -691,7 +719,9 @@ export function createComposer(
 
   const runAnnotate = (): void => {
     const current = draft;
-    if (current === null || annotating || current.image === null) return;
+    // One lane at a time (WR-01): an in-flight attach owns `draft.image`, and
+    // the editor must not open over a frame that is about to be replaced.
+    if (current === null || annotating || attaching || current.image === null) return;
     const base = current.image;
     setAnnotateLoading(true);
     clearEditorError();
@@ -743,7 +773,9 @@ export function createComposer(
   };
 
   const openPicker = (): void => {
-    if (attaching || draft === null) return;
+    // The mirror of `runAnnotate`'s guard: no picker while the editor chunk is
+    // fetching, and none while another decode is already running (WR-01).
+    if (attaching || annotating || draft === null) return;
     fileInput.click();
   };
 
@@ -752,8 +784,13 @@ export function createComposer(
     // Reset the picker value up front so selecting the SAME file again still
     // fires a change event (replace-after-rejection is a real walk).
     fileInput.value = '';
-    if (draft === null || file === undefined) return;
+    // The generation this decode belongs to (WR-01): the composer may be
+    // discarded, replaced or closed while `createImageBitmap` runs, and a late
+    // resolution must never write this file's bytes onto another draft.
+    const target = draft;
+    if (target === null || file === undefined) return;
     if (attaching) return;
+    const imageAtStart = target.image;
     setAttaching(true);
     clearAttachError();
     // A-05/P3-D-15: the attachment enters as pixels through the same seam the
@@ -765,22 +802,30 @@ export function createComposer(
     void manualCapture
       .capture({ beforeRead: () => undefined, file })
       .then((image) => {
-        const current = draft;
-        if (current === null) return;
-        current.image = image;
-        current.t1 = [];
-        current.masks = [];
+        // Discarded (`draft === null`, composer closed) or replaced draft, or a
+        // frame swapped by the editor while the decode ran: abandon silently.
+        // `open` is false whenever another surface owns the screen (the
+        // router's `showScreen` renders the composer with `null`), so a
+        // background attach can never re-show the composer under the review.
+        if (!open || draft !== target || target.image !== imageAtStart) return;
+        target.image = image;
+        target.t1 = [];
+        target.masks = [];
         // A picked file's pixel grid has nothing to do with the display, so the
         // captured frame's scale no longer describes it: the neutral `1` keeps
         // the pixelation floor measured in the attachment's own pixels (CAP-02).
-        current.bitmapPerCssPx = 1;
-        current.encoded = null;
-        current.captureNote = null;
-        render(current);
+        target.bitmapPerCssPx = 1;
+        target.encoded = null;
+        target.captureNote = null;
+        // Through the router, never `render()`: the composer re-renders only if
+        // it still owns the screen (WR-01).
+        handlers.onDraftMutated(target);
       })
       .catch(() => {
         // Every rejection class (format/size/decode, and anything else the
-        // engine raises) is the same visible refusal (M-6: never silent).
+        // engine raises) is the same visible refusal (M-6: never silent) — but
+        // only while this decode still belongs to the shown draft.
+        if (!open || draft !== target || target.image !== imageAtStart) return;
         showAttachError();
       })
       .finally(() => {

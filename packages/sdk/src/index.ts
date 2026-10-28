@@ -306,6 +306,13 @@ export function init(options: WatchbugInitOptions): void {
       onReview: () => {
         void reviewDraft();
       },
+      // The file lane mutated the draft in place (attach). Re-render through the
+      // router so only the surface that currently owns the screen re-draws: a
+      // background attach must never re-show the composer underneath the
+      // review (WR-01).
+      onDraftMutated: () => {
+        showScreen(screen);
+      },
       // Discard (button or Escape) drops the draft without confirmation
       // (UI-SPEC A-4) and re-arms the launcher (P3-D-04).
       onDiscard: () => {
@@ -353,7 +360,15 @@ export function init(options: WatchbugInitOptions): void {
     // two surfaces, so `Edit report` lands back on the same fields/image.
     onEdit: () => showScreen('composer'),
     onSend: (current) => {
-      void flowRef.current?.send(current);
+      const active = flowRef.current;
+      if (active === null) return;
+      // `pendingFor` throws when `encoded` is absent (a send from a state that
+      // never composed an artifact). That throw must never become an unhandled
+      // rejection behind a dead button: surface the loud failure, nothing sent
+      // (M-6 / WR-01).
+      void active.send(current).catch(() => {
+        onView({ kind: 'failed', failure: 'capture' });
+      });
     },
   });
 
