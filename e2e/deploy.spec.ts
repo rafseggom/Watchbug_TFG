@@ -16,8 +16,12 @@ test('panel root returns the SPA shell (DEP-01)', async ({ page }) => {
   const response = await page.goto('/');
   expect(response?.status()).toBe(200);
   await expect(page.locator('#root')).toBeAttached();
-  // The bundle is loaded and the React tree rendered the app frame.
-  await expect(page.getByRole('heading', { name: 'Watchbug' })).toBeVisible();
+  // The bundle is loaded and the React tree rendered the app frame. `exact`
+  // is load-bearing: the shared stack holds real incidents, and the detail
+  // pane's incident-title <h2> also contains "Watchbug" (e.g. the fixture's
+  // default title) — a substring match resolves to both elements and fails
+  // strict mode (cross-row interference found by the 02-05 full-suite run).
+  await expect(page.getByRole('heading', { name: 'Watchbug', exact: true })).toBeVisible();
 });
 
 test('panel document ships the full CSP plus the header pair (S-4)', async ({ page }) => {
@@ -42,8 +46,9 @@ test('panel document ships the full CSP plus the header pair (S-4)', async ({ pa
   expect(response?.headers()['x-content-type-options']).toBe('nosniff');
   expect(response?.headers()['referrer-policy']).toBe('same-origin');
 
-  // The bundle rendered under the policy.
-  await expect(page.getByRole('heading', { name: 'Watchbug' })).toBeVisible();
+  // The bundle rendered under the policy (exact: see the DEP-01 note above —
+  // an incident title in the detail pane must never satisfy this heading).
+  await expect(page.getByRole('heading', { name: 'Watchbug', exact: true })).toBeVisible();
 
   // Self-DoS guard: the policy must not refuse any of the panel's own loads.
   const violations = consoleMessages.filter((text) => /Content Security Policy|Refused to/.test(text));

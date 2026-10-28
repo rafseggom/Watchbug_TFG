@@ -393,6 +393,25 @@ bundle; R-01 and the SDK's zero-runtime-dependency rule are untouched). Taken as
 policy. Decision trace: owner answer "Selecciona la opción 1 … deja constancia de esta
 adición de dependencias de desarrollo en el documento correspondiente".
 
+### A-14 · OQ-2 closed — the webkit/WebP fallback premise is false on this platform (probe evidence 2026-10-17)
+
+`playwright.config.ts` and the release-criteria wording say the webkit project "exercises the silent WebP→PNG fallback (R-11)". **That premise is false on this host.** Recorded here as a *note* — plan 02-05 Task 3 explicitly keeps this a documentation entry: **R-12 (verification policy) and its release-criteria wording are NOT edited by this amendment.**
+
+What was actually observed:
+
+| Observation | Evidence |
+|---|---|
+| Playwright's WebKit (1.63.0, WinCairo, Windows) encodes **real WebP** — `toBlob(…, 'image/webp')` returns `RIFF….WEBP` magic bytes, `blob.type` matching magic in all three engines | capability probe, **2026-10-17** (02-RESEARCH Pitfall 3) |
+| The same WebKit build sometimes answers a WebP request with a **zero-byte blob still labelled `image/webp`** (spec says fall back to PNG; this build does neither) | runtime observation, 02-02 (encode-ladder hardening, commit `e7cb5f2`) |
+| No engine on this host reproduces real macOS Safari's silent PNG fallback; Safari proper remains untestable here | research premise R-11/M-3 |
+
+**Consequences (corrected premise):**
+
+- **Magic-byte sniffing is the authority**, not the transport label: the SDK's capability probe validates `RIFF`/`WEBP` at offsets 0/8 before caching WebP support, and `encodeLadder` rejects any zero-byte encode loudly (02-02). `blob.type === 'image/webp'` alone is a claim, never evidence.
+- **M-3 (WebP→PNG silent-fallback) coverage is provoked by stub, not assumed from the engine**: the `forcePngEncode` stub makes a `.png` / `image/png` multipart part that the real API accepts with 201 (`M-3:` row, green on chromium + firefox + webkit).
+- The **webkit project stays** — it still covers engine-divergent rendering and the `CaptureSource`-seam capture tier — and the `playwright.config.ts` header comment now says this instead of the old fallback claim.
+- **Flagged for the owner (not rewritten here):** `.planning/REQUIREMENTS.md` release criteria still contains the clause "webkit exercises the WebP→PNG fallback" — a wording delta this plan is not authorised to edit (plan 02-05 flagged-assumptions).
+
 ### Still open
 
 - **Q-05** — university IP policy before the repo is public (release gate).

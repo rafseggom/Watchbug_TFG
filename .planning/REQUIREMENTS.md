@@ -35,7 +35,7 @@ A requirement is **Complete** when:
 3. Its security-sensitive behaviour is verified at the **artifact level** (encoded bytes, HTTP response, stored row), not at a function boundary.
 4. It is committed, and the change is reflected in `.planning/ROADMAP.md` traceability.
 
-**Release criteria:** `npm run check:size` passes · the e2e suite passes CA-01…CA-05 on all three Playwright browser projects (chromium, firefox, **webkit** — webkit exercises the WebP→PNG fallback, firefox the no-`ImageCapture` path) · `docker-compose up` brings up three working services from a clean machine using only `.env.example` as a guide · no secret exists in the repository.
+**Release criteria:** `npm run check:size` passes · the e2e suite passes CA-01…CA-05 on all three Playwright browser projects (chromium, firefox, **webkit** — webkit covers engine-divergent rendering and the `CaptureSource`-seam capture tier; the silent WebP→PNG fallback is covered by the forced-PNG stub because this platform's WebKit encodes real WebP (A-14); firefox covers the no-`ImageCapture` path) · `docker-compose up` brings up three working services from a clean machine using only `.env.example` as a guide · no secret exists in the repository.
 
 ---
 
@@ -43,28 +43,28 @@ A requirement is **Complete** when:
 
 ### Integration
 
-- [ ] **INT-01**: A developer can add Watchbug to a web app with a single async script tag and no build step
-- [ ] **INT-02**: A developer can initialise Watchbug with a public project key and options via `window.Watchbug.init()`
+- [x] **INT-01**: A developer can add Watchbug to a web app with a single async script tag and no build step
+- [x] **INT-02**: A developer can initialise Watchbug with a public project key and options via `window.Watchbug.init()`
 - [ ] **INT-03**: A developer can attach `user`, `appVersion` and `custom` context at init and have it ride on every report
 - [ ] **INT-04**: A developer can turn off end-user identity collection with `privacy: { userIdentity: false }`
-- [ ] **INT-05**: A developer can consume Watchbug as an ES module instead of a global
+- [x] **INT-05**: A developer can consume Watchbug as an ES module instead of a global
 
 ### Widget & Isolation
 
-- [ ] **WDG-01**: An end user can open the widget from a floating launcher button
-- [ ] **WDG-02**: Hostile host CSS (e.g. `* { display: none !important }`) cannot hide, restyle or break the widget
-- [ ] **WDG-03**: The widget never leaks styles, classes or CSS variables into the host document
-- [ ] **WDG-04**: The host page gains exactly one global (`window.Watchbug`) and no native prototype is modified
-- [ ] **WDG-05**: The widget renders above all host content regardless of host stacking context or layout
+- [x] **WDG-01**: An end user can open the widget from a floating launcher button
+- [x] **WDG-02**: Hostile host CSS (e.g. `* { display: none !important }`) cannot hide, restyle or break the widget
+- [x] **WDG-03**: The widget never leaks styles, classes or CSS variables into the host document
+- [x] **WDG-04**: The host page gains exactly one global (`window.Watchbug`) and no native prototype is modified
+- [x] **WDG-05**: The widget renders above all host content regardless of host stacking context or layout
 - [ ] **WDG-06**: An end user can use the widget in English or Spanish, auto-matched to browser language with a manual override
 
 ### Capture
 
-- [ ] **CAP-01**: An end user can capture a screenshot of the current tab via the browser's capture prompt
+- [x] **CAP-01**: An end user can capture a screenshot of the current tab via the browser's capture prompt
 - [ ] **CAP-02**: An end user can attach an image from their device instead of capturing
 - [ ] **CAP-03**: An end user sees a clear failure state when capture is unavailable and can still file text-only feedback
-- [ ] **CAP-04**: A capture never contains the Watchbug widget itself
-- [ ] **CAP-05**: Captures are downscaled to fit ≤ 16 MP and ≤ 2 MB without going blank on HiDPI displays
+- [x] **CAP-04**: A capture never contains the Watchbug widget itself
+- [x] **CAP-05**: Captures are downscaled to fit ≤ 16 MP and ≤ 2 MB without going blank on HiDPI displays
 
 ### Annotation
 
@@ -77,12 +77,12 @@ A requirement is **Complete** when:
 
 ### Privacy & Masking
 
-- [ ] **PRV-01**: `input[type=password]` values are excluded from the capture automatically
-- [ ] **PRV-02**: Credential, token and payment-card patterns are redacted automatically
-- [ ] **PRV-03**: Elements marked `data-watchbug-sensitive` are redacted automatically
+- [x] **PRV-01**: `input[type=password]` values are excluded from the capture automatically
+- [x] **PRV-02**: Credential, token and payment-card patterns are redacted automatically
+- [x] **PRV-03**: Elements marked `data-watchbug-sensitive` are redacted automatically
 - [ ] **PRV-04**: A masked region is destroyed at the pixel level and is unrecoverable from the encoded image
-- [ ] **PRV-05**: The SDK never reads or transmits host cookies, storage or auth headers
-- [ ] **PRV-06**: URL query strings and fragments are stripped before transmission
+- [x] **PRV-05**: The SDK never reads or transmits host cookies, storage or auth headers
+- [x] **PRV-06**: URL query strings and fragments are stripped before transmission
 - [ ] **PRV-07**: An end user can review and edit the capture before it is sent
 
 ### Payload & Enrichment
@@ -141,10 +141,10 @@ A requirement is **Complete** when:
 
 ### Performance Budget
 
-- [ ] **PRF-01**: The injected script is ≤ 45 KB gzipped; the build fails otherwise (RNF-01)
+- [x] **PRF-01**: The injected script is ≤ 45 KB gzipped; the build fails otherwise (RNF-01)
 - [ ] **PRF-02**: Each lazy chunk is ≤ 25 KB gzipped (R-01)
 - [ ] **PRF-03**: Total runtime client payload is ≤ 80 KB gzipped (R-01)
-- [ ] **PRF-04**: The client SDK ships zero runtime npm dependencies (R-01)
+- [x] **PRF-04**: The client SDK ships zero runtime npm dependencies (R-01)
 - [ ] **PRF-05**: Injecting Watchbug lowers Lighthouse performance by ≤ 2 points (CA-03)
 
 ---
@@ -212,34 +212,34 @@ Which phases cover which requirements. **Updated during roadmap creation** — e
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INT-01 | Phase 2 | Pending |
-| INT-02 | Phase 2 | Pending |
+| INT-01 | Phase 2 | Complete |
+| INT-02 | Phase 2 | Complete |
 | INT-03 | Phase 4 | Pending |
 | INT-04 | Phase 4 | Pending |
-| INT-05 | Phase 2 | Pending |
-| WDG-01 | Phase 2 | Pending |
-| WDG-02 | Phase 2 | Pending |
-| WDG-03 | Phase 2 | Pending |
-| WDG-04 | Phase 2 | Pending |
-| WDG-05 | Phase 2 | Pending |
+| INT-05 | Phase 2 | Complete |
+| WDG-01 | Phase 2 | Complete |
+| WDG-02 | Phase 2 | Complete |
+| WDG-03 | Phase 2 | Complete |
+| WDG-04 | Phase 2 | Complete |
+| WDG-05 | Phase 2 | Complete |
 | WDG-06 | Phase 3 | Pending |
-| CAP-01 | Phase 2 | Pending |
+| CAP-01 | Phase 2 | Complete |
 | CAP-02 | Phase 3 | Pending |
 | CAP-03 | Phase 3 | Pending |
-| CAP-04 | Phase 2 | Pending |
-| CAP-05 | Phase 2 | Pending |
+| CAP-04 | Phase 2 | Complete |
+| CAP-05 | Phase 2 | Complete |
 | ANN-01 | Phase 3 | Pending |
 | ANN-02 | Phase 3 | Pending |
 | ANN-03 | Phase 3 | Pending |
 | ANN-04 | Phase 3 | Pending |
 | ANN-05 | Phase 3 | Pending |
 | ANN-06 | Phase 3 | Pending |
-| PRV-01 | Phase 2 | Pending |
-| PRV-02 | Phase 2 | Pending |
-| PRV-03 | Phase 2 | Pending |
+| PRV-01 | Phase 2 | Complete |
+| PRV-02 | Phase 2 | Complete |
+| PRV-03 | Phase 2 | Complete |
 | PRV-04 | Phase 3 | Pending |
-| PRV-05 | Phase 2 | Pending |
-| PRV-06 | Phase 2 | Pending |
+| PRV-05 | Phase 2 | Complete |
+| PRV-06 | Phase 2 | Complete |
 | PRV-07 | Phase 3 | Pending |
 | ENR-01 | Phase 4 | Pending |
 | ENR-02 | Phase 4 | Pending |
@@ -277,10 +277,10 @@ Which phases cover which requirements. **Updated during roadmap creation** — e
 | DEP-02 | Phase 1 | Complete |
 | DEP-03 | Phase 5 | Pending |
 | DEP-04 | Phase 7 | Pending |
-| PRF-01 | Phase 2 | Pending |
+| PRF-01 | Phase 2 | Complete |
 | PRF-02 | Phase 3 | Pending |
 | PRF-03 | Phase 3 | Pending |
-| PRF-04 | Phase 2 | Pending |
+| PRF-04 | Phase 2 | Complete |
 | PRF-05 | Phase 7 | Pending |
 
 **Coverage:**
