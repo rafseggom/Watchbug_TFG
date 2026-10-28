@@ -30,7 +30,14 @@ import { transformFor } from '../redact/geometry.ts';
 import type { MaskPatch } from '../redact/masks.ts';
 import { setEditorLocale } from '../strings.editor.ts';
 import type { AnnotatorOpenOptions, AnnotatorResult } from '../annotator.ts';
-import { createEditorShell, injectEditorCss, type ToolName } from './editor-dom.ts';
+import {
+  createEditorShell,
+  currentMaskStyle,
+  injectEditorCss,
+  isMaskConfirmed,
+  markMaskConfirmed,
+  type ToolName,
+} from './editor-dom.ts';
 import { bakeMask, blockSizeFor, capHeightPx, rebakeMasks } from './masks.ts';
 import {
   drawFreehandSegment,
@@ -52,7 +59,7 @@ export function createEditor(options: AnnotatorOpenOptions): Promise<AnnotatorRe
     setEditorLocale(options.locale);
     injectEditorCss(options.mount);
 
-    const shell = createEditorShell();
+    const shell = createEditorShell(options.maskConfirm);
     options.mount.appendChild(shell.root);
 
     const canvas = shell.canvas;
@@ -125,6 +132,9 @@ export function createEditor(options: AnnotatorOpenOptions): Promise<AnnotatorRe
     let activeTool: ToolName = 'freehand';
     const selectTool = (tool: ToolName): void => {
       activeTool = tool;
+      // The CSS-keyed `.mask-mode` toggle visibility (P3-D-10: shown only
+      // while the mask tool is active) hangs off this attribute.
+      shell.root.setAttribute('data-wb-active-tool', tool);
       shell.canvas.style.cursor = tool === 'text' ? 'text' : 'crosshair';
       for (const [name, button] of shell.tools) {
         button.setAttribute('aria-pressed', String(name === tool));
@@ -144,6 +154,9 @@ export function createEditor(options: AnnotatorOpenOptions): Promise<AnnotatorRe
 
     const onPointerDown = (event: PointerEvent): void => {
       if (event.pointerType === 'mouse' && event.button !== 0) return;
+      // While the mask confirmation is open it owns the interaction — no new
+      // drag starts behind the modal (P3-D-09).
+      if (shell.maskDialog.isOpen()) return;
       // The text tool anchors a label on `click`, NOT on `pointerdown`: the
       // same click's mousedown would otherwise steal focus from the freshly
       // opened input and its blur-commit would close it empty. `labelDown`
@@ -207,27 +220,75 @@ export function createEditor(options: AnnotatorOpenOptions): Promise<AnnotatorRe
     };
 
     /**
-     * Bake the dragged rect into the canvas and the shared base (T2). The
-     * confirmation gate wraps THIS call (Task 2) — the bake itself stays one
-     * function. FAIL CLOSED: a geometry throw or a degenerate rect ABORTS the
-     * mask (nothing baked, drag discarded, the next redraw restores the
-     * preview) — never fill an approximate region while the real one stays
-     * visible.
+     * Destroy `rect` now (T2). The confirmation gate wraps the DRAG decision,
+     * the bake itself is one function. FAIL CLOSED: a geometry throw or a
+     * degenerate rect ABORTS the mask (nothing baked, drag discarded, the
+     * next redraw restores the preview) — never fill an approximate region
+     * while the real one stays visible.
      */
-    const commitMask = (from: [number, number], to: [number, number]): void => {
+    const bakeRect = (rect: { left: number; top: number; right: number; bottom: number }): void => {
+      try {
+        const style = currentMaskStyle();
+        // Pixelate measures the platform's own cap height per bake (never an
+        // assumed constant); fill ignores the block size.
+        const blockPx = style === 'pixelate' ? blockSizeFor(capHeightPx(context)) : 0;
+        // Append-only: the patch is destroyed pixels only, and it NEVER
+        // touches the stroke stack (ANN-06 / Pitfall 4).
+        masks.push(bakeMask(base, context, rect, style, blockPx));
+      } catch {
+        // Aborted — fail closed, the region stays as it was.
+      }
+    };
+
+    /** A mask drag awaiting its once-per-session confirmation. */
+    let pendingMask: { left: number; top: number; right: number; bottom: number } | null = null;
+
+    const maskToolButton = shell.tools.get('mask');
+    const closeMaskDialog = (): void => {
+      shell.maskDialog.hide();
+      // Focus returns to the mask tool button on close (UI-SPEC a11y).
+      maskToolButton?.focus();
+    };
+
+    shell.maskDialog.action.addEventListener('click', () => {
+      if (pendingMask === null) return;
+      const rect = pendingMask;
+      pendingMask = null;
+      bakeRect(rect);
+      // Every LATER mask of the session bakes on release without asking
+      // (P3-D-09) — the irreversibility moment is made explicit exactly once.
+      markMaskConfirmed();
+      closeMaskDialog();
+      redraw();
+    });
+    shell.maskDialog.cancel.addEventListener('click', () => {
+      // `Not now`: the pending mask is cancelled — nothing baked, the drag
+      // discarded; the next redraw restores the untouched region.
+      pendingMask = null;
+      closeMaskDialog();
+      redraw();
+    });
+
+    /**
+     * Commit the dragged rect: bake immediately once the session has
+     * confirmed, otherwise raise the alertdialog over the editor (focus on
+     * the `Mask` action, `Escape` = `Not now`; the dialog owns Escape while
+     * open — its keydown handler stops the event before the document-level
+     * Escape-to-Done listener, Pitfall 11).
+     */
+    const requestMaskCommit = (from: [number, number], to: [number, number]): void => {
       const rect = {
         left: Math.min(from[0], to[0]),
         top: Math.min(from[1], to[1]),
         right: Math.max(from[0], to[0]) + 1,
         bottom: Math.max(from[1], to[1]) + 1,
       };
-      try {
-        // Append-only: the patch is destroyed pixels only, and it NEVER
-        // touches the stroke stack (ANN-06 / Pitfall 4).
-        masks.push(bakeMask(base, context, rect, 'fill', 0));
-      } catch {
-        // Aborted — fail closed, the region stays as it was.
+      if (isMaskConfirmed()) {
+        bakeRect(rect);
+        return;
       }
+      pendingMask = rect;
+      shell.maskDialog.show();
     };
 
     const onPointerUp = (event: PointerEvent): void => {
@@ -257,7 +318,7 @@ export function createEditor(options: AnnotatorOpenOptions): Promise<AnnotatorRe
         } else if (dragged.tool === 'mask') {
           const moved =
             dragged.to[0] !== dragged.from[0] || dragged.to[1] !== dragged.from[1];
-          if (moved) commitMask(dragged.from, dragged.to);
+          if (moved) requestMaskCommit(dragged.from, dragged.to);
         } else if (
           dragged.tool === 'arrow' ||
           dragged.tool === 'rectangle'

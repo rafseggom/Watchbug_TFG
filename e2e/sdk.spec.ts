@@ -46,14 +46,21 @@ import {
 } from './helpers/composer';
 import {
   analyzeInk,
+  analyzePixelation,
   canvasBox,
+  clickMaskDialogButton,
   clickOnBitmap,
   done,
   dragOnBitmap,
-  frameBitmapRect,
   dragMaskOnBitmap,
+  expectMaskConfirmation,
+  frameBitmapRect,
+  maskModeState,
+  measureBlockSize,
   openEditor,
   selectTool,
+  setMaskMode,
+  snapOutwardExpected,
   typeLabel,
   undo,
   undoKey,
@@ -4121,13 +4128,22 @@ const MASK_FRAME = { width: 640, height: 360 };
  * pixel to its bottom-right pixel (both inclusive), so the SDK's committed
  * rect is the marker's painted rect EXACTLY — the ring assertion then proves
  * the destruction landed where the independently-computed formula says it
- * did, instead of hiding a mapping error behind a generous drag.
+ * did, instead of hiding a mapping error behind a generous drag. The first
+ * drag of the session waits for the once-per-session confirmation (03-06
+ * Task 2): when the dialog is open it is answered with `Mask`; later drags
+ * bake silently. Rows that drive the dialog explicitly (ANN-05) call
+ * `dragMaskOnBitmap` directly instead.
  */
 async function maskDrag(
   page: Page,
   rect: { left: number; top: number; right: number; bottom: number },
 ): Promise<void> {
   await dragMaskOnBitmap(page, [rect.left, rect.top], [rect.right - 1, rect.bottom - 1]);
+  const asking = await page.evaluate(() => {
+    const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
+    return root?.querySelector('div.mask-dialog[data-shown="true"]') !== null;
+  });
+  if (asking) await clickMaskDialogButton(page, 'action');
 }
 
 /**
@@ -4140,7 +4156,12 @@ async function maskAndSend(
   page: Page,
   browserName: string,
   steps: (bitmap: { left: number; top: number; right: number; bottom: number }) => Promise<void>,
-  options: { frame?: { width: number; height: number }; dprCheck?: number } = {},
+  options: {
+    frame?: { width: number; height: number };
+    dprCheck?: number;
+    /** Lossless outgoing bytes (the pixelate mechanism row). */
+    forcePng?: boolean;
+  } = {},
 ): Promise<{
   image: Buffer;
   masked: CssRect;
@@ -4154,6 +4175,7 @@ async function maskAndSend(
     // must be pinned per-row rather than assumed).
     expect(await page.evaluate(() => window.devicePixelRatio)).toBe(options.dprCheck);
   }
+  if (options.forcePng === true) await forcePngEncode(page);
   await installCaptureStub(page, browserName, options.frame ? { frame } : {});
   await page.route(INCIDENT_POST_RE, async (route) => {
     if (route.request().method() !== 'POST') {
@@ -4210,4 +4232,211 @@ test('PRV-04 CA-02: a user mask destroys the region and its boundary ring — ze
   expect(report.width).toBe(640);
   expect(report.height).toBe(360);
   expectMaskedAndTargeted(report);
+});
+
+/* ------------------------------------------------------------------------- */
+/* ANN-05 + pixelate — 03-06 Task 2 (session confirmation, opt-in pixelate)   */
+/* ------------------------------------------------------------------------- */
+
+/** The second mask's BITMAP rect (row A's later-no-dialog mask): clear of the
+ * marker, the control region and the moving dot on the 640x360 default frame. */
+const MASK_B_RECT = { left: 320, top: 240, right: 440, bottom: 280 };
+/** Its viewport twin on the 0.5-scale default frame (bitmap / 0.5 = ×2). */
+const MASK_B_CSS: CssRect = {
+  left: MASK_B_RECT.left * 2,
+  top: MASK_B_RECT.top * 2,
+  right: MASK_B_RECT.right * 2,
+  bottom: MASK_B_RECT.bottom * 2,
+};
+
+test('ANN-05: the first mask asks, later masks do not', async ({ page, browserName }) => {
+  const { image, masked, viewport } = await maskAndSend(page, browserName, async (bitmap) => {
+    // First drag: the alertdialog comes up over the editor.
+    await dragMaskOnBitmap(page, [bitmap.left, bitmap.top], [bitmap.right - 1, bitmap.bottom - 1]);
+    const asking = await expectMaskConfirmation(page, true);
+    expect(asking.role, 'role="alertdialog"').toBe('alertdialog');
+    expect(asking.ariaModal, 'aria-modal="true"').toBe('true');
+    expect(asking.focusOnAction, 'focus moves to the Mask action on open').toBe(true);
+
+    // The locked copy renders in full and wraps inside the 360 px dialog
+    // (UI-SPEC long-text: word-boundary wraps, no truncation).
+    const dialogCopy = await page.evaluate(() => {
+      const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
+      const dialog = root?.querySelector('div.mask-dialog') as HTMLElement | null;
+      const title = (dialog?.querySelector('.mask-dialog-title') ?? null) as HTMLElement | null;
+      const body = (dialog?.querySelector('.mask-dialog-body') ?? null) as HTMLElement | null;
+      if (dialog === null || title === null || body === null) {
+        throw new Error('ANN-05: dialog parts missing');
+      }
+      const lineHeight = Number.parseFloat(window.getComputedStyle(body).lineHeight);
+      return {
+        title: title.textContent ?? '',
+        body: body.textContent ?? '',
+        dialogWidth: dialog.getBoundingClientRect().width,
+        // "wraps" = the body renders on more than one line at 360 px.
+        wrapped: body.getBoundingClientRect().height > lineHeight * 1.5,
+        overflowing: body.scrollWidth > body.clientWidth,
+      };
+    });
+    expect(dialogCopy.title, 'the core-resolved mask.confirm.title renders').toBe(
+      'Masking is permanent',
+    );
+    expect(
+      dialogCopy.body.endsWith('by you or anyone else.'),
+      'the full mask.confirm.body copy renders (no truncation)',
+    ).toBe(true);
+    expect(dialogCopy.dialogWidth, 'the dialog stays inside its 360 px budget').toBeLessThanOrEqual(
+      360,
+    );
+    expect(dialogCopy.wrapped, 'the body copy wraps at word boundaries').toBe(true);
+    expect(dialogCopy.overflowing, 'and never overflows the dialog box').toBe(false);
+
+    await clickMaskDialogButton(page, 'action');
+    const closed = await expectMaskConfirmation(page, false);
+    expect(closed.focusOnMaskTool, 'focus returns to the mask tool button on close').toBe(true);
+
+    // Second drag: no dialog, baked on release.
+    await dragMaskOnBitmap(
+      page,
+      [MASK_B_RECT.left, MASK_B_RECT.top],
+      [MASK_B_RECT.right - 1, MASK_B_RECT.bottom - 1],
+    );
+    const afterSecond = await expectMaskConfirmation(page, false);
+    expect(afterSecond.visible, 'the second mask of the session never re-asks').toBe(false);
+  });
+
+  // Both masks landed in the encoded artifact: the marker destroyed (the
+  // confirmed first mask) AND the second rect filled (the silent later one).
+  const first = await analyzeRedaction(page, image, {
+    viewport,
+    masked,
+    control: REDACTION_CONTROL_RECT,
+  });
+  expectMaskedAndTargeted(first);
+  const second = await analyzeRedaction(page, image, {
+    viewport,
+    masked: MASK_B_CSS,
+    control: REDACTION_CONTROL_RECT,
+  });
+  expectMaskedAndTargeted(second);
+});
+
+test('ANN-05 Not now: refusing the first mask bakes nothing, Escape does not close the editor', async ({
+  page,
+  browserName,
+}) => {
+  const { image, masked, viewport } = await maskAndSend(page, browserName, async (bitmap) => {
+    await dragMaskOnBitmap(page, [bitmap.left, bitmap.top], [bitmap.right - 1, bitmap.bottom - 1]);
+    const asking = await expectMaskConfirmation(page, true);
+    expect(asking.focusOnAction, 'Escape arrives while the Mask action owns focus').toBe(true);
+    // `Escape` means `Not now` — and ONLY the dialog acts on it (Pitfall 11 /
+    // T-03-26): the editor must not also dismiss.
+    await page.keyboard.press('Escape');
+    await expectMaskConfirmation(page, false);
+    const screen = await page.evaluate(
+      () =>
+        document.querySelector('watchbug-host')?.shadowRoot?.querySelector('.wrap')?.getAttribute(
+          'data-wb-screen',
+        ) ?? '',
+    );
+    expect(screen, 'the editor is still open after the dialog ate Escape').toBe('editor');
+    const stillAsking = await page.evaluate(() => {
+      const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
+      return root?.querySelector('div.mask-dialog[data-shown="true"]') !== null;
+    });
+    expect(stillAsking, 'and the dialog is gone').toBe(false);
+  });
+
+  // The refused region survives untouched in the decoded bytes: the pending
+  // mask was cancelled, nothing was baked.
+  const report = await analyzeRedaction(page, image, {
+    viewport,
+    masked,
+    control: REDACTION_CONTROL_RECT,
+  });
+  expectStillVisible(report);
+});
+
+test('ANN-05 mask-mode: the toggle shows only for the mask tool and defaults to fill', async ({
+  page,
+  browserName,
+}) => {
+  await installCaptureStub(page, browserName);
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+  await clickLauncher(page);
+  await waitForComposer(page);
+  await openEditor(page);
+
+  const hidden = await maskModeState(page);
+  expect(hidden.visible, 'no toggle while freehand is active').toBe(false);
+  expect(hidden.pressed, 'fill is the default, selected before the mask tool ever opens').toBe(
+    'fill',
+  );
+
+  await selectTool(page, 'mask');
+  const shown = await maskModeState(page);
+  expect(shown.visible, 'the pair appears while the mask tool is active').toBe(true);
+  expect(shown.pressed).toBe('fill');
+
+  await setMaskMode(page, 'pixelate');
+  const pixelated = await maskModeState(page);
+  expect(pixelated.pressed, 'the selection lands on pixelate').toBe('pixelate');
+
+  await selectTool(page, 'freehand');
+  const away = await maskModeState(page);
+  expect(away.visible, 'and hides again with the tool').toBe(false);
+
+  await selectTool(page, 'mask');
+  const back = await maskModeState(page);
+  expect(back.pressed, 'the mode survives between masks of the session').toBe('pixelate');
+});
+
+test('PRV-04 pixelate: block-averaged, grid-snapped and opaque', async ({ page, browserName }) => {
+  let blockPx = 0;
+  const expected = { left: 0, top: 0, right: 0, bottom: 0 };
+  const { image } = await maskAndSend(
+    page,
+    browserName,
+    async (bitmap) => {
+      // Opt in behind the toggle (P3-D-10), then drive the same drag.
+      blockPx = await measureBlockSize(page);
+      await setMaskMode(page, 'pixelate');
+      await maskDrag(page, bitmap);
+      const snapped = snapOutwardExpected(bitmap, blockPx);
+      expected.left = snapped.left;
+      expected.top = snapped.top;
+      expected.right = snapped.right;
+      expected.bottom = snapped.bottom;
+    },
+    { forcePng: true },
+  );
+
+  // The independently-snapped grid: outward-snapped anchors on grid lines.
+  // The uniformity check below then has teeth: a mask that did NOT snap (or
+  // snapped to a different grid) leaves raw gradient inside a full block of
+  // this one, and "every block internally uniform" fails on the edge blocks.
+  expect(expected.left % blockPx, 'the top-left anchors sit on the block grid').toBe(0);
+  expect(expected.top % blockPx, 'the top-right anchors sit on the block grid').toBe(0);
+  expect(expected.right % blockPx, 'the right edge sits on the block grid').toBe(0);
+  expect(expected.bottom % blockPx, 'the bottom edge sits on the block grid').toBe(0);
+  expect(expected.right, 'the snapped region is non-degenerate').toBeGreaterThan(expected.left);
+
+  const report = await analyzePixelation(page, image, expected, blockPx);
+  expect(report.pixels, 'the region holds real pixels').toBeGreaterThan(100);
+  expect(report.blockCount, 'the region tiles into full blocks').toBeGreaterThanOrEqual(4);
+  expect(report.notOpaque, 'every pixel of the region is alpha 255').toBe(0);
+  expect(report.nonUniformBlocks, 'every block is internally uniform (one mean)').toBe(0);
+  expect(
+    report.distinctColours,
+    'at most one colour per block — the block average, not fine detail',
+  ).toBeLessThanOrEqual(report.blockCount);
+  expect(
+    report.distinctColours,
+    'more than one colour: pixelate AVERAGED, it did not flat-fill',
+  ).toBeGreaterThan(1);
+  expect(
+    report.blackish / report.pixels,
+    'a block over the gradient keeps the gradient colour — no flat black',
+  ).toBeLessThan(0.5);
 });

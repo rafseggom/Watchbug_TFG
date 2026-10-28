@@ -316,6 +316,111 @@ export async function clickMaskDialogButton(
   }, which);
 }
 
+export interface PixelationReport {
+  /** Pixels inside the snapped region that are NOT alpha 255. */
+  notOpaque: number;
+  /** Full blocks that are not internally identical (one colour per block). */
+  nonUniformBlocks: number;
+  /** Exact distinct RGB triples inside the region. */
+  distinctColours: number;
+  /** Full `blockPx` blocks the region tiles into. */
+  blockCount: number;
+  /** Pixels counted inside the region (non-vacuity). */
+  pixels: number;
+  /** Near-black pixels — a flat FILL would be (almost) all of them, a
+   * block AVERAGE over the gradient keeps the region's colours. */
+  blackish: number;
+}
+
+/**
+ * The pixelate MECHANISM report over the outgoing bytes (03-06 Task 2): the
+ * PRV-04 pixelate row pairs this with `snapOutwardExpected` +
+ * `measureBlockSize` — all written independently of the SDK — and asserts:
+ * every block of the chosen size inside the outward-snapped region is
+ * internally identical (the block mean), every pixel is opaque, and the
+ * region holds at most one colour per block. Colour SURVIVAL is deliberately
+ * not asserted: a horizontally-uniform source is its own block mean
+ * (plan-flagged assumption). Run against a losslessly-encoded (forced-PNG)
+ * artifact so "identical" means byte-identical.
+ */
+export async function analyzePixelation(
+  page: Page,
+  bytes: Buffer,
+  region: { left: number; top: number; right: number; bottom: number },
+  blockPx: number,
+): Promise<PixelationReport> {
+  const base64 = bytes.toString('base64');
+  return page.evaluate(
+    async (payload) => {
+      const { binary, rect, block } = payload;
+      const raw = new Uint8Array(binary.length);
+      for (let at = 0; at < binary.length; at += 1) raw[at] = binary.charCodeAt(at);
+      const bitmap = await createImageBitmap(new Blob([raw.buffer as ArrayBuffer]));
+      const canvas = document.createElement('canvas');
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const context = canvas.getContext('2d');
+      if (context === null) throw new Error('analyzePixelation: a 2D canvas is unavailable');
+      context.drawImage(bitmap, 0, 0);
+      const image = context.getImageData(0, 0, canvas.width, canvas.height);
+      const data = image.data;
+      const width = canvas.width;
+      const left = Math.max(0, rect.left);
+      const top = Math.max(0, rect.top);
+      const right = Math.min(width, rect.right);
+      const bottom = Math.min(canvas.height, rect.bottom);
+      let notOpaque = 0;
+      let nonUniformBlocks = 0;
+      let blockCount = 0;
+      let pixels = 0;
+      let blackish = 0;
+      const colours = new Set<number>();
+      for (let by = top; by < bottom; by += block) {
+        const blockBottom = Math.min(bottom, by + block);
+        for (let bx = left; bx < right; bx += block) {
+          const blockRight = Math.min(right, bx + block);
+          const full = blockRight - bx === block && blockBottom - by === block;
+          let firstR = -1;
+          let firstG = -1;
+          let firstB = -1;
+          let uniform = true;
+          let counted = false;
+          for (let y = by; y < blockBottom; y += 1) {
+            for (let x = bx; x < blockRight; x += 1) {
+              const at = (y * width + x) * 4;
+              pixels += 1;
+              if (data[at + 3] !== 255) notOpaque += 1;
+              if (Math.max(data[at], data[at + 1], data[at + 2]) <= 24) blackish += 1;
+              colours.add((data[at] << 16) | (data[at + 1] << 8) | data[at + 2]);
+              if (firstR < 0) {
+                firstR = data[at];
+                firstG = data[at + 1];
+                firstB = data[at + 2];
+              } else if (data[at] !== firstR || data[at + 1] !== firstG || data[at + 2] !== firstB) {
+                uniform = false;
+              }
+              counted = true;
+            }
+          }
+          if (counted && full) {
+            blockCount += 1;
+            if (!uniform) nonUniformBlocks += 1;
+          }
+        }
+      }
+      return {
+        notOpaque,
+        nonUniformBlocks,
+        distinctColours: colours.size,
+        blockCount,
+        pixels,
+        blackish,
+      };
+    },
+    { binary: atob(base64), rect: { ...region }, block: blockPx },
+  );
+}
+
 /** A trusted click at a BITMAP point (text-tool anchoring). */
 export async function clickOnBitmap(page: Page, at: BitmapPoint): Promise<void> {
   const box = await canvasBox(page);
