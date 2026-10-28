@@ -2885,3 +2885,148 @@ test('PRV-07: review shows the flattened artifact and Send posts it exactly once
   expect(analysis.width, 'the sent image part decodes').toBeGreaterThan(0);
   expect(analysis.height).toBeGreaterThan(0);
 });
+
+test('P3-D-02: the title prefills from document.title truncated to 200 code points; empty blocks review', async ({
+  page,
+  browserName,
+}) => {
+  await installCaptureStub(page, browserName);
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+
+  // 300 code points = 500 UTF-16 units: the prefill must count CODE POINTS
+  // (the Zod `.max(MAX_TITLE_CHARS)` semantics the server validates against),
+  // and `maxlength` — which counts units — is deliberately absent (Pitfall 13).
+  const longTitle = `${'A'.repeat(100)}${'\u{1F600}'.repeat(200)}`;
+  expect([...longTitle].length).toBe(300);
+  await page.evaluate((title) => {
+    document.title = title;
+  }, longTitle);
+
+  await clickLauncher(page);
+  await waitForComposer(page);
+
+  const composing = await probeWidget(page);
+  const expectedPrefill = [...longTitle].slice(0, MAX_TITLE_CHARS).join('');
+  expect([...composing.composerTitle].length, 'prefill is exactly 200 code points').toBe(
+    MAX_TITLE_CHARS,
+  );
+  expect(composing.composerTitle).toBe(expectedPrefill);
+
+  // Emptying the field blocks the navigate to review — inline error, not a move.
+  await setTitle(page, '   ');
+  await clickComposerReview(page);
+  await page.waitForTimeout(300);
+  const blocked = await probeWidget(page);
+  expect(blocked.screen, 'review did not open on an empty title').toBe('composer');
+  expect(blocked.composerError).toBe('Add a title to continue.');
+  expect(blocked.composerTitleAriaInvalid).toBe('true');
+  expect(blocked.titleFocused, 'focus stays in the title field when blocked').toBe(true);
+
+  // Typing a title unblocks — same click now walks into review.
+  await setTitle(page, 'P3-D-02 recovered title');
+  await clickComposerReview(page);
+  await waitForReview(page);
+  const recovered = await probeWidget(page);
+  expect(recovered.reviewTitle).toBe('P3-D-02 recovered title');
+});
+
+test('P3-D-03: the segmented control defaults to bug, switches the heading, and reaches the wire', async ({
+  page,
+  browserName,
+}) => {
+  await installCaptureStub(page, browserName);
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+  await page.evaluate(() => {
+    document.title = 'P3-D-03 segmented report';
+  });
+
+  const calls = await interceptIncidentPosts(page, async () => ({
+    status: 201,
+    body: JSON.stringify({ id: INTERCEPTED_ID }),
+  }));
+
+  await clickLauncher(page);
+  await waitForComposer(page);
+  const initial = await probeWidget(page);
+  expect(initial.composerType, 'the default segment is bug').toBe('bug');
+  expect(initial.composerHeading).toBe('Report a bug');
+
+  await setType(page, 'feedback');
+  const switched = await probeWidget(page);
+  expect(switched.composerType).toBe('feedback');
+  expect(switched.composerHeading, 'the heading follows the segment').toBe('Send feedback');
+
+  await reviewAndSend(page);
+  await waitForHeadline(page, 'Report sent ✓', 15_000);
+  expect(calls).toHaveLength(1);
+  const meta = interceptedMeta(calls[0]);
+  expect(meta.type, 'the selected segment value reaches the wire').toBe('feedback');
+  expect(meta.title).toBe('P3-D-03 segmented report');
+});
+
+test('P3-D-04: the composer is a wide overlay replacing the 320 px panel; Escape returns to idle', async ({
+  page,
+  browserName,
+}) => {
+  await installCaptureStub(page, browserName);
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+
+  const calls = await interceptIncidentPosts(page, async () => ({
+    status: 201,
+    body: JSON.stringify({ id: INTERCEPTED_ID }),
+  }));
+
+  await clickLauncher(page);
+  await waitForComposer(page);
+  const composing = await probeWidget(page);
+  expect(
+    composing.composerWidth,
+    'the composition surface is wider than the 320 px status panel',
+  ).toBeGreaterThan(320);
+  expect(composing.panelHidden, 'the panel reports hidden while composing').toBe('true');
+  expect(composing.launcherDisabled, 'the launcher is disabled while the overlay is open').toBe(
+    true,
+  );
+
+  // Escape (and the discard button) drops the draft with no confirmation and
+  // re-arms the launcher (UI-SPEC A-4/A-7, P3-D-04).
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(
+    () => {
+      const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
+      return root?.querySelector('.wrap')?.getAttribute('data-wb-screen') === 'idle';
+    },
+    null,
+    { timeout: 5_000 },
+  );
+  const idle = await probeWidget(page);
+  expect(idle.screen).toBe('idle');
+  expect(idle.composerOpen).toBe(false);
+  expect(idle.launcherDisabled, 'the launcher is re-enabled after Escape').toBe(false);
+  await page.waitForTimeout(400);
+  expect(calls, 'Escape discards the draft; nothing was sent').toHaveLength(0);
+});
+
+test('P3-D-02 note counter: hidden at 3,999 code points and visible at 4,000', async ({
+  page,
+  browserName,
+}) => {
+  await installCaptureStub(page, browserName);
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+
+  await clickLauncher(page);
+  await waitForComposer(page);
+
+  await setNote(page, 'a'.repeat(3999));
+  const below = await probeWidget(page);
+  expect(below.composerCounterShown, 'the counter stays hidden below 4,000').toBe(false);
+
+  await setNote(page, 'a'.repeat(4000));
+  const at = await probeWidget(page);
+  expect(at.composerCounterShown, 'the counter surfaces at exactly 4,000').toBe(true);
+  expect(at.composerCounter).toBe('4000 / 5000');
+});

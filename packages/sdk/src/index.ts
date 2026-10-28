@@ -221,10 +221,12 @@ export function init(options: WatchbugInitOptions): void {
     },
   });
 
-  /** Review entry encodes ONCE (T-03-17); the review shows these exact bytes. */
+  /** Review entry encodes ONCE per entry (T-03-17); the review shows these
+   * exact bytes. Returning from the review re-validates the draft fields. */
   const reviewDraft = async (): Promise<void> => {
     const current = draft;
-    if (current === null || current.image === null || screen !== 'composer') return;
+    if (current === null || current.image === null) return;
+    if (screen !== 'composer' && screen !== 'review') return;
     try {
       current.encoded = await encodeFinal(current.image, current.t1, current.masks);
     } catch {
