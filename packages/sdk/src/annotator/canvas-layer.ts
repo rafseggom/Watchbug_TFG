@@ -102,10 +102,24 @@ export function createEditor(options: AnnotatorOpenOptions): Promise<AnnotatorRe
     };
     redraw();
 
-    /** Cap at UNDO_LIMIT, dropping the oldest committed stroke (P3-D-11). */
+    /**
+     * Cap at `UNDO_LIMIT` (P3-D-11: "~20 strokes"). The cap bounds the UNDO
+     * HISTORY, never the ink: the canvas is stateless between drags (every
+     * commit ends in `redraw()`, which repaints `base` + the vector list), so
+     * dropping a record without first flattening would delete that stroke from
+     * the canvas and from the exported image — silent loss of the user's
+     * annotation. At the cap, snapshot the whole canvas into `base` (the same
+     * readback `finish()` does) and restart the list: the evicted strokes have
+     * already merged into the only redraw source. Mask patches re-bake LAST in
+     * that snapshot, so T3 and the irreversibility of C-2 both hold.
+     */
     const pushStroke = (stroke: Stroke): void => {
       strokes.push(stroke);
-      if (strokes.length > UNDO_LIMIT) strokes.shift();
+      if (strokes.length > UNDO_LIMIT) {
+        redraw();
+        base.data.set(context.getImageData(0, 0, base.width, base.height).data);
+        strokes.length = 0;
+      }
     };
 
     const undoStroke = (): void => {
