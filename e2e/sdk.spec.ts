@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+﻿import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { MAX_TITLE_CHARS } from '@watchbug/contracts/constants';
@@ -11,6 +11,7 @@ import {
   openHostileFixture,
   projectKey,
   readSnapshot,
+  snapshotGlobals,
   waitForSnapshot,
   type HostileVariant,
 } from './helpers/host-fixtures';
@@ -43,6 +44,20 @@ import {
   waitForComposer,
   waitForReview,
 } from './helpers/composer';
+import {
+  analyzeInk,
+  canvasBox,
+  clickOnBitmap,
+  done,
+  dragOnBitmap,
+  openEditor,
+  selectTool,
+  typeLabel,
+  undo,
+  undoKey,
+  waitForEditor,
+  type BitmapPoint,
+} from './helpers/editor';
 
 /**
  * The SDK post endpoint, matched by **one shared RegExp**. `page.unroute`
@@ -3603,4 +3618,222 @@ test('CAP-03 no-API: a browser without getDisplayMedia can still file text-only 
   );
   expect(posts).toHaveLength(1);
   expect(posts[0].toString('utf8'), 'meta-only multipart body').not.toContain('name="image"');
+});
+
+
+/* ------------------------------------------------------------------------- */
+/* Annotation editor rows — 03-05 (ANN-01, PRF-02 lazy, T-03-21 recovery)     */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * The lazy chunk's route — ONE shared RegExp (S-10): `page.unroute` matches by
+ * source+flags, so an inline duplicate would leak the mock into the next row.
+ */
+const ANNOTATOR_CHUNK_ROUTE = /\/__e2e\/bundles\/watchbug-annotator\.mjs(\?retry=\d+)?$/;
+
+test('ANN-01: freehand ink follows the drag path', async ({ page, browserName }) => {
+  await installCaptureStub(page, browserName);
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+
+  const calls = await interceptIncidentPosts(page, async () => ({
+    status: 201,
+    body: JSON.stringify({ id: INTERCEPTED_ID }),
+  }));
+
+  await clickLauncher(page);
+  await waitForComposer(page);
+
+  // The whole path at once: Annotate -> chunk fetch -> editor in the SAME
+  // shadow root -> one freehand drag -> Done -> the ink in the decoded
+  // outgoing image.
+  await openEditor(page);
+  const opened = await probeWidget(page);
+  expect(opened.screen).toBe('editor');
+  expect(opened.editorOpen).toBe(true);
+  expect(opened.activeTool, 'the default tool on open is freehand (P3-D-06)').toBe('freehand');
+  expect(
+    opened.editorCanvasWidth,
+    'the editor canvas carries the draft bitmap itself',
+  ).toBe(opened.composerPreviewWidth);
+  expect(opened.editorCanvasHeight).toBe(opened.composerPreviewHeight);
+  const styleCount = await page.evaluate(
+    () =>
+      document.querySelector('watchbug-host')?.shadowRoot?.querySelectorAll('style').length ?? 0,
+  );
+  expect(
+    styleCount,
+    'EDITOR_CSS lands on the core style element — one stylesheet, never adoptedStyleSheets (T-03-22)',
+  ).toBe(1);
+
+  // One diagonal drag across the frame, in BITMAP coordinates.
+  const from: BitmapPoint = [100, 260];
+  const to: BitmapPoint = [540, 60];
+  await dragOnBitmap(page, from, to);
+  await done(page);
+
+  const back = await probeWidget(page);
+  expect(back.screen, 'Done returns to the composer').toBe('composer');
+  expect(back.editorOpen, 'the editor unmounts on Done').toBe(false);
+  const previewInk = await page.evaluate(() => {
+    const canvas = document
+      .querySelector('watchbug-host')
+      ?.shadowRoot?.querySelector('canvas.composer-preview') as HTMLCanvasElement | null;
+    if (canvas === null) return -1;
+    const context = canvas.getContext('2d');
+    if (context === null) return -2;
+    const data = context.getImageData(0, 0, canvas.width, canvas.height).data;
+    let count = 0;
+    for (let at = 0; at < data.length; at += 4) {
+      const dr = data[at] - 0x2f;
+      const dg = data[at + 1] - 0x6f;
+      const db = data[at + 2] - 0xeb;
+      if (dr * dr + dg * dg + db * db <= 14400) count += 1;
+    }
+    return count;
+  });
+  expect(
+    previewInk,
+    'the preview redraws from the buffer the editor returned — the flattened ink is IN the draft (C-2)',
+  ).toBeGreaterThan(0);
+
+  await reviewAndSend(page);
+  await waitForHeadline(page, 'Report sent ✓', 15_000);
+  expect(calls, 'one annotated report leaves the browser exactly once').toHaveLength(1);
+
+  const image = await readOutgoingImage(page);
+  const ink = await analyzeInk(page, image, {
+    bands: [{ from, to, halfWidth: 4 }],
+    // A sampled region far from the path over the navy side of the gradient:
+    // no palette block inside, and d² > 14400 from every frame colour there,
+    // so ANY ink-family pixel in it could only come from a bleed.
+    boxes: [{ left: 40, top: 40, right: 120, bottom: 120 }],
+  });
+  expect(
+    ink.bands[0],
+    'accent ink (squared distance to #2f6feb) exists along the drag path',
+  ).toBeGreaterThanOrEqual(50);
+  expect(ink.boxes[0], 'a sampled region far from the path carries no ink').toBe(0);
+});
+
+test('PRF-02 lazy: the annotator chunk is fetched only on Annotate, exactly once, and adds no global', async ({
+  page,
+  browserName,
+}) => {
+  await installCaptureStub(page, browserName);
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+
+  const chunkRequests: string[] = [];
+  page.on('request', (request) => {
+    const url = request.url();
+    if (url.includes('/__e2e/bundles/watchbug-annotator')) chunkRequests.push(url);
+  });
+
+  await clickLauncher(page);
+  await waitForComposer(page);
+  expect(
+    chunkRequests,
+    'zero requests for the annotator chunk while the composer is open (PRF-02, UI-SPEC A-2)',
+  ).toHaveLength(0);
+
+  const before = await snapshotGlobals(page);
+  await openEditor(page);
+  expect(chunkRequests, 'exactly one fetch after Annotate image').toHaveLength(1);
+  expect(
+    chunkRequests[0],
+    'the shipped lazy artifact is the .mjs twin (OQ-5)',
+  ).toMatch(/watchbug-annotator\.mjs$/);
+  const after = await snapshotGlobals(page);
+  expect(addedNames(after.w, before.w), 'the chunk load adds no global (INV-02)').toEqual([]);
+  expect(after.p, 'and patches no native prototype').toEqual(before.p);
+
+  // Re-entrancy: close and reopen — the memoised module is reused, so the
+  // request count stays exactly one.
+  await done(page);
+  await openEditor(page);
+  expect(chunkRequests, 'reopening reuses the memoised module (no second fetch)').toHaveLength(1);
+  await done(page);
+});
+
+test('PRF-02 lazy: the fetch shows the loading state, and a failed load re-enables the button with the inline error — a retry then opens the editor', async ({
+  page,
+  browserName,
+}) => {
+  await installCaptureStub(page, browserName);
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+
+  // Fail the FIRST fetch (with a delay that makes the loading state
+  // observably visible); serve the retry from dist so the recovery walk is
+  // real, not a re-404 (T-03-21: never a dead button).
+  let firstAttempt = true;
+  await page.route(ANNOTATOR_CHUNK_ROUTE, async (route) => {
+    if (firstAttempt) {
+      firstAttempt = false;
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      await route.abort('failed');
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/javascript; charset=utf-8',
+      body: readFileSync(resolve(repoRoot, 'packages/sdk/dist/watchbug-annotator.mjs')),
+    });
+  });
+
+  await clickLauncher(page);
+  await waitForComposer(page);
+
+  await page.evaluate(() => {
+    const button = document
+      .querySelector('watchbug-host')
+      ?.shadowRoot?.querySelector('button.composer-annotate') as HTMLButtonElement;
+    button.click();
+  });
+  const loading = await probeWidget(page);
+  expect(
+    loading.editorLoading,
+    '12 px spinner + editor.loading on the disabled button while the chunk fetches',
+  ).toBe(true);
+  expect(loading.annotateDisabled, 'the button is disabled mid-fetch').toBe(true);
+
+  await page.waitForFunction(
+    () => {
+      const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
+      return (
+        root?.querySelector('span.field-error[data-wb-error="editor"][data-shown="true"]') !==
+        null
+      );
+    },
+    null,
+    { timeout: 10_000 },
+  );
+  const failed = await probeWidget(page);
+  expect(failed.editorError, 'the locked load-error copy renders inline (OQ-4)').toBe(
+    "Couldn't load the editor.",
+  );
+  expect(failed.editorLoading, 'the loading state ends on failure').toBe(false);
+  expect(failed.annotateDisabled, 'never a dead button — the action re-enables (T-03-21)').toBe(
+    false,
+  );
+  expect(failed.editorOpen, 'no editor mounted from a failed fetch').toBe(false);
+  const hintText = await page.evaluate(
+    () =>
+      document
+        .querySelector('watchbug-host')
+        ?.shadowRoot?.querySelector(
+          'span.field-error[data-wb-error="editor-hint"][data-shown="true"]',
+        )
+        ?.textContent ?? '',
+  );
+  expect(hintText, 'with the solution hint beside it').toBe(
+    'Nothing was changed. Check your connection, then try again.',
+  );
+
+  // The retry: the memoised rejection was cleared, and the editor opens.
+  await openEditor(page);
+  const opened = await probeWidget(page);
+  expect(opened.editorOpen, 'a retry after a failed load succeeds (retryable memo)').toBe(true);
+  expect(opened.editorError).toBe('');
 });

@@ -146,6 +146,10 @@ export function mountHost(css: string): WatchbugHost {
   const root = element.attachShadow({ mode: SHADOW_MODE });
 
   const style = document.createElement('style');
+  // The lazy lane appends `EDITOR_CSS` to THIS element (one `<style>`, never a
+  // second stylesheet, never `adoptedStyleSheets` — UI-SPEC isolation, T-03-22)
+  // and finds it by this marker through the mount's root node (03-05).
+  style.setAttribute('data-wb-core', 'true');
   style.textContent = css;
   root.appendChild(style);
 

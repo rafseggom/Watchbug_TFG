@@ -612,6 +612,21 @@ export interface WidgetProbe {
   composerAttachErrorHint: string;
   /** The review summary's image row — 'No image' on a text-only report. */
   reviewNoImage: string;
+  /** `section.editor` exists (fullscreen editor owns the screen, 03-05). */
+  editorOpen: boolean;
+  /** The pressed tool rail button's `data-wb-tool` (null while none). */
+  activeTool: string | null;
+  /** The editor top-bar title copy (locale-resolved, WDG-06 editor). */
+  editorTitle: string;
+  /** The annotate button is mid-fetch (spinner + `editor.loading`, disabled). */
+  editorLoading: boolean;
+  /** The annotate button's live `disabled` state (T-03-21: never dead). */
+  annotateDisabled: boolean;
+  /** The visible editor-load refusal copy ('' while hidden). */
+  editorError: string;
+  /** `canvas.editor-canvas` backing-store size — the draft bitmap. */
+  editorCanvasWidth: number;
+  editorCanvasHeight: number;
 }
 
 /** Read the panel/launcher state. `probe` deliberately has no side effects. */
@@ -722,6 +737,25 @@ export async function probeWidget(page: Page): Promise<WidgetProbe> {
       reviewNoImage:
         (root?.querySelector('[data-wb-summary="image"] .summary-value') as HTMLElement | null)
           ?.textContent ?? '',
+      editorOpen: root?.querySelector('section.editor') !== null,
+      activeTool:
+        root?.querySelector('button.tool[aria-pressed="true"]')?.getAttribute('data-wb-tool') ??
+        null,
+      editorTitle:
+        (root?.querySelector('section.editor .editor-title') as HTMLElement | null)?.textContent ??
+        '',
+      editorLoading: root?.querySelector('button.composer-annotate[data-wb-loading="true"]') !== null,
+      annotateDisabled:
+        (root?.querySelector('button.composer-annotate') as HTMLButtonElement | null)?.disabled ??
+        false,
+      editorError:
+        (root?.querySelector(
+          'span.field-error[data-wb-error="editor"][data-shown="true"]',
+        ) as HTMLElement | null)?.textContent ?? '',
+      editorCanvasWidth:
+        (root?.querySelector('canvas.editor-canvas') as HTMLCanvasElement | null)?.width ?? 0,
+      editorCanvasHeight:
+        (root?.querySelector('canvas.editor-canvas') as HTMLCanvasElement | null)?.height ?? 0,
     };
   });
 }

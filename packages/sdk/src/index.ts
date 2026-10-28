@@ -93,6 +93,20 @@ const LOADING_SCRIPT_URL: string | undefined = (() => {
   return script instanceof HTMLScriptElement && script.src.length > 0 ? script.src : undefined;
 })();
 
+/**
+ * The core bundle's OWN URL — the only base the annotator chunk resolves
+ * against (T-03-20: never `init()` options, never a `data-` attribute, never
+ * `document.baseURI`). The IIFE lane reads `LOADING_SCRIPT_URL`
+ * (`document.currentScript` at module eval); the ESM lane reads
+ * `import.meta.url`, which esbuild compiles to a property read of an empty
+ * object in the IIFE lane — i.e. `undefined` there (Pitfall 2, verified on
+ * this repo's esbuild 0.28.2), so the `??` chain simply falls through the
+ * other way per lane. An unresolved base never reaches `new URL`: the loader
+ * rejects and the composer surfaces the inline load error.
+ */
+const CORE_BUNDLE_URL: string | undefined =
+  LOADING_SCRIPT_URL ?? (typeof import.meta === 'object' ? import.meta.url : undefined);
+
 /** Origin of the loading script, or `null` when it cannot be determined. */
 function loadingScriptOrigin(): string | null {
   if (LOADING_SCRIPT_URL === undefined) return null;
@@ -265,33 +279,52 @@ export function init(options: WatchbugInitOptions): void {
     showScreen('review');
   };
 
-  const composer: Composer = createComposer({
-    onReview: () => {
-      void reviewDraft();
+  const composer: Composer = createComposer(
+    {
+      onReview: () => {
+        void reviewDraft();
+      },
+      // Discard (button or Escape) drops the draft without confirmation
+      // (UI-SPEC A-4) and re-arms the launcher (P3-D-04).
+      onDiscard: () => {
+        draft = null;
+        showScreen('idle');
+      },
+      // The editor screen (03-05): `showScreen('editor')` hides the composer
+      // (its own `data-hidden` contract) while the fullscreen editor owns the
+      // shadow root; `Done` lands back on the composer with the draft's frame
+      // mutated in place, so the preview re-draws with the ink on it.
+      onEditorOpen: () => {
+        showScreen('editor');
+      },
+      onEditorClosed: () => {
+        showScreen('composer');
+      },
+      // WDG-06 manual override: flip the module locale, re-declare `lang`, and
+      // RE-RENDER the mounted surface — a locale change is never a re-lookup of
+      // cached strings, and nothing here touches host storage (SEC-03 / A-1).
+      onLocaleChange: (code: LocaleCode) => {
+        setLocale(code);
+        host.setLang(code);
+        launcher.render();
+        if (screen === 'composer' && draft !== null) composer.render(draft);
+        else if (
+          screen === 'review' &&
+          draft !== null &&
+          (draft.encoded !== null || draft.image === null)
+        )
+          review.render(draft);
+        else if (screen === 'status') panel.render(lastView);
+      },
     },
-    // Discard (button or Escape) drops the draft without confirmation
-    // (UI-SPEC A-4) and re-arms the launcher (P3-D-04).
-    onDiscard: () => {
-      draft = null;
-      showScreen('idle');
+    {
+      // The chunk resolves ONLY from the core bundle's own URL (T-03-20), and
+      // the editor mounts ONLY inside `.wrap` (INV-01 — same closed shadow
+      // root, never `document.body`).
+      coreUrl: () => CORE_BUNDLE_URL,
+      wrap: host.content,
     },
-    // WDG-06 manual override: flip the module locale, re-declare `lang`, and
-    // RE-RENDER the mounted surface — a locale change is never a re-lookup of
-    // cached strings, and nothing here touches host storage (SEC-03 / A-1).
-    onLocaleChange: (code: LocaleCode) => {
-      setLocale(code);
-      host.setLang(code);
-      launcher.render();
-      if (screen === 'composer' && draft !== null) composer.render(draft);
-      else if (
-        screen === 'review' &&
-        draft !== null &&
-        (draft.encoded !== null || draft.image === null)
-      )
-        review.render(draft);
-      else if (screen === 'status') panel.render(lastView);
-    },
-  });
+  );
 
   const review: Review = createReview({
     // The round-trip is lossless: the draft object is untouched between the

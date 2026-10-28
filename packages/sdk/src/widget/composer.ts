@@ -22,8 +22,9 @@
  * `ImageData` with `putImageData`; it never encodes (the encode happens once,
  * at Review entry).
  *
- * Later plans mount into this frame: `Annotate image` / `Replace image` gain
- * their behaviour with the editor (03-05); the file lane (CAP-02, this plan)
+ * Later plans mount into this frame: `Annotate image` is wired here (03-05 —
+ * the loading/error states, the memoised chunk fetch through `widget/loader.ts`
+ * and the editor layer inside `.wrap`); the file lane (CAP-02, this plan)
  * wires `Attach image` / `Replace image` to `ManualFileCapture` behind a
  * hidden `input[type=file]` that lives INSIDE the shadow root (INV-01), shows
  * the refusal copy on any rejection (PATTERNS §13 — the `accept` attribute is
@@ -34,6 +35,7 @@ import { MAX_NOTE_CHARS, MAX_TITLE_CHARS } from '@watchbug/contracts/constants';
 import type { Draft } from '../capture/pipeline.ts';
 import { createManualFileCapture } from '../capture/manual-file.ts';
 import { locale, t } from '../strings.ts';
+import { loadAnnotator } from './loader.ts';
 
 /** The counter surfaces from this many CODE POINTS up (UI-SPEC overflow). */
 export const NOTE_COUNTER_VISIBLE_FROM = 4_000;
@@ -43,6 +45,10 @@ const TITLE_ERROR_ID = 'wb-composer-title-error';
 /** The attachment refusal's ids — error copy + its solution hint (CAP-02). */
 const ATTACH_ERROR_ID = 'wb-composer-attach-error';
 const ATTACH_HINT_ID = 'wb-composer-attach-error-hint';
+
+/** The ids of the editor-load refusal (OQ-4 copy, the attach-error pattern). */
+const EDITOR_ERROR_ID = 'wb-composer-editor-load-error';
+const EDITOR_HINT_ID = 'wb-composer-editor-load-error-hint';
 
 /** The formats the hidden picker hints at — decoration only, never validation. */
 const ATTACH_ACCEPT_HINT = 'image/png,image/webp,image/jpeg';
@@ -55,13 +61,29 @@ export interface ComposerHandlers {
   onReview: (draft: Draft) => void;
   /** `✕` / `Escape`: discard the draft, no confirmation (UI-SPEC A-4). */
   onDiscard: (draft: Draft) => void;
-  /** The editor's entry points (03-05) and the file lane (03-04). */
-  onAnnotate?: (draft: Draft) => void;
+  /** The file lane (03-04). */
   onReplace?: (draft: Draft) => void;
   onAttach?: (draft: Draft) => void;
   onContinueTextOnly?: (draft: Draft) => void;
   /** The A-7 EN/ES pair; a locale change is a re-render, never a re-lookup. */
   onLocaleChange?: (locale: LocaleCode) => void;
+  /** Router transitions for the editor screen (03-05): the editor lives
+   * between the composer opens and closes; `data-wb-screen` follows. */
+  onEditorOpen?: (draft: Draft) => void;
+  onEditorClosed?: (draft: Draft) => void;
+}
+
+/**
+ * The editor lane's dependencies (03-05), supplied by `index.ts` where the
+ * shadow host exists: the chunk resolves ONLY from the core bundle's own URL
+ * (T-03-20) and mounts ONLY inside `.wrap` (INV-01).
+ */
+export interface ComposerEditorDeps {
+  /** The core bundle's own URL — `LOADING_SCRIPT_URL` (IIFE) or
+   * `import.meta.url` (ESM). An unresolvable base rejects visibly. */
+  coreUrl: () => string | undefined;
+  /** `.wrap` — the container the editor layer mounts into. */
+  wrap: HTMLElement;
 }
 
 export interface Composer {
@@ -275,6 +297,14 @@ export const COMPOSER_CSS = `
   background: var(--wb-color-surface);
 }
 .zone-notice { display: none; }
+.composer-annotate[data-wb-loading='true'] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.composer-annotate[data-wb-loading='true'] .spinner {
+  flex: none;
+}
 .image-zone[data-wb-zone='none'] .composer-preview,
 .image-zone[data-wb-zone='none'] .composer-annotate,
 .image-zone[data-wb-zone='none'] .composer-replace { display: none; }
@@ -377,7 +407,10 @@ function clampCodePoints(value: string, max: number): string {
   return units.length > max ? units.slice(0, max).join('') : value;
 }
 
-export function createComposer(handlers: ComposerHandlers): Composer {
+export function createComposer(
+  handlers: ComposerHandlers,
+  editorDeps: ComposerEditorDeps,
+): Composer {
   const composer = el('section', 'composer');
   composer.setAttribute('data-hidden', 'true');
   composer.setAttribute('data-wb-state', 'image');
@@ -489,6 +522,18 @@ export function createComposer(handlers: ComposerHandlers): Composer {
   attachHint.setAttribute('data-wb-error', 'attach-hint');
   attachHint.setAttribute('data-shown', 'false');
 
+  // The editor-load refusal (03-05 / OQ-4): the same inline shape as the
+  // attach refusal — error + solution hint, wired from the annotate action.
+  const editorError = el('span', 'field-error attach-error');
+  editorError.id = EDITOR_ERROR_ID;
+  editorError.setAttribute('data-wb-error', 'editor');
+  editorError.setAttribute('role', 'alert');
+  editorError.setAttribute('data-shown', 'false');
+  const editorHint = el('span', 'field-error attach-error-hint');
+  editorHint.id = EDITOR_HINT_ID;
+  editorHint.setAttribute('data-wb-error', 'editor-hint');
+  editorHint.setAttribute('data-shown', 'false');
+
   // The hidden picker inside the shadow root (INV-01): a hostile host page
   // cannot reach this input, so the synthetic-selection surface is exactly
   // the research A4 analysis (user-picked bytes, magic-gated).
@@ -526,6 +571,8 @@ export function createComposer(handlers: ComposerHandlers): Composer {
   composer.appendChild(imageZone);
   composer.appendChild(attachError);
   composer.appendChild(attachHint);
+  composer.appendChild(editorError);
+  composer.appendChild(editorHint);
   composer.appendChild(fileInput);
   composer.appendChild(footer);
 
@@ -589,6 +636,107 @@ export function createComposer(handlers: ComposerHandlers): Composer {
     for (const button of [attachButton, noticeAttachButton]) {
       button.setAttribute('aria-describedby', `${ATTACH_ERROR_ID} ${ATTACH_HINT_ID}`);
     }
+  };
+
+  /**
+   * The editor lane (03-05 / PRF-02 / UI-SPEC A-2): `Annotate image` fetches
+   * the lazy chunk ONLY on this click (zero editor bytes before it), shows the
+   * 12 px spinner + `editor.loading` on the disabled button while it fetches,
+   * mounts `div.editor-layer` inside `.wrap` — the same closed shadow root,
+   * never `document.body` (INV-01) — and returns to the composer with the
+   * draft's own `ImageData` mutated in place (C-2: one flattened working
+   * bitmap). A failure re-enables the button with the inline refusal copy
+   * (T-03-21: never a dead button; the loader cleared its memo, so a retry
+   * can succeed).
+   */
+  let annotating = false;
+
+  const setAnnotateLoading = (busy: boolean): void => {
+    annotating = busy;
+    annotateButton.disabled = busy;
+    if (busy) {
+      annotateButton.setAttribute('data-wb-loading', 'true');
+      annotateButton.textContent = '';
+      const spinner = el('span', 'spinner');
+      spinner.setAttribute('aria-hidden', 'true');
+      const label = el('span', 'annotate-loading-label');
+      label.textContent = t('editor.loading');
+      annotateButton.appendChild(spinner);
+      annotateButton.appendChild(label);
+    } else {
+      annotateButton.removeAttribute('data-wb-loading');
+      annotateButton.textContent = t('composer.annotate');
+    }
+  };
+
+  const clearEditorError = (): void => {
+    editorError.setAttribute('data-shown', 'false');
+    editorHint.setAttribute('data-shown', 'false');
+    annotateButton.removeAttribute('aria-describedby');
+  };
+
+  const showEditorError = (): void => {
+    editorError.setAttribute('data-shown', 'true');
+    editorHint.setAttribute('data-shown', 'true');
+    annotateButton.setAttribute('aria-describedby', `${EDITOR_ERROR_ID} ${EDITOR_HINT_ID}`);
+  };
+
+  /** The single accent authority: the custom property's COMPUTED value with
+   * the design-token literal as fallback only (P3-D-07 — the chunk carries no
+   * colour literal of its own; `--wb-color-accent` stays the one definition). */
+  const resolveInk = (): string => {
+    const value = getComputedStyle(editorDeps.wrap).getPropertyValue('--wb-color-accent').trim();
+    return value.length > 0 ? value : '#2f6feb';
+  };
+
+  const runAnnotate = (): void => {
+    const current = draft;
+    if (current === null || annotating || current.image === null) return;
+    const base = current.image;
+    setAnnotateLoading(true);
+    clearEditorError();
+    void (async (): Promise<void> => {
+      let layer: HTMLDivElement | null = null;
+      let opened = false;
+      try {
+        const module = await loadAnnotator(editorDeps.coreUrl());
+        // The draft was discarded or its frame replaced while the chunk
+        // fetched: abandon silently — a late editor must never mount over a
+        // dead draft nor resurrect an old frame onto the wire.
+        if (!open || draft !== current || current.image !== base) return;
+        layer = el('div', 'editor-layer');
+        editorDeps.wrap.appendChild(layer);
+        handlers.onEditorOpen?.(current);
+        opened = true;
+        const result = await module.open({
+          base,
+          locale: locale(),
+          masks: current.masks,
+          mount: layer,
+          ink: resolveInk(),
+          maskConfirm: {
+            title: t('mask.confirm.title'),
+            body: t('mask.confirm.body'),
+            action: t('mask.confirm.action'),
+            cancel: t('mask.confirm.cancel'),
+          },
+        });
+        // The editor mutates `base` in place and resolves with THAT same
+        // instance (C-2/A-04); the assignment re-asserts the draft's contract
+        // for the lanes that swap the buffer (03-06's bake included).
+        current.image = result.img;
+        if (result.masks !== current.masks) current.masks = Array.from(result.masks);
+        handlers.onEditorClosed?.(current);
+      } catch {
+        // Every rejection class (unresolvable base, 404, missing 2D context)
+        // is the same visible refusal — never silent, never a dead button.
+        if (opened) handlers.onEditorClosed?.(current);
+        showEditorError();
+      } finally {
+        if (layer !== null) layer.remove();
+        setAnnotateLoading(false);
+      }
+    })();
   };
 
   const openPicker = (): void => {
@@ -687,9 +835,7 @@ export function createComposer(handlers: ComposerHandlers): Composer {
   feedbackSegment.addEventListener('click', () => selectType('feedback'));
   enButton.addEventListener('click', () => handlers.onLocaleChange?.('en'));
   esButton.addEventListener('click', () => handlers.onLocaleChange?.('es'));
-  annotateButton.addEventListener('click', () => {
-    if (draft !== null) handlers.onAnnotate?.(draft);
-  });
+  annotateButton.addEventListener('click', runAnnotate);
   // `Attach image` (footer + degraded notice) and `Replace image` all open
   // the same hidden picker (CAP-02); the composer owns the file lane.
   const openAttachPicker = (): void => {
@@ -767,7 +913,9 @@ export function createComposer(handlers: ComposerHandlers): Composer {
     noteLabel.textContent = t('composer.note.label');
     noteInput.placeholder = t('composer.note.placeholder');
     preview.setAttribute('aria-label', t('composer.image.label'));
-    annotateButton.textContent = t('composer.annotate');
+    // The loading state owns the button while a fetch is in flight (locale
+    // changes mid-fetch must not clobber the spinner + `editor.loading`).
+    if (!annotating) annotateButton.textContent = t('composer.annotate');
     replaceButton.textContent = t('composer.replace');
     attachButton.textContent = t('composer.attach');
     noticeAttachButton.textContent = t('composer.attach');
@@ -778,6 +926,8 @@ export function createComposer(handlers: ComposerHandlers): Composer {
     noticeHint.textContent = noticeHintText(current);
     attachError.textContent = t('composer.attach.error');
     attachHint.textContent = t('composer.attach.error.hint');
+    editorError.textContent = t('editor.load.error');
+    editorHint.textContent = t('editor.load.error.hint');
     localePair.setAttribute('aria-label', t('i18n.label'));
     enButton.textContent = t('i18n.en');
     esButton.textContent = t('i18n.es');
@@ -805,7 +955,10 @@ export function createComposer(handlers: ComposerHandlers): Composer {
     );
     // A fresh draft is a fresh start: a refusal shown on the previous report
     // never rides into the next one.
-    if (reopened) clearAttachError();
+    if (reopened) {
+      clearAttachError();
+      clearEditorError();
+    }
 
     renderCopy(next);
     // Inputs are state: set `.value` only when it differs (no focus loss).

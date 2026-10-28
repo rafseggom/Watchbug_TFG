@@ -44,7 +44,19 @@ const HOSTILE_ROUTE = /\/__e2e\/hostile-host\.html/;
 
 export const HOSTILE_URL = `${FIXTURE_ORIGIN}/__e2e/hostile-host.html`;
 
-export type BundleName = 'watchbug.js' | 'watchbug.mjs' | 'watchbug.e2e.js' | 'watchbug.e2e.mjs';
+export type BundleName =
+  | 'watchbug.js'
+  | 'watchbug.mjs'
+  | 'watchbug.e2e.js'
+  | 'watchbug.e2e.mjs'
+  // The lazy editor chunk (03-05). `import()` always fetches the `.mjs` twin
+  // (the loader resolves it from the core bundle's own URL); the `.js` twin
+  // stays emitted and gated by `check:size` so neither can drift (OQ-5).
+  | 'watchbug-annotator.js'
+  | 'watchbug-annotator.mjs';
+
+/** The lazy-lane names served alongside every core bundle (Pitfall 3). */
+const LAZY_CHUNKS: readonly BundleName[] = ['watchbug-annotator.js', 'watchbug-annotator.mjs'];
 
 /** `iife` = one async `<script src>`; `esm` = one `<script type="module">` import. */
 export type FixtureMode = 'iife' | 'esm';
@@ -191,26 +203,40 @@ export async function openHostFixture(page: Page, options: HostFixtureOptions): 
   await page.goto(FIXTURE_URL, { waitUntil: 'load' });
 }
 
-/** Serve one dist bundle from the panel origin under `/__e2e/bundles/`. */
+/**
+ * Serve one dist bundle from the panel origin under `/__e2e/bundles/` — plus,
+ * as a SET, the lazy editor chunk twins (03-05): the loader fetches
+ * `watchbug-annotator.mjs` through one dynamic import, and a single-name
+ * comparison would 404 every editor row (Pitfall 3). Genuinely unknown names
+ * STILL 404, so the guard keeps its teeth.
+ */
 async function serveBundle(page: Page, bundle: BundleName): Promise<Buffer> {
-  const bundleBytesPath = bundlePath(bundle);
-  let bundleBytes: Buffer;
-  try {
-    bundleBytes = readFileSync(bundleBytesPath);
-  } catch {
-    throw new Error(`missing ${bundleBytesPath} — run "npm run build" before the e2e suite`);
+  const serving = new Map<string, Buffer>();
+  const loadBundle = (name: BundleName): Buffer => {
+    const bundleBytesPath = bundlePath(name);
+    try {
+      return readFileSync(bundleBytesPath);
+    } catch {
+      throw new Error(`missing ${bundleBytesPath} — run "npm run build" before the e2e suite`);
+    }
+  };
+  const bundleBytes = loadBundle(bundle);
+  serving.set(bundle, bundleBytes);
+  for (const chunk of LAZY_CHUNKS) {
+    if (!serving.has(chunk)) serving.set(chunk, loadBundle(chunk));
   }
 
   await page.route(BUNDLE_ROUTE, async (route) => {
     const requested = new URL(route.request().url()).pathname.split('/').pop();
-    if (requested !== bundle) {
+    const bytes = requested === undefined ? undefined : serving.get(requested);
+    if (bytes === undefined) {
       await route.fulfill({ status: 404, contentType: 'text/plain', body: 'unknown fixture bundle' });
       return;
     }
     await route.fulfill({
       status: 200,
       contentType: 'text/javascript; charset=utf-8',
-      body: bundleBytes,
+      body: bytes,
     });
   });
 
@@ -295,6 +321,19 @@ export async function waitForSnapshot(page: Page): Promise<void> {
   await page.waitForFunction(() => document.documentElement.hasAttribute('data-wb-after'), null, {
     timeout: 10_000,
   });
+}
+
+/**
+ * The global-surface probe ON DEMAND (03-05 / PRF-02): the lazy chunk loads
+ * long AFTER the page's `load` event, so the fixture's before/after attribute
+ * pair cannot straddle it. This re-evaluates the SAME `SNAPSHOT_EXPRESSION`
+ * (WDG-04's shape — `getOwnPropertyNames` of window + the four named
+ * prototypes, never an `Object.keys(window)` counter, never anything parked on
+ * the page) at the moment the row chooses.
+ */
+export async function snapshotGlobals(page: Page): Promise<GlobalSnapshot> {
+  const raw = await page.evaluate(`(${SNAPSHOT_EXPRESSION})`);
+  return JSON.parse(String(raw)) as GlobalSnapshot;
 }
 
 export async function readSnapshot(page: Page, which: 'before' | 'after'): Promise<GlobalSnapshot> {
