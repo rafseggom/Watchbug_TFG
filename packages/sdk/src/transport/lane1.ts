@@ -182,7 +182,12 @@ async function postOnce(options: SendOptions): Promise<AttemptOutcome> {
     return { ok: true, transient: false, id: await readCreatedId(response) };
   }
 
-  const transient = response.status === 429 || response.status >= 500;
+  // 408 Request Timeout is a TRANSIENT condition like 429 and 5xx — a reverse
+  // proxy emits it before a slow upstream answers (this phase's own nginx
+  // shape). Classifying it as a contract rejection would kill the P2-D-03
+  // retry schedule and the "reuse the same key" guarantee for exactly the
+  // failure that key exists to survive (LW-03).
+  const transient = response.status === 408 || response.status === 429 || response.status >= 500;
   return {
     ok: false,
     transient,
