@@ -79,10 +79,62 @@ export function drawStroke(ctx: CanvasRenderingContext2D, stroke: Stroke): void 
       ctx.stroke();
       break;
     }
-    default:
-      // arrow / rectangle / text render arms land with Task 2 of this plan
-      // (tools become selectable only once their renderer exists).
+    case 'arrow': {
+      // ANN-02: a `3 * scaleX` shaft from tail to head plus a FILLED head
+      // ~12 px (bitmap space) long and wider than the shaft — the head is a
+      // triangle centred on the line direction (UI-SPEC § Annotation editor).
+      resetForStroke(ctx, stroke.width, stroke.ink);
+      const [fx, fy] = stroke.from;
+      const [tx, ty] = stroke.to;
+      const dx = tx - fx;
+      const dy = ty - fy;
+      const length = Math.hypot(dx, dy);
+      if (length < 1) return;
+      const ux = dx / length;
+      const uy = dy / length;
+      const headLen = Math.min(12, length);
+      const bx = tx - ux * headLen;
+      const by = ty - uy * headLen;
+      ctx.beginPath();
+      ctx.moveTo(fx, fy);
+      ctx.lineTo(bx, by);
+      ctx.stroke();
+      const half = Math.max(7, stroke.width * 2.5);
+      ctx.beginPath();
+      ctx.moveTo(tx, ty);
+      ctx.lineTo(bx - uy * half, by + ux * half);
+      ctx.lineTo(bx + uy * half, by - ux * half);
+      ctx.closePath();
+      ctx.fillStyle = stroke.ink;
+      ctx.fill();
       break;
+    }
+    case 'rectangle': {
+      // ANN-03: four edges, no fill — the interior stays untouched.
+      const x = Math.min(stroke.from[0], stroke.to[0]);
+      const y = Math.min(stroke.from[1], stroke.to[1]);
+      const width = Math.abs(stroke.to[0] - stroke.from[0]);
+      const height = Math.abs(stroke.to[1] - stroke.from[1]);
+      if (width < 1 || height < 1) return;
+      resetForStroke(ctx, stroke.width, stroke.ink);
+      ctx.beginPath();
+      ctx.rect(x, y, width, height);
+      ctx.stroke();
+      break;
+    }
+    case 'text': {
+      // ANN-04 / P3-D-08: the committed value is drawn VERBATIM with
+      // `fillText` — textContent-safe by construction, no HTML sink, no
+      // escaping path, no modal (the record's own `text` is the whole story).
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalAlpha = 1;
+      ctx.setLineDash([]);
+      resolveFont(ctx, stroke.size);
+      ctx.fillStyle = stroke.ink;
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText(stroke.text, stroke.at[0], stroke.at[1]);
+      break;
+    }
   }
 }
 

@@ -1,4 +1,4 @@
-﻿import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { MAX_TITLE_CHARS } from '@watchbug/contracts/constants';
@@ -3836,4 +3836,164 @@ test('PRF-02 lazy: the fetch shows the loading state, and a failed load re-enabl
   const opened = await probeWidget(page);
   expect(opened.editorOpen, 'a retry after a failed load succeeds (retryable memo)').toBe(true);
   expect(opened.editorError).toBe('');
+});
+
+/* ------------------------------------------------------------------------- */
+/* ANN-02..04 rows — 03-05 Task 2 (arrow, rectangle, text on one geometry)    */
+/* ------------------------------------------------------------------------- */
+
+/** The shared walk of an annotation row: draw in the editor, Done, review,
+ * send — and hand back the OUTGOING bytes. The artifact is the evidence,
+ * every row; no row asserts on canvas internals. */
+async function drawAndSend(
+  page: Page,
+  browserName: string,
+  draw: () => Promise<void>,
+): Promise<Buffer> {
+  await installCaptureStub(page, browserName);
+  await page.route(INCIDENT_POST_RE, async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.continue();
+      return;
+    }
+    void route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({ id: INTERCEPTED_ID }),
+    });
+  });
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+  await clickLauncher(page);
+  await waitForComposer(page);
+
+  await openEditor(page);
+  await draw();
+  await done(page);
+
+  await clickComposerReview(page);
+  await waitForReview(page);
+  await clickReviewSend(page);
+  await waitForHeadline(page, 'Report sent ✓', 15_000);
+  return readOutgoingImage(page);
+}
+
+test('ANN-02: an arrow paints a shaft and a wider head', async ({ page, browserName }) => {
+  const tail: BitmapPoint = [40, 340];
+  const head: BitmapPoint = [420, 60];
+  const image = await drawAndSend(page, browserName, async () => {
+    await selectTool(page, 'arrow');
+    await dragOnBitmap(page, tail, head);
+  });
+  const ink = await analyzeInk(page, image, {
+    bands: [{ from: tail, to: head, halfWidth: 4 }],
+    boxes: [
+      { left: 30, top: 330, right: 52, bottom: 352 }, // tail cap
+      { left: 402, top: 52, right: 424, bottom: 74 }, // head body
+    ],
+    crosses: [
+      { from: tail, to: head, at: 0.5, reach: 12 }, // mid-shaft width
+      { from: tail, to: head, at: 0.977, reach: 12 }, // near the head base
+    ],
+  });
+  expect(ink.bands[0], 'ink runs along the shaft').toBeGreaterThanOrEqual(60);
+  expect(ink.boxes[0], 'ink at the tail').toBeGreaterThanOrEqual(3);
+  expect(ink.boxes[1], 'ink at the head').toBeGreaterThanOrEqual(20);
+  expect(
+    ink.crosses[1],
+    'the head is WIDER than the shaft (perpendicular ink counts)',
+  ).toBeGreaterThanOrEqual(ink.crosses[0] + 5);
+});
+
+test('ANN-03: a rectangle outlines its four edges and leaves the interior alone', async ({
+  page,
+  browserName,
+}) => {
+  // rectangle: a 3-logical-px navy background keeps the thin blue stroke
+  // comfortably inside the ink tolerance under WebP 4:2:0 (the gold half of
+  // the stub gradient would subsample a 1.7px blue line toward grey).
+  const a: BitmapPoint = [60, 40];
+  const b: BitmapPoint = [240, 160];
+  const image = await drawAndSend(page, browserName, async () => {
+    await selectTool(page, 'rectangle');
+    await dragOnBitmap(page, a, b);
+  });
+  const edge = (from: BitmapPoint, to: BitmapPoint) => ({ from, to, halfWidth: 4 });
+  const ink = await analyzeInk(page, image, {
+    bands: [
+      edge([70, 40], [230, 40]),
+      edge([240, 50], [240, 150]),
+      edge([70, 160], [230, 160]),
+      edge([60, 50], [60, 150]),
+    ],
+    // Sampled interior: the pure-gradient gap between palette blocks (col 1/2
+    // gap x 102..130, row 1/2 gap y 95..120) — no block pixels near the ink
+    // tolerance's noise floor, and >40 px from every edge stroke.
+    boxes: [{ left: 102, top: 95, right: 130, bottom: 120 }],
+  });
+  for (const [which, name] of ['top', 'right', 'bottom', 'left'].entries()) {
+    expect(ink.bands[which], `ink along the ${name} edge`).toBeGreaterThanOrEqual(60);
+  }
+  expect(ink.boxes[0], 'the sampled interior region carries no ink (outline only, no fill)').toBe(
+    0,
+  );
+});
+
+test('ANN-04: a text label is click-typed-confirmed without a modal', async ({
+  page,
+  browserName,
+}) => {
+  const image = await drawAndSend(page, browserName, async () => {
+    await typeLabel(page, [110, 90], 'primera', 'enter');
+    await typeLabel(page, [110, 130], 'segunda', 'outside');
+    // No modal was created by the label flow (P3-D-08): the only surface the
+    // walk touched is the inline input.
+    const modals = await page.evaluate(
+      () =>
+        document
+          .querySelector('watchbug-host')
+          ?.shadowRoot?.querySelectorAll('[role="dialog"], [role="alertdialog"]').length ?? 0,
+    );
+    expect(modals, 'the text tool opens no modal').toBe(0);
+  });
+  const ink = await analyzeInk(page, image, {
+    boxes: [
+      { left: 104, top: 74, right: 230, bottom: 96 },
+      { left: 104, top: 114, right: 230, bottom: 136 },
+    ],
+  });
+  expect(ink.boxes[0], 'the Enter-committed label rendered at its anchor').toBeGreaterThanOrEqual(8);
+  expect(
+    ink.boxes[1],
+    'the click-outside-committed label rendered at its anchor',
+  ).toBeGreaterThanOrEqual(8);
+});
+
+test('ANN-04 empty: confirming an empty label draws nothing', async ({ page, browserName }) => {
+  const image = await drawAndSend(page, browserName, async () => {
+    await typeLabel(page, [300, 80], '', 'enter');
+  });
+  const ink = await analyzeInk(page, image, {
+    boxes: [{ left: 294, top: 64, right: 360, bottom: 88 }],
+  });
+  expect(ink.boxes[0], 'an empty commit paints nothing').toBe(0);
+  const global = await analyzeImagePixels(page, image);
+  expect(global.accentCount, 'zero accent pixels anywhere: the decoded image is unchanged').toBe(0);
+});
+
+test('ANN-04 encoding: a non-ASCII label is drawn verbatim', async ({ page, browserName }) => {
+  const image = await drawAndSend(page, browserName, async () => {
+    await typeLabel(page, [110, 90], 'Añadir ✓', 'enter');
+  });
+  const ink = await analyzeInk(page, image, {
+    boxes: [
+      { left: 104, top: 74, right: 200, bottom: 96 },
+      { left: 132, top: 74, right: 200, bottom: 96 },
+    ],
+  });
+  expect(ink.boxes[0], 'the label rendered from its anchor').toBeGreaterThanOrEqual(8);
+  expect(
+    ink.boxes[1],
+    'ink reaches the label END (the trailing check glyph) — no truncation, no escaping',
+  ).toBeGreaterThanOrEqual(3);
 });
