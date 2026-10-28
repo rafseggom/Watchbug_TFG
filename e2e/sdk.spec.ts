@@ -66,6 +66,7 @@ import {
   undoKey,
   waitForEditor,
   type BitmapPoint,
+  type MaskDragRect,
 } from './helpers/editor';
 
 /**
@@ -4124,38 +4125,67 @@ const MASK_LOOKALIKE_TEXT = 'xJhdXRv.NExhbWVfaWRlbnRpdHlfOTk5OTk5.SGNyZWRzX3NpZ2
 const MASK_FRAME = { width: 640, height: 360 };
 
 /**
- * One mask drag over the marker's expected bitmap rect: from its top-left
- * pixel to its bottom-right pixel (both inclusive), so the SDK's committed
- * rect is the marker's painted rect EXACTLY — the ring assertion then proves
- * the destruction landed where the independently-computed formula says it
- * did, instead of hiding a mapping error behind a generous drag. The first
- * drag of the session waits for the once-per-session confirmation (03-06
- * Task 2): when the dialog is open it is answered with `Mask`; later drags
- * bake silently. Rows that drive the dialog explicitly (ANN-05) call
- * `dragMaskOnBitmap` directly instead.
+ * One mask drag over `rect` (BITMAP coords, both endpoints inclusive): the
+ * helper dispatches whole-CSS-pixel coordinates and returns the rect the SDK
+ * WILL commit (predicted by the helper's own independent mapping — see
+ * `dragMaskOnBitmap`). The committed rect always COVERS `rect` with a pad
+ * bounded by one CSS pixel of quantization; the rows assert coverage and then
+ * run the CA-02 machinery on the committed rect, whose untouched 1-px ring
+ * proves the destruction stayed targeted. The first drag of the session waits
+ * for the once-per-session confirmation (03-06 Task 2): when the dialog is
+ * open it is answered with `Mask`; later drags bake silently. Rows that drive
+ * the dialog explicitly (ANN-05) call `dragMaskOnBitmap` directly instead.
  */
 async function maskDrag(
   page: Page,
-  rect: { left: number; top: number; right: number; bottom: number },
-): Promise<void> {
-  await dragMaskOnBitmap(page, [rect.left, rect.top], [rect.right - 1, rect.bottom - 1]);
+  rect: MaskDragRect,
+): Promise<MaskDragRect> {
+  const committed = await dragMaskOnBitmap(
+    page,
+    [rect.left, rect.top],
+    [rect.right - 1, rect.bottom - 1],
+  );
   const asking = await page.evaluate(() => {
     const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
     return root?.querySelector('div.mask-dialog[data-shown="true"]') !== null;
   });
   if (asking) await clickMaskDialogButton(page, 'action');
+  return committed;
+}
+
+/**
+ * A committed BITMAP rect expressed in viewport CSS space for
+ * `analyzeRedaction` (which maps CSS → decoded with the frame/viewport
+ * scale). The ε pull-in makes the round-trip land back on the same integer
+ * edges through `floor`/`ceil` (exact at DPR 1/2, and the DPR-3 resample
+ * blur the 0.90 floor already tolerates is unaffected by ±0.01 css).
+ */
+function cssOfBitmap(
+  rect: MaskDragRect,
+  viewport: CssRect,
+  frame: { width: number; height: number },
+): CssRect {
+  const sx = viewport.right / frame.width;
+  const sy = viewport.bottom / frame.height;
+  return {
+    left: (rect.left + 0.01) * sx,
+    top: (rect.top + 0.01) * sy,
+    right: (rect.right - 0.01) * sx,
+    bottom: (rect.bottom - 0.01) * sy,
+  };
 }
 
 /**
  * The shared mask walk: stub frame + marker, composer, `Annotate image`,
  * mask tool, `steps` (which see the expected bitmap rect), `Done`, review,
- * send. Returns the outgoing bytes with the marker's CSS rect and the
- * viewport — `analyzeRedaction` consumes them unchanged.
+ * send. Returns the outgoing bytes with the marker's CSS rect, the expected
+ * bitmap rect, the frame and the viewport — `analyzeRedaction` consumes them
+ * unchanged.
  */
 async function maskAndSend(
   page: Page,
   browserName: string,
-  steps: (bitmap: { left: number; top: number; right: number; bottom: number }) => Promise<void>,
+  steps: (bitmap: MaskDragRect) => Promise<void>,
   options: {
     frame?: { width: number; height: number };
     dprCheck?: number;
@@ -4165,8 +4195,9 @@ async function maskAndSend(
 ): Promise<{
   image: Buffer;
   masked: CssRect;
-  bitmap: { left: number; top: number; right: number; bottom: number };
+  bitmap: MaskDragRect;
   viewport: CssRect;
+  frame: { width: number; height: number };
 }> {
   const frame = options.frame ?? MASK_FRAME;
   if (options.dprCheck !== undefined) {
@@ -4211,24 +4242,35 @@ async function maskAndSend(
   await clickReviewSend(page);
   await waitForHeadline(page, 'Report sent ✓', 20_000);
   const image = await readOutgoingImage(page);
-  return { image, masked, bitmap, viewport };
+  return { image, masked, bitmap, viewport, frame };
 }
 
 test('PRV-04 CA-02: a user mask destroys the region and its boundary ring — zero original pixels inside the mask rect and on its 1-px ring, flat opaque fill inside, control region untouched', async ({
   page,
   browserName,
 }) => {
-  const { image, masked, viewport } = await maskAndSend(page, browserName, async (bitmap) => {
-    await maskDrag(page, bitmap);
+  let committed: MaskDragRect | null = null;
+  const { image, viewport, bitmap, frame } = await maskAndSend(page, browserName, async (asked) => {
+    committed = await maskDrag(page, asked);
+  });
+  const mask = committed as unknown as MaskDragRect;
+  // The committed rect covers the asked rect (the marker's own bitmap rect)
+  // and the outward pad stays inside one CSS pixel of quantization — at DPR 1
+  // where CSS pixels are finer than this frame's bitmap pixels the two are
+  // byte-identical.
+  expect(mask.left, 'the committed rect covers the asked left edge').toBeLessThanOrEqual(
+    bitmap.left,
+  );
+  expect(mask.top).toBeLessThanOrEqual(bitmap.top);
+  expect(mask.right).toBeGreaterThanOrEqual(bitmap.right);
+  expect(mask.bottom).toBeGreaterThanOrEqual(bitmap.bottom);
+  const report = await analyzeRedaction(page, image, {
+    viewport,
+    masked: cssOfBitmap(mask, viewport, frame),
+    control: REDACTION_CONTROL_RECT,
   });
   // The default tracer frame reaches the wire unscaled — the mask rows
   // exercise the same 640x360 geometry the PRV-02 artifact rows assert on.
-  expect(image.length, 'an image left the browser').toBeGreaterThan(0);
-  const report = await analyzeRedaction(page, image, {
-    viewport,
-    masked,
-    control: REDACTION_CONTROL_RECT,
-  });
   expect(report.width).toBe(640);
   expect(report.height).toBe(360);
   expectMaskedAndTargeted(report);
@@ -4241,18 +4283,17 @@ test('PRV-04 CA-02: a user mask destroys the region and its boundary ring — ze
 /** The second mask's BITMAP rect (row A's later-no-dialog mask): clear of the
  * marker, the control region and the moving dot on the 640x360 default frame. */
 const MASK_B_RECT = { left: 320, top: 240, right: 440, bottom: 280 };
-/** Its viewport twin on the 0.5-scale default frame (bitmap / 0.5 = ×2). */
-const MASK_B_CSS: CssRect = {
-  left: MASK_B_RECT.left * 2,
-  top: MASK_B_RECT.top * 2,
-  right: MASK_B_RECT.right * 2,
-  bottom: MASK_B_RECT.bottom * 2,
-};
 
 test('ANN-05: the first mask asks, later masks do not', async ({ page, browserName }) => {
-  const { image, masked, viewport } = await maskAndSend(page, browserName, async (bitmap) => {
+  let firstRect: MaskDragRect | null = null;
+  let secondRect: MaskDragRect | null = null;
+  const { image, viewport, frame } = await maskAndSend(page, browserName, async (asked) => {
     // First drag: the alertdialog comes up over the editor.
-    await dragMaskOnBitmap(page, [bitmap.left, bitmap.top], [bitmap.right - 1, bitmap.bottom - 1]);
+    firstRect = await dragMaskOnBitmap(
+      page,
+      [asked.left, asked.top],
+      [asked.right - 1, asked.bottom - 1],
+    );
     const asking = await expectMaskConfirmation(page, true);
     expect(asking.role, 'role="alertdialog"').toBe('alertdialog');
     expect(asking.ariaModal, 'aria-modal="true"').toBe('true');
@@ -4296,7 +4337,7 @@ test('ANN-05: the first mask asks, later masks do not', async ({ page, browserNa
     expect(closed.focusOnMaskTool, 'focus returns to the mask tool button on close').toBe(true);
 
     // Second drag: no dialog, baked on release.
-    await dragMaskOnBitmap(
+    secondRect = await dragMaskOnBitmap(
       page,
       [MASK_B_RECT.left, MASK_B_RECT.top],
       [MASK_B_RECT.right - 1, MASK_B_RECT.bottom - 1],
@@ -4309,13 +4350,13 @@ test('ANN-05: the first mask asks, later masks do not', async ({ page, browserNa
   // confirmed first mask) AND the second rect filled (the silent later one).
   const first = await analyzeRedaction(page, image, {
     viewport,
-    masked,
+    masked: cssOfBitmap(firstRect as unknown as MaskDragRect, viewport, frame),
     control: REDACTION_CONTROL_RECT,
   });
   expectMaskedAndTargeted(first);
   const second = await analyzeRedaction(page, image, {
     viewport,
-    masked: MASK_B_CSS,
+    masked: cssOfBitmap(secondRect as unknown as MaskDragRect, viewport, frame),
     control: REDACTION_CONTROL_RECT,
   });
   expectMaskedAndTargeted(second);
@@ -4398,12 +4439,12 @@ test('PRV-04 pixelate: block-averaged, grid-snapped and opaque', async ({ page, 
   const { image } = await maskAndSend(
     page,
     browserName,
-    async (bitmap) => {
+    async (asked) => {
       // Opt in behind the toggle (P3-D-10), then drive the same drag.
       blockPx = await measureBlockSize(page);
       await setMaskMode(page, 'pixelate');
-      await maskDrag(page, bitmap);
-      const snapped = snapOutwardExpected(bitmap, blockPx);
+      const committed = await maskDrag(page, asked);
+      const snapped = snapOutwardExpected(committed, blockPx);
       expected.left = snapped.left;
       expected.top = snapped.top;
       expected.right = snapped.right;
@@ -4439,4 +4480,177 @@ test('PRV-04 pixelate: block-averaged, grid-snapped and opaque', async ({ page, 
     report.blackish / report.pixels,
     'a block over the gradient keeps the gradient colour — no flat black',
   ).toBeLessThan(0.5);
+});
+
+/* ------------------------------------------------------------------------- */
+/* PRV-04 stroke / ANN-06 masks / PRV-04 DPR — 03-06 Task 3                   */
+/* ------------------------------------------------------------------------- */
+
+test('PRV-04 stroke: a freehand drawn across the mask cannot resurrect it', async ({
+  page,
+  browserName,
+}) => {
+  let maskRect: MaskDragRect | null = null;
+  let strokeMid = 0;
+  const { image, viewport, frame } = await maskAndSend(page, browserName, async (asked) => {
+    maskRect = await maskDrag(page, asked);
+    // Now draw a freehand stroke straight ACROSS the masked region (T3 order
+    // says the patch replays AFTER the ink — inside the region and on its
+    // ring, the destruction must still hold in the exported bytes).
+    await selectTool(page, 'freehand');
+    const mid = Math.round((maskRect.top + maskRect.bottom) / 2);
+    strokeMid = mid;
+    await dragOnBitmap(page, [maskRect.left - 40, mid], [maskRect.right + 40, mid]);
+  });
+  const mask = maskRect as unknown as MaskDragRect;
+
+  // Non-vacuity: the stroke really crossed the mask and its ink survives in
+  // the bytes OUTSIDE the masked region (the tails either side).
+  const ink = await analyzeInk(page, image, {
+    bands: [
+      { from: [mask.left - 36, strokeMid], to: [mask.left - 10, strokeMid], halfWidth: 4 },
+      { from: [mask.right + 10, strokeMid], to: [mask.right + 36, strokeMid], halfWidth: 4 },
+    ],
+  });
+  expect(ink.bands[0], 'the stroke tail left of the mask is visible').toBeGreaterThanOrEqual(8);
+  expect(ink.bands[1], 'the stroke tail right of the mask is visible').toBeGreaterThanOrEqual(8);
+
+  // Inside the region and on its ring, the mask won: zero original pixels,
+  // the flat fill still at >= 0.98 of the interior — the ink physically could
+  // not sit above the patch (rebakeMasks after every stroke, patch replay
+  // last in encodeFinal).
+  const report = await analyzeRedaction(page, image, {
+    viewport,
+    masked: cssOfBitmap(mask, viewport, frame),
+    control: REDACTION_CONTROL_RECT,
+  });
+  expectMaskedAndTargeted(report);
+});
+
+test('ANN-06 masks: undo removes strokes and never a mask', async ({ page, browserName }) => {
+  let maskRect: MaskDragRect | null = null;
+  const { image, viewport, frame } = await maskAndSend(page, browserName, async (asked) => {
+    maskRect = await maskDrag(page, asked);
+    await selectTool(page, 'freehand');
+    // Two strokes, undone away…
+    await dragOnBitmap(page, STROKE_A_FROM, STROKE_A_TO);
+    await dragOnBitmap(page, STROKE_B_FROM, STROKE_B_TO);
+    await undo(page);
+    await undo(page);
+    // …then one survivor, so the "strokes are gone" assertion cannot pass
+    // vacuously (undo worked and the ink path works; the survivor proves it).
+    await dragOnBitmap(page, [60, 220], [240, 220]);
+  });
+  const mask = maskRect as unknown as MaskDragRect;
+  const ink = await analyzeInk(page, image, {
+    bands: [
+      ...UNDO_BANDS,
+      { from: [60, 220], to: [240, 220], halfWidth: 4 },
+    ],
+  });
+  expect(ink.bands[0], 'the first undone stroke is gone entirely').toBe(0);
+  expect(ink.bands[1], 'the second undone stroke is gone entirely').toBe(0);
+  expect(ink.bands[2], 'the survivor stroke is on the wire').toBeGreaterThanOrEqual(60);
+
+  // The masked region survived both undos: the undo stack never held a mask
+  // (append-only `masks`, strokes-only `pop`) and the redraw source holds no
+  // original pixels to resurrect (bakeMask wrote the destroyed bytes into it).
+  const report = await analyzeRedaction(page, image, {
+    viewport,
+    masked: cssOfBitmap(mask, viewport, frame),
+    control: REDACTION_CONTROL_RECT,
+  });
+  expectMaskedAndTargeted(report);
+});
+
+/**
+ * One DPR matrix row: mask the marker at `deviceScaleFactor` dpr on a
+ * frame = viewport × dpr, assert the same CA-02 thresholds on the decoded
+ * bytes. The committed rect comes from the helper's INDEPENDENT formula, so
+ * a mapping error at a non-integer zoom shows as a mismatch (the coverage
+ * assertion + the ring), not as a tolerance that hides it. The DPR-3 row
+ * follows the existing H-1 convention: the mask burns in before the ladder
+ * clamps 3x to 2x, and the interior-fill floor drops to 0.9 for the
+ * resampled boundary.
+ */
+async function runDprMaskRow(
+  page: Page,
+  browserName: string,
+  dpr: number,
+  frame: { width: number; height: number },
+  expectedWidth: number,
+  minInteriorBlack = 0.98,
+): Promise<void> {
+  let maskRect: MaskDragRect | null = null;
+  const { image, viewport, bitmap } = await maskAndSend(
+    page,
+    browserName,
+    async (asked) => {
+      maskRect = await maskDrag(page, asked);
+    },
+    { frame, dprCheck: dpr },
+  );
+  const mask = maskRect as unknown as MaskDragRect;
+  // The committed rect covers the asked rect, and the CSS-pixel quantization
+  // pad stays inside one CSS pixel of the frame's bitmap scale.
+  expect(mask.left).toBeLessThanOrEqual(bitmap.left);
+  expect(mask.top).toBeLessThanOrEqual(bitmap.top);
+  expect(mask.right).toBeGreaterThanOrEqual(bitmap.right);
+  expect(mask.bottom).toBeGreaterThanOrEqual(bitmap.bottom);
+  const pad = Math.ceil(frame.width / 1100); // sX ≈ canvas/CSS-box, box ≤ 1144
+  expect(mask.left).toBeGreaterThanOrEqual(bitmap.left - pad);
+  expect(mask.top).toBeGreaterThanOrEqual(bitmap.top - pad);
+
+  const report = await analyzeRedaction(page, image, {
+    viewport,
+    masked: cssOfBitmap(mask, viewport, frame),
+    control: REDACTION_CONTROL_RECT,
+  });
+  // The output scale pins which frame geometry was actually exercised.
+  expect(report.width).toBe(expectedWidth);
+  expectMaskedAndTargeted(report, minInteriorBlack);
+}
+
+test.describe('PRV-04 DPR (deviceScaleFactor: 1)', () => {
+  test.use({ deviceScaleFactor: 1 });
+
+  test('PRV-04 DPR: devicePixelRatio 1 masks land where they were dragged — rect and 1-px ring clean', async ({
+    page,
+    browserName,
+  }) => {
+    await runDprMaskRow(page, browserName, 1, { width: 1280, height: 720 }, 1280);
+  });
+});
+
+test.describe('PRV-04 DPR (deviceScaleFactor: 1.25)', () => {
+  test.use({ deviceScaleFactor: 1.25 });
+
+  test('PRV-04 DPR: devicePixelRatio 1.25 (non-integer scale) masks land where they were dragged', async ({
+    page,
+    browserName,
+  }) => {
+    await runDprMaskRow(page, browserName, 1.25, { width: 1600, height: 900 }, 1600);
+  });
+});
+
+test.describe('PRV-04 DPR (deviceScaleFactor: 2)', () => {
+  test.use({ deviceScaleFactor: 2 });
+
+  test('PRV-04 DPR: devicePixelRatio 2 masks land where they were dragged', async ({
+    page,
+    browserName,
+  }) => {
+    await runDprMaskRow(page, browserName, 2, { width: 2560, height: 1440 }, 2560);
+  });
+});
+
+test.describe('PRV-04 DPR (deviceScaleFactor: 3)', () => {
+  test.use({ deviceScaleFactor: 3 });
+
+  test('PRV-04 DPR: devicePixelRatio 3 masks before the DPR-2 encode clamp — rect and ring stay clean', async ({
+    page,
+    browserName,
+  }) => {
+    await runDprMaskRow(page, browserName, 3, { width: 3840, height: 2160 }, 2560, 0.9);
+  });
 });

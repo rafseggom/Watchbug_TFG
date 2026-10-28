@@ -74,6 +74,76 @@ export async function canvasBox(page: Page): Promise<CanvasBox> {
   });
 }
 
+/**
+ * The mask drag (03-06): bitmap coords → trusted pointer drag, and the
+ * destroyed bitmap rect the SDK WILL commit, computed here with the same
+ * independent formula (canvas box, `round`, outward `+1` on the exclusive
+ * edge) the SDK's `toBitmapPoint` applies to the coords it receives.
+ *
+ * **Why integer coords:** the engines differ in what they deliver — this
+ * platform's Chromium forwards fractional `page.mouse` coordinates verbatim,
+ * Firefox and WebKit truncate them to whole CSS pixels (measured probe).
+ * Requesting WHOLE pixel coordinates makes the delivered value engine-
+ * identical, so the destroyed rect the SDK maps is deterministic on all three
+ * engines — and still derived twice (this formula vs the SDK's) for
+ * non-vacuity. The start coordinate is chosen so the committed edge lands
+ * AT OR OUTSIDE the requested pixel, and the end coordinate so it covers
+ * the requested last pixel: the destroyed rect always CONTAINS the asked
+ * rect, with the outward pad bounded by one CSS pixel of quantization
+ * (±1 px at DPR 1, up to ~4 px at DPR 3 where one CSS px spans 3.36 bitmap
+ * px — the ring assertions run on the committed rect, so the over-pad is
+ * still proven targeted by the untouched frame around it).
+ *
+ * Returns the committed rect in BITMAP (backing-store) coordinates.
+ */
+export interface MaskDragRect {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+export async function dragMaskOnBitmap(
+  page: Page,
+  from: BitmapPoint,
+  to: BitmapPoint,
+): Promise<MaskDragRect> {
+  const box = await canvasBox(page);
+  const qX = box.width / box.bitmapWidth; // CSS px per bitmap px
+  const qY = box.height / box.bitmapHeight;
+  const sX = box.bitmapWidth / box.width; // the SDK's own scale, written out here
+  const sY = box.bitmapHeight / box.height;
+  // Start: the LARGEST whole-pixel coord the SDK still maps AT OR BELOW the
+  // requested first pixel (`< from + 0.5` is the round-down half-open bound).
+  let p0x = Math.ceil(box.left + (from[0] + 0.5) * qX) - 1;
+  let p0y = Math.ceil(box.top + (from[1] + 0.5) * qY) - 1;
+  // End: the SMALLEST whole-pixel coord the SDK maps AT OR ABOVE the
+  // requested last pixel (`>= to - 0.5` rounds up to `to`).
+  let p1x = Math.ceil(box.left + (to[0] - 0.5) * qX);
+  let p1y = Math.ceil(box.top + (to[1] - 0.5) * qY);
+  // Never leave the canvas box: the SDK commits only when the release lands
+  // inside it, and the press must hit the canvas at all.
+  p0x = Math.max(p0x, Math.ceil(box.left));
+  p0y = Math.max(p0y, Math.ceil(box.top));
+  p1x = Math.min(p1x, Math.floor(box.left + box.width));
+  p1y = Math.min(p1y, Math.floor(box.top + box.height));
+  const committed: MaskDragRect = {
+    left: Math.round((p0x - box.left) * sX),
+    top: Math.round((p0y - box.top) * sY),
+    right: Math.round((p1x - box.left) * sX) + 1,
+    bottom: Math.round((p1y - box.top) * sY) + 1,
+  };
+  const steps = 8;
+  await page.mouse.move(p0x, p0y);
+  await page.mouse.down();
+  for (let at = 1; at <= steps; at += 1) {
+    const fraction = at / steps;
+    await page.mouse.move(p0x + (p1x - p0x) * fraction, p0y + (p1y - p0y) * fraction);
+  }
+  await page.mouse.up();
+  return committed;
+}
+
 /** Wait until the fullscreen editor owns the screen. */
 export async function waitForEditor(page: Page, timeout = 10_000): Promise<void> {
   await page.waitForFunction(
@@ -135,24 +205,6 @@ export async function dragOnBitmap(
     await page.mouse.move(p0.x + (p1.x - p0.x) * fraction, p0.y + (p1.y - p0.y) * fraction);
   }
   await page.mouse.up();
-}
-
-/**
- * The mask drag (03-06): the same trusted pointer walk, named for the tool
- * it drives. Endpoints are BITMAP points of the draft (the editor canvas's
- * own backing-store pixels); the viewport mapping is the INDEPENDENT formula
- * above — `box = canvas.getBoundingClientRect(); scaleX = canvas.width /
- * box.width; viewportX = box.left + bitmapX / scaleX` — never the SDK's
- * `transformFor`. If the SDK's mapping and this one ever disagree, the mask
- * lands where the row's expected rect is not and the CA-02 assertions fail:
- * two derivations, one assertion (non-vacuity).
- */
-export async function dragMaskOnBitmap(
-  page: Page,
-  from: BitmapPoint,
-  to: BitmapPoint,
-): Promise<void> {
-  await dragOnBitmap(page, from, to, 8);
 }
 
 export interface BitmapRectLike {
