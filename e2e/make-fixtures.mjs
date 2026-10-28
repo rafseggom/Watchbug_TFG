@@ -16,6 +16,11 @@
  *     bomb guard reads only the header, so the synthetic-SOF route (PLAN, Task
  *     2: "keep the script browser-only") produces exactly the hostile shape a
  *     small file declaring a huge canvas has — no 64 MP browser canvas needed.
+ *   e2e/fixtures/rotated-exif-80x40.jpg — an 80×40 canvas JPEG with an APP1
+ *     `Exif` segment (Orientation = 6, "rotate 90° CW to display") inserted
+ *     immediately after the SOI marker. The P3-D-14 orientation lane: after
+ *     autoOrient + re-encode the STORED frame must be 40×80 with no Exif
+ *     segment left.
  */
 import { chromium } from '@playwright/test';
 import { writeFileSync, mkdirSync } from 'node:fs';
@@ -133,10 +138,67 @@ const oversizeBase64 = await page.evaluate(async () => {
   throw new Error('no SOF marker found in the encoded JPEG');
 });
 
+const rotatedBase64 = await page.evaluate(async () => {
+  // An 80×40 raw frame carrying EXIF Orientation = 6: the reporter SAW a
+  // 40×80 portrait (rotate 90° clockwise on display). This is the fixture
+  // that proves `autoOrient: true` runs — without it sharp stores the
+  // sideways 80×40 raw order and its default metadata strip removes the tag,
+  // making the intended orientation unrecoverable (research Pitfall 9).
+  const canvas = document.createElement('canvas');
+  canvas.width = 80;
+  canvas.height = 40;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#2f6feb';
+  ctx.fillRect(0, 0, 80, 40);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(4, 4, 72, 32);
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+  if (blob.type !== 'image/jpeg') throw new Error(`expected image/jpeg, got ${blob.type}`);
+  const src = new Uint8Array(await blob.arrayBuffer());
+
+  // APP1 Exif segment: length + "Exif\0\0" + a little-endian TIFF holding
+  // exactly one IFD0 entry — tag 0x0112 (Orientation), type SHORT, value 6.
+  const exifHeader = [0x45, 0x78, 0x69, 0x66, 0x00, 0x00]; // "Exif\0\0"
+  const tiff = [
+    0x49, 0x49, 0x2a, 0x00, // "II" + magic 42
+    0x08, 0x00, 0x00, 0x00, // IFD0 sits right after the 8-byte TIFF header
+    0x01, 0x00, // one directory entry
+    0x12, 0x01, // tag   0x0112 = Orientation
+    0x03, 0x00, // type  SHORT
+    0x01, 0x00, 0x00, 0x00, // count 1
+    0x06, 0x00, 0x00, 0x00, // value 6 (rotate 90° CW), zero-padded to 4 bytes
+    0x00, 0x00, 0x00, 0x00, // next IFD: none
+  ];
+  const segLen = 2 + exifHeader.length + tiff.length; // the length field counts itself
+  const app1 = [0xff, 0xe1, (segLen >> 8) & 0xff, segLen & 0xff, ...exifHeader, ...tiff];
+
+  // Insert immediately after SOI (PLAN Task 3).
+  const bytes = new Uint8Array(src.length + app1.length);
+  bytes.set(src.subarray(0, 2), 0);
+  bytes.set(app1, 2);
+  bytes.set(src.subarray(2), 2 + app1.length);
+
+  // The script-level assertions the plan mandates: the produced bytes carry
+  // the Exif segment and still begin with the JPEG magic prefix.
+  if (!(bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff)) {
+    throw new Error('fixture no longer starts with the JPEG magic prefix');
+  }
+  const asLatin1 = Array.from(bytes.slice(0, 2 + app1.length))
+    .map((x) => String.fromCharCode(x))
+    .join('');
+  if (!asLatin1.includes('Exif')) throw new Error('APP1 Exif segment missing from the fixture');
+  if (!(bytes[2] === 0xff && bytes[3] === 0xe1)) throw new Error('APP1 marker was not placed right after SOI');
+
+  let binary = '';
+  bytes.forEach((b) => { binary += String.fromCharCode(b); });
+  return btoa(binary);
+});
+
 await browser.close();
 
 writeFileSync(join(outDir, 'valid-64x64.png'), Buffer.from(pngBase64, 'base64'));
 writeFileSync(join(outDir, 'valid-64x64.webp'), Buffer.from(webpBase64, 'base64'));
 writeFileSync(join(outDir, 'valid-64x64.jpg'), Buffer.from(jpegBase64, 'base64'));
 writeFileSync(join(outDir, 'oversize-64mp.jpg'), Buffer.from(oversizeBase64, 'base64'));
+writeFileSync(join(outDir, 'rotated-exif-80x40.jpg'), Buffer.from(rotatedBase64, 'base64'));
 console.log(`fixtures written to ${outDir}`);

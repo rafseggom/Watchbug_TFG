@@ -36,6 +36,7 @@ const png = readFileSync(resolve(repoRoot, 'e2e/fixtures/valid-64x64.png'));
 const webp = readFileSync(resolve(repoRoot, 'e2e/fixtures/valid-64x64.webp'));
 const jpeg = readFileSync(resolve(repoRoot, 'e2e/fixtures/valid-64x64.jpg'));
 const oversizeJpeg = readFileSync(resolve(repoRoot, 'e2e/fixtures/oversize-64mp.jpg'));
+const rotatedJpeg = readFileSync(resolve(repoRoot, 'e2e/fixtures/rotated-exif-80x40.jpg'));
 const polyglotGif = readFileSync(resolve(repoRoot, 'e2e/fixtures/polyglot-gif-html.gif'));
 
 // The published JSON Schema artifact must exist and be the committed contract.
@@ -197,6 +198,33 @@ test('webp fixture ingests and serves image/webp', async ({ request }) => {
   expect(bytes.subarray(0, 4).toString('latin1')).toBe('RIFF');
   expect(bytes.subarray(8, 12).toString('latin1')).toBe('WEBP');
 });
+
+/**
+ * The artifact-side twin of `guard.ts`'s header walk, for assertions on
+ * committed fixtures and served bytes: dimensions from the first SOFn, or
+ * null when the header is unusable. Deliberately the same standalone-marker
+ * and SOFn rules as the server so a drift between them is a test failure.
+ */
+function jpegHeaderDims(buf: Buffer): { width: number; height: number } | null {
+  if (buf.length < 4 || buf[0] !== 0xff || buf[1] !== 0xd8) return null;
+  let off = 2;
+  while (off + 4 <= buf.length) {
+    if (buf[off] !== 0xff) return null;
+    const marker = buf[off + 1];
+    if (marker === 0xd9 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+      off += 2;
+      continue;
+    }
+    if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+      if (off + 9 > buf.length) return null;
+      return { width: buf.readUInt16BE(off + 7), height: buf.readUInt16BE(off + 5) };
+    }
+    const length = buf.readUInt16BE(off + 2);
+    if (length < 2) return null;
+    off += 2 + length;
+  }
+  return null;
+}
 
 /**
  * Decode the stored blob in a real browser and report the bitmap dimensions —
@@ -381,6 +409,45 @@ test('format allowlist: SVG and GIF are still rejected and the copy names JPEG',
   });
   expect(gif.status).toBe(400);
   expect(String(gif.body.message)).toContain('JPEG');
+});
+
+test('JPEG orientation: an EXIF-rotated photo is stored upright without its EXIF segment', async ({ request, page }) => {
+  // The proof that `autoOrient` ACTUALLY runs (research F1, Pitfall 9): the
+  // committed fixture is an 80×40 raw frame whose APP1 Exif declares
+  // Orientation = 6 ("rotate 90° CW to display"). Without autoOrient, sharp's
+  // default metadata strip removes the tag and the stored artifact is
+  // permanently sideways — unrecoverable. With it, the stored frame is the
+  // 40×80 the reporter saw. Browser decode is decisive here precisely because
+  // the served bytes carry NO Exif tag left to auto-orient a second time:
+  // what decodes is what was stored.
+  expect(rotatedJpeg.subarray(0, 3)).toEqual(Buffer.from([0xff, 0xd8, 0xff]));
+  const fixtureDims = jpegHeaderDims(rotatedJpeg);
+  expect(fixtureDims, 'fixture carries an SOF declaring the raw sensor frame').toEqual({ width: 80, height: 40 });
+  expect(rotatedJpeg.includes('Exif'), 'fixture carries an Exif segment').toBe(true);
+
+  const created = await postIncident(request, {
+    key: KEY,
+    idempotencyKey: `e2e-jpeg-exif-${randomUUID()}`,
+    meta: { ...META, title: 'JPEG EXIF orientation probe' },
+    bytes: rotatedJpeg,
+    filename: 'rotated.jpg',
+    mime: 'image/jpeg',
+  });
+  expect(created.status).toBe(201);
+
+  const image = await request.get(`/api/incidents/${created.body.id as string}/image`);
+  expect(image.status()).toBe(200);
+  const served = Buffer.from(await image.body());
+
+  // (i) the metadata did not reach the developer's server (T-03-12) and
+  // (iii) the container is still a JPEG after the rotate + re-encode.
+  expect(served.subarray(0, 3)).toEqual(Buffer.from([0xff, 0xd8, 0xff]));
+  expect(served.includes('Exif'), 'served bytes carry no Exif segment').toBe(false);
+
+  // (ii) stored dimensions SWAPPED relative to the fixture: 40 wide × 80
+  // tall — Orientation = 6 applied, not stripped.
+  expect(jpegHeaderDims(served)).toEqual({ width: 40, height: 80 });
+  expect(await servedImageDims(page, created.body.id as string)).toEqual({ width: 40, height: 80 });
 });
 
 test('ING-03: same Idempotency-Key replays the same id and stores one row', async ({ request }) => {

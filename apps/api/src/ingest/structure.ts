@@ -18,6 +18,16 @@ import type { ImageExt } from '@watchbug/contracts/types';
  *   data past the declared **File Size** is rejected (the container spec says
  *   a WebP file "SHOULD NOT contain any data after the data specified by
  *   File Size" — trailing bytes are exactly where a second payload hides).
+ * - **JPEG:** the bytes pass through **unchanged** (P3-D-14, research F1/A3).
+ *   A JPEG walker would have to parse entropy-coded scan data — byte-stuffed
+ *   `FF 00` escapes, restart intervals, progressive scans, multi-picture/MPPO
+ *   files — and a buggy walker is a worse control than no walker. The written
+ *   control for JPEG is elsewhere in the stack: the 3-byte magic allowlist in
+ *   `sniff.ts` decides admission; the SOF header-dimension guard in
+ *   `guard.ts` runs **before any decoder**; and the mandatory sharp root
+ *   re-encode in `harden.ts` is the hardening backend — only libvips' own
+ *   output reaches storage, which kills polyglot and trailing-data payloads
+ *   without this file ever touching scan data.
  *
  * The dropping here is the structural half of the hardening; the root
  * re-encode in `harden.ts` (P1-D-10, `sharp`) is the other half. This module
