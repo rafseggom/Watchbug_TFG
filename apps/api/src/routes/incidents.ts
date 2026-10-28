@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { and, desc, eq, lt, or } from 'drizzle-orm';
 import { MAX_BODY_BYTES, MAX_ENCODED_IMAGE_BYTES } from '@watchbug/contracts/constants';
+import type { ImageExt } from '@watchbug/contracts/types';
 import { PROJECT_KEY_PATTERN, type AppConfig } from '../config';
 import type { AppDb } from '../db/client';
 import { incidents, projects } from '../db/schema';
@@ -44,13 +45,35 @@ import type { Storage } from '../ports';
  *
  * `GET /api/incidents/:id/image` resolves the blob key **from the database
  * row only** — a request never names a file (R-04, C-4).
+ *
+ * CAP-03 (this phase): a submission that carries **no `image` part** is a
+ * text-only report. The image pipeline (size cap → sniff → structure → guard
+ * → harden) is skipped entirely and the row is stored with `storage_key` /
+ * `content_type` NULL; the meta pipeline (validate → sanitise → re-validate),
+ * the project-key gate and the idempotency conflict handling run exactly as
+ * for an image-bearing report — an optional image never makes the ingest
+ * pipeline optional (T-03-06). The blob route answers the same structured 404
+ * shape it uses for "incident not found" and never hands a null key to the
+ * `Storage` seam.
  */
 
 const DAY_MS = 86_400_000;
 const MAX_IDEMPOTENCY_KEY_CHARS = 256;
 
 /** Server-side ext→MIME allowlist — the stored value never decides its own response headers. */
-const CONTENT_TYPE_BY_EXT: Record<string, string> = { png: 'image/png', webp: 'image/webp' };
+const CONTENT_TYPE_BY_EXT: Record<ImageExt, string> = { png: 'image/png', webp: 'image/webp' };
+
+/**
+ * The **one** inverse of `CONTENT_TYPE_BY_EXT`, derived from it at module
+ * scope so the two mappings can never drift (Pitfall 8 — the binary-ternary
+ * class that would store a JPEG as `image/webp`). The blob route reads `ext`
+ * from here; `image/jpeg` joins the pair when 03-02 adds the JPEG lane, and
+ * until then a stored `'image/jpeg'` row resolves to `undefined` here and
+ * answers the structured 500 — never a guessed MIME (T-03-09).
+ */
+const EXT_BY_CONTENT_TYPE: ReadonlyMap<string, ImageExt> = new Map(
+  (Object.entries(CONTENT_TYPE_BY_EXT) as [ImageExt, string][]).map(([ext, mime]) => [mime, ext]),
+);
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -225,65 +248,74 @@ export async function registerIncidentsRoutes(app: FastifyInstance, deps: RouteD
     // ever re-reads or re-checks the key.
     const projectId = (req as GatedRequest)[PROJECT_ID]!;
 
-    if (imageBytes === undefined) return badRequest(reply, 'the "image" part is missing');
+    // CAP-03 — a submission that carried no `image` part is a text-only
+    // report: stages 2-5 (semantic size cap, sniff, structure, guard, harden)
+    // are image-stage work and are skipped entirely. The meta pipeline — Zod
+    // validate (above), sanitise + re-validate (below) — the project-key gate
+    // (a preHandler, already run) and the idempotency conflict handling (the
+    // insert) run exactly as they do for an image-bearing report.
+    let storedImage: { bytes: Uint8Array; ext: ImageExt } | null = null;
+    if (imageBytes !== undefined) {
+      // A-06 semantic cap — checked on the bytes actually read, before any
+      // codec work (the 4 MB multipart limit above it is only the parser guard).
+      if (imageBytes.length > MAX_ENCODED_IMAGE_BYTES) {
+        return reply.code(413).send(
+          failure(
+            413,
+            `image is ${imageBytes.length} bytes; the contract allows at most ${MAX_ENCODED_IMAGE_BYTES} (MAX_ENCODED_IMAGE_BYTES)`,
+          ),
+        );
+      }
 
-    // A-06 semantic cap — checked on the bytes actually read, before any
-    // codec work (the 4 MB multipart limit above it is only the parser guard).
-    if (imageBytes.length > MAX_ENCODED_IMAGE_BYTES) {
-      return reply.code(413).send(
-        failure(
-          413,
-          `image is ${imageBytes.length} bytes; the contract allows at most ${MAX_ENCODED_IMAGE_BYTES} (MAX_ENCODED_IMAGE_BYTES)`,
-        ),
-      );
-    }
+      // Stage 2 — magic bytes only, never the client-declared Content-Type.
+      const sniffed = sniffImage(imageBytes);
+      if (sniffed === null) {
+        return badRequest(
+          reply,
+          'image is neither PNG nor WebP (magic bytes); SVG, GIF and HTML are never accepted',
+        );
+      }
 
-    // Stage 2 — magic bytes only, never the client-declared Content-Type.
-    const sniffed = sniffImage(imageBytes);
-    if (sniffed === null) {
-      return badRequest(
-        reply,
-        'image is neither PNG nor WebP (magic bytes); SVG, GIF and HTML are never accepted',
-      );
-    }
+      // Stage 3 — container structure: chunk allowlists, no animation, no
+      // trailing data; metadata chunks are dropped here (C-3, P1-D-11).
+      const structure = validateStructure(imageBytes, sniffed);
+      if (!structure.ok) return badRequest(reply, structure.message);
 
-    // Stage 3 — container structure: chunk allowlists, no animation, no
-    // trailing data; metadata chunks are dropped here (C-3, P1-D-11).
-    const structure = validateStructure(imageBytes, sniffed);
-    if (!structure.ok) return badRequest(reply, structure.message);
-
-    // Stage 4 — dimensions from the header, before any pixel work.
-    const guard = assertDecodeSafe(structure.bytes, sniffed);
-    if (!guard.ok) return reply.code(guard.statusCode).send({
-      statusCode: guard.statusCode,
-      error: 'Bad Request',
-      message: guard.message,
-    });
-
-    // Stage 5 — P1-D-10 root re-encode (sharp): decode → re-encode in the same
-    // format (P1-D-12), metadata stripped, processing-time guarded. The bytes
-    // that reach storage are libvips' output, not the submitted container.
-    const hardened = await hardenImage(structure.bytes);
-    if (!hardened.ok) {
-      return reply.code(hardened.statusCode).send({
-        statusCode: hardened.statusCode,
+      // Stage 4 — dimensions from the header, before any pixel work.
+      const guard = assertDecodeSafe(structure.bytes, sniffed);
+      if (!guard.ok) return reply.code(guard.statusCode).send({
+        statusCode: guard.statusCode,
         error: 'Bad Request',
-        message: hardened.message,
+        message: guard.message,
       });
-    }
 
-    // A-06's 2 MB cap is a cap on the STORED artifact, not only on the input:
-    // a low-quality noisy input well under the cap can re-encode to far more
-    // (WR-02), and nothing downstream re-checks it — the blob route would
-    // stream whatever size landed. Re-cap the hardened bytes with the same
-    // contract constant and the same structured 413 body as the input cap.
-    if (hardened.bytes.length > MAX_ENCODED_IMAGE_BYTES) {
-      return reply.code(413).send(
-        failure(
-          413,
-          `re-encoded image is ${hardened.bytes.length} bytes; the contract allows at most ${MAX_ENCODED_IMAGE_BYTES} (MAX_ENCODED_IMAGE_BYTES)`,
-        ),
-      );
+      // Stage 5 — P1-D-10 root re-encode (sharp): decode → re-encode in the same
+      // format (P1-D-12), metadata stripped, processing-time guarded. The bytes
+      // that reach storage are libvips' output, not the submitted container.
+      const hardened = await hardenImage(structure.bytes);
+      if (!hardened.ok) {
+        return reply.code(hardened.statusCode).send({
+          statusCode: hardened.statusCode,
+          error: 'Bad Request',
+          message: hardened.message,
+        });
+      }
+
+      // A-06's 2 MB cap is a cap on the STORED artifact, not only on the input:
+      // a low-quality noisy input well under the cap can re-encode to far more
+      // (WR-02), and nothing downstream re-checks it — the blob route would
+      // stream whatever size landed. Re-cap the hardened bytes with the same
+      // contract constant and the same structured 413 body as the input cap.
+      if (hardened.bytes.length > MAX_ENCODED_IMAGE_BYTES) {
+        return reply.code(413).send(
+          failure(
+            413,
+            `re-encoded image is ${hardened.bytes.length} bytes; the contract allows at most ${MAX_ENCODED_IMAGE_BYTES} (MAX_ENCODED_IMAGE_BYTES)`,
+          ),
+        );
+      }
+
+      storedImage = { bytes: hardened.bytes, ext: hardened.ext };
     }
 
     // Stage 6 — plain-text sanitization, then re-validate the contract so
@@ -293,7 +325,10 @@ export async function registerIncidentsRoutes(app: FastifyInstance, deps: RouteD
       return badRequest(reply, 'meta no longer validates after sanitization (e.g. a markup-only title)');
     }
 
-    const { key } = await storage.put(hardened.bytes, hardened.ext, projectId);
+    // The blob is written before the insert ONLY when there is an image to
+    // write (CAP-03): a text-only report never touches the Storage seam.
+    const storageKey =
+      storedImage === null ? null : (await storage.put(storedImage.bytes, storedImage.ext, projectId)).key;
 
     const now = Date.now();
     // WR-03: the blob is written BEFORE the insert (required for idempotent
@@ -317,26 +352,34 @@ export async function registerIncidentsRoutes(app: FastifyInstance, deps: RouteD
           userEmail: cleanMeta.user?.email ?? null,
           identityPurgeAt: new Date(now + config.ttlIdentityDays * DAY_MS),
           artifactPurgeAt: new Date(now + config.ttlArtifactDays * DAY_MS),
-          storageKey: key,
-          contentType: hardened.ext === 'png' ? 'image/png' : 'image/webp',
+          storageKey,
+          contentType: storedImage === null ? null : CONTENT_TYPE_BY_EXT[storedImage.ext],
         })
         .onConflictDoNothing({ target: [incidents.projectId, incidents.idempotencyKey] })
         .returning({ id: incidents.id });
     } catch (err) {
-      await storage.delete(key).catch((cleanupErr) => {
-        console.error('[watchbug] orphaned blob delete failed after insert error (WR-03):', cleanupErr);
-      });
+      // WR-03 applies only when this attempt actually wrote a blob — an
+      // imageless insert failure has nothing to clean up (null never reaches
+      // the Storage seam).
+      if (storageKey !== null) {
+        await storage.delete(storageKey).catch((cleanupErr) => {
+          console.error('[watchbug] orphaned blob delete failed after insert error (WR-03):', cleanupErr);
+        });
+      }
       throw err;
     }
 
     if (inserted.length === 0) {
       // Replay: the uniqueness index won the race. The blob written for this
-      // attempt is unreferenced — delete it, then serve the original id.
-      // Best-effort (WR-03): a failed cleanup must not fail the replay (a
+      // attempt (image-bearing submissions only — a meta-only replay wrote
+      // nothing, CAP-03) is unreferenced — delete it, then serve the original
+      // id. Best-effort (WR-03): a failed cleanup must not fail the replay (a
       // 500 + retry would only leak a second blob); it is logged for ops.
-      await storage.delete(key).catch((cleanupErr) => {
-        console.error('[watchbug] replay blob delete failed (WR-03):', cleanupErr);
-      });
+      if (storageKey !== null) {
+        await storage.delete(storageKey).catch((cleanupErr) => {
+          console.error('[watchbug] replay blob delete failed (WR-03):', cleanupErr);
+        });
+      }
       // WR-01: the conflict is detected on `(project_id, idempotency_key)`,
       // so the replay lookup MUST be scoped to the same pair — an unscoped
       // lookup could return a DIFFERENT project's incident with the same
@@ -452,17 +495,25 @@ export async function registerIncidentsRoutes(app: FastifyInstance, deps: RouteD
       return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'incident not found' });
     }
 
-    // DB-lookup-only key resolution: the key in the row was server-generated
-    // at insert; the request never contributed a path segment (R-04, C-4).
-    // The path safety itself is delegated to `FsStorage.stream`, which applies
-    // `STORAGE_KEY_REGEX` and then `path.resolve` + a volume-root prefix
-    // assertion before any file access — belt and braces on top of the key
-    // being server-generated.
-    const stream = await storage.stream(row.storageKey);
+    // CAP-03: a text-only row has no screenshot. Answer the same structured
+    // 404 shape this route already uses for "incident not found" — never 500,
+    // never an empty 200 stream — and never hand a null key to the Storage
+    // seam (the one invariant, `storageKey === null`, read here and by the
+    // skip guard in purge.ts).
+    if (row.storageKey === null) {
+      return reply.code(404).send({
+        statusCode: 404,
+        error: 'Not Found',
+        message: 'incident has no stored screenshot',
+      });
+    }
 
-    const ext = row.contentType === 'image/webp' ? 'webp' : row.contentType === 'image/png' ? 'png' : null;
-    const mime = ext === null ? null : CONTENT_TYPE_BY_EXT[ext];
-    if (mime === null || ext === null) {
+    // One allowlist, read in both directions (Pitfall 8): ext is derived from
+    // the stored content type through the SAME map the insert used, never a
+    // second ternary. An unknown (or null-beside-a-key — corruption) value
+    // answers the structured 500 BEFORE any file access (T-03-09).
+    const ext = row.contentType === null ? undefined : EXT_BY_CONTENT_TYPE.get(row.contentType);
+    if (ext === undefined) {
       // The CHECK constraint makes this unreachable; if it ever fires the row
       // is corrupt — refuse rather than guess a content type.
       return reply.code(500).send({
@@ -472,8 +523,16 @@ export async function registerIncidentsRoutes(app: FastifyInstance, deps: RouteD
       });
     }
 
+    // DB-lookup-only key resolution: the key in the row was server-generated
+    // at insert; the request never contributed a path segment (R-04, C-4).
+    // The path safety itself is delegated to `FsStorage.stream`, which applies
+    // `STORAGE_KEY_REGEX` and then `path.resolve` + a volume-root prefix
+    // assertion before any file access — belt and braces on top of the key
+    // being server-generated.
+    const stream = await storage.stream(row.storageKey);
+
     return reply
-      .header('Content-Type', mime)
+      .header('Content-Type', CONTENT_TYPE_BY_EXT[ext])
       .header('X-Content-Type-Options', 'nosniff')
       // Fixed ASCII name: header injection through a stored filename is not possible.
       .header('Content-Disposition', `attachment; filename="screenshot.${ext}"`)

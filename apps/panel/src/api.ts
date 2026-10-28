@@ -27,7 +27,8 @@ export interface Incident {
   url: string | null;
   user: ReportUser | null;
   status: IncidentStatus;
-  contentType: string;
+  /** `null` for a CAP-03 text-only report — no screenshot was ever captured. */
+  contentType: string | null;
   createdAt: string;
 }
 

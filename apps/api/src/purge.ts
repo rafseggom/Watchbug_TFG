@@ -83,13 +83,19 @@ export async function runPurge(deps: PurgeDeps): Promise<void> {
 
   let deleted = 0;
   for (const row of due) {
-    try {
-      await storage.delete(row.storageKey);
-    } catch (err) {
-      // Counts and uuids only — never the PII the job exists to destroy
-      // (T-m3v-03).
-      console.error(`[watchbug] purge: artifact blob delete failed (id=${row.id}, kept for retry):`, err);
-      continue;
+    // CAP-03: an imageless row has no blob — the null key is never handed to
+    // the Storage seam (the one invariant, read here and by the blob route's
+    // 404). The row is still deleted and still counted, so the TTL sweep
+    // survives mixed rows without an exception path (T-03-08).
+    if (row.storageKey !== null) {
+      try {
+        await storage.delete(row.storageKey);
+      } catch (err) {
+        // Counts and uuids only — never the PII the job exists to destroy
+        // (T-m3v-03).
+        console.error(`[watchbug] purge: artifact blob delete failed (id=${row.id}, kept for retry):`, err);
+        continue;
+      }
     }
     await db.delete(incidents).where(eq(incidents.id, row.id));
     deleted += 1;

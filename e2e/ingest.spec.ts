@@ -58,16 +58,47 @@ async function postIncident(
 ): Promise<PostResult> {
   const form = {
     meta: JSON.stringify(opts.meta),
-    image: {
-      name: opts.filename ?? 'shot.png',
-      mimeType: opts.mime ?? 'image/png',
-      buffer: opts.bytes ?? png,
-    },
+    // CAP-03: `bytes === undefined` now means "send no `image` part at all" —
+    // the old `opts.bytes ?? png` default silently uploaded the PNG fixture on
+    // every call, which made the route's imageless branch unreachable from
+    // this helper. Callers that intend an image pass `bytes: png` explicitly.
+    ...(opts.bytes === undefined
+      ? {}
+      : {
+          image: {
+            name: opts.filename ?? 'shot.png',
+            mimeType: opts.mime ?? 'image/png',
+            buffer: opts.bytes,
+          },
+        }),
   };
   const headers: Record<string, string> = { 'X-Project-Key': opts.key };
   if (opts.idempotencyKey !== null) headers['Idempotency-Key'] = opts.idempotencyKey;
   const res = await request.post('/api/incidents', { multipart: form, headers });
   return { status: res.status(), body: (await res.json()) as Record<string, unknown> };
+}
+
+/**
+ * CAP-03 artifact-level blob counter: the number of files in the api
+ * container's attachments volume (`blobs/…` plus in-flight `tmp/…`). The suite
+ * already hard-requires the compose stack (global-setup fails without
+ * `/api/health`), so the very docker CLI that runs it is a legitimate
+ * assertion surface; `compose exec` resolves the container by service name and
+ * the volume root comes from the container's own `WATCHBUG_DATA_DIR`, so no
+ * host secret is read. With `workers: 1` and no parallel tests, a before/after
+ * diff inside one row counts exactly this row's volume writes.
+ */
+function blobCount(): number {
+  const run = spawnSync(
+    'docker',
+    ['compose', 'exec', '-T', 'api', 'sh', '-c', 'find "${WATCHBUG_DATA_DIR:-/data}" -type f | wc -l'],
+    { cwd: repoRoot, encoding: 'utf8', timeout: 20_000 },
+  );
+  if (run.error) throw new Error(`docker compose exec failed: ${String(run.error)}`);
+  if (run.status !== 0) throw new Error(`docker compose exec exited ${String(run.status)}: ${run.stderr}`);
+  const count = Number.parseInt(run.stdout.trim(), 10);
+  if (Number.isNaN(count)) throw new Error(`could not parse a blob count from ${JSON.stringify(run.stdout)}`);
+  return count;
 }
 
 // The e2e project key: the deploy stack seeds from WATCHBUG_PROJECT_KEY in
@@ -95,7 +126,7 @@ const META = {
 
 test('POST /api/incidents: 201, row validates against the published schema, list + image round-trip (ING-01, ENR-06)', async ({ request }) => {
   const idem = `e2e-create-${randomUUID()}`;
-  const created = await postIncident(request, { key: KEY, idempotencyKey: idem, meta: META });
+  const created = await postIncident(request, { key: KEY, idempotencyKey: idem, meta: META, bytes: png });
   expect(created.status).toBe(201);
   const id = created.body.id as string;
   expect(id).toMatch(/^[0-9a-f-]{36}$/);
@@ -166,10 +197,10 @@ test('webp fixture ingests and serves image/webp', async ({ request }) => {
 
 test('ING-03: same Idempotency-Key replays the same id and stores one row', async ({ request }) => {
   const idem = `e2e-replay-${randomUUID()}`;
-  const first = await postIncident(request, { key: KEY, idempotencyKey: idem, meta: { ...META, title: 'Replay probe' } });
+  const first = await postIncident(request, { key: KEY, idempotencyKey: idem, meta: { ...META, title: 'Replay probe' }, bytes: png });
   expect(first.status).toBe(201);
 
-  const replay = await postIncident(request, { key: KEY, idempotencyKey: idem, meta: { ...META, title: 'Replay probe' } });
+  const replay = await postIncident(request, { key: KEY, idempotencyKey: idem, meta: { ...META, title: 'Replay probe' }, bytes: png });
   expect(replay.status).toBe(200);
   expect(replay.body.replayed).toBe(true);
   expect(replay.body.id).toBe(first.body.id);
@@ -182,8 +213,8 @@ test('ING-03: concurrent pair with one key yields one row', async ({ request }) 
   const idem = `e2e-race-${randomUUID()}`;
   const meta = { ...META, title: 'Race probe' };
   const [a, b] = await Promise.all([
-    postIncident(request, { key: KEY, idempotencyKey: idem, meta }),
-    postIncident(request, { key: KEY, idempotencyKey: idem, meta }),
+    postIncident(request, { key: KEY, idempotencyKey: idem, meta, bytes: png }),
+    postIncident(request, { key: KEY, idempotencyKey: idem, meta, bytes: png }),
   ]);
 
   // One create wins; the loser replays (or, in a tight race, both report 201
@@ -200,7 +231,7 @@ test('ING-03: concurrent pair with one key yields one row', async ({ request }) 
 test('ING-03 (Q6): missing Idempotency-Key → 400 structured body, list unchanged', async ({ request }) => {
   const before = (await (await request.get('/api/incidents')).json() as unknown[]).length;
 
-  const created = await postIncident(request, { key: KEY, idempotencyKey: null, meta: { ...META, title: 'No key probe' } });
+  const created = await postIncident(request, { key: KEY, idempotencyKey: null, meta: { ...META, title: 'No key probe' }, bytes: png });
   expect(created.status).toBe(400);
   expect(typeof created.body.statusCode).toBe('number');
   expect(typeof created.body.error).toBe('string');
@@ -215,6 +246,7 @@ test('wrong project key → 401; svg → 400 (SEC-03, P1-D-11)', async ({ reques
     key: 'wkbt_ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ',
     idempotencyKey: `e2e-wrongkey-${randomUUID()}`,
     meta: META,
+    bytes: png,
   });
   expect(wrong.status).toBe(401);
 
@@ -229,6 +261,38 @@ test('wrong project key → 401; svg → 400 (SEC-03, P1-D-11)', async ({ reques
   expect(svg.status).toBe(400);
 });
 
+test('CAP-03 text-only: a meta-only submission stores a row with no screenshot', async ({ request }) => {
+  // The helper omits the `image` multipart part entirely when `bytes` is
+  // undefined, so this request is genuinely meta-only and reaches the route's
+  // imageless branch — the same meta pipeline, no screenshot.
+  const idem = `e2e-textonly-${randomUUID()}`;
+  const title = 'Text-only report probe';
+  const before = blobCount();
+  const created = await postIncident(request, { key: KEY, idempotencyKey: idem, meta: { ...META, title } });
+  expect(created.status).toBe(201);
+  const id = created.body.id as string;
+  expect(id).toMatch(/^[0-9a-f-]{36}$/);
+
+  // Artifact-level: no blob was written for a screenshot this reporter never
+  // took (before/after file count of the attachments volume, workers=1).
+  expect(blobCount()).toBe(before);
+
+  // The list projection carries the row with a null content type — the read
+  // surface shows exactly what the reporter captured, including nothing.
+  const list = await (await request.get('/api/incidents')).json() as Array<Record<string, unknown>>;
+  const row = list.find((r) => r.id === id);
+  expect(row).toBeDefined();
+  expect(row?.title).toBe(title);
+  expect(row?.contentType).toBeNull();
+
+  // The blob route answers the structured 404 — never 500, never an empty 200
+  // stream, and never a fabricated image.
+  const image = await request.get(`/api/incidents/${id}/image`);
+  expect(image.status()).toBe(404);
+  const body = (await image.json()) as Record<string, unknown>;
+  expect(typeof body.message).toBe('string');
+});
+
 test('panel renders the row and its screenshot (P1-D-04, SEC-05 pass 2)', async ({ page, request }) => {
   // Ensure at least one row exists for the panel to show. The title carries a
   // script tag: SEC-05 pass 1 (server-side sanitize-html) must strip it before
@@ -239,6 +303,7 @@ test('panel renders the row and its screenshot (P1-D-04, SEC-05 pass 2)', async 
     key: KEY,
     idempotencyKey: `e2e-panel-${randomUUID()}`,
     meta: { ...META, title: `${probe} <script>x</script>` },
+    bytes: png,
   });
   expect(created.status).toBe(201);
 
