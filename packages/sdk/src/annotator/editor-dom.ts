@@ -74,6 +74,18 @@ export const EDITOR_CSS = `
 }
 .editor-done:hover { background: var(--wb-color-accent-hover); }
 .editor-done:active { background: var(--wb-color-accent-active); }
+.editor-error {
+  display: none;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--wb-color-danger);
+  overflow-wrap: anywhere;
+}
+.editor-error[data-shown='true'] { display: block; }
 .editor-body {
   flex: 1 1 auto;
   display: flex;
@@ -319,6 +331,13 @@ export interface EditorShell {
   readonly title: HTMLElement;
   /** The `Done` button. */
   readonly done: HTMLButtonElement;
+  /** The in-bar mask refusal (`role="alert"`, hidden until a bake throws): a
+   * failed mask is a privacy event and must never be a silent no-op (LW-02). */
+  readonly error: HTMLElement;
+  /** Surface `editor.mask.error` — called when a mask bake fails closed. */
+  showMaskError(): void;
+  /** Clear it (the next successful bake, or a locale re-render). */
+  clearMaskError(): void;
   /** The canvas area box — the contain-fit reference for the canvas. */
   readonly area: HTMLElement;
   /** The drawing canvas: `role="img"` + `aria-label={editor.canvas.label}`. */
@@ -470,9 +489,15 @@ export function createEditorShell(maskConfirm: MaskConfirmCopy): EditorShell {
 
   const bar = el('div', 'editor-bar');
   const title = el('h1', 'editor-title');
+  // The mask refusal line (LW-02): a bake that throws leaves the region as it
+  // was, so the user is told the mask did NOT land instead of believing it did.
+  const error = el('span', 'editor-error');
+  error.setAttribute('role', 'alert');
+  error.setAttribute('data-shown', 'false');
   const done = el('button', 'editor-done');
   done.setAttribute('type', 'button');
   bar.appendChild(title);
+  bar.appendChild(error);
   bar.appendChild(done);
 
   const body = el('div', 'editor-body');
@@ -603,6 +628,23 @@ export function createEditorShell(maskConfirm: MaskConfirmCopy): EditorShell {
   root.appendChild(labelInput);
   root.appendChild(maskDialogRoot);
 
+  /** True while the mask refusal is on screen (so a locale re-render can
+   * re-resolve its copy instead of blanking it). */
+  let maskErrorShown = false;
+
+  const showMaskError = (): void => {
+    maskErrorShown = true;
+    error.textContent = tEditor('editor.mask.error');
+    error.setAttribute('data-shown', 'true');
+  };
+
+  const clearMaskError = (): void => {
+    if (!maskErrorShown) return;
+    maskErrorShown = false;
+    error.textContent = '';
+    error.setAttribute('data-shown', 'false');
+  };
+
   /** Re-resolve every `tEditor`-derived label (mount + locale re-render). */
   const renderCopy = (): void => {
     title.textContent = tEditor('editor.title');
@@ -633,6 +675,9 @@ export function createEditorShell(maskConfirm: MaskConfirmCopy): EditorShell {
     if (pixelateButton !== undefined) {
       pixelateButton.textContent = tEditor('editor.mask.pixelate');
     }
+    // A shown refusal is copy too: re-resolve it with the new locale rather
+    // than leaving the previous language on screen (LW-02).
+    if (maskErrorShown) error.textContent = tEditor('editor.mask.error');
   };
   renderCopy();
 
@@ -640,6 +685,9 @@ export function createEditorShell(maskConfirm: MaskConfirmCopy): EditorShell {
     root,
     title,
     done,
+    error,
+    showMaskError,
+    clearMaskError,
     area,
     canvas,
     tools,

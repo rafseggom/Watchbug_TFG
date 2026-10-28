@@ -32,6 +32,8 @@ const editorEn = {
   'editor.mask.mode.label': 'Mask style',
   'editor.mask.fill': 'Fill',
   'editor.mask.pixelate': 'Pixelate',
+  // LW-02: a bake that fails closed leaves the region as it was — say so.
+  'editor.mask.error': "That area couldn't be masked. Nothing was hidden there.",
 } as const;
 
 /** Every editor string key — derived from the English dictionary. */
@@ -51,6 +53,7 @@ const editorEs: Record<EditorStringId, string> = {
   'editor.mask.mode.label': 'Estilo de máscara',
   'editor.mask.fill': 'Relleno',
   'editor.mask.pixelate': 'Pixelar',
+  'editor.mask.error': 'No se pudo enmascarar esa zona. Ahí no se ocultó nada.',
 };
 
 /** Both locales, one shape (the `strings.ts` map discipline, lazy lane). */

@@ -256,8 +256,15 @@ export function createEditor(options: AnnotatorOpenOptions): Promise<AnnotatorRe
         // Append-only: the patch is destroyed pixels only, and it NEVER
         // touches the stroke stack (ANN-06 / Pitfall 4).
         masks.push(bakeMask(base, context, rect, style, blockPx));
+        // The refusal line only describes the LAST bake: a later success clears
+        // it (LW-02).
+        shell.clearMaskError();
       } catch {
-        // Aborted — fail closed, the region stays as it was.
+        // Aborted — fail closed, the region stays as it was. A silently
+        // unmasked region is the one outcome a privacy tool must not hide: the
+        // user is told the mask did NOT land (LW-02), never left believing a
+        // secret is covered.
+        shell.showMaskError();
       }
     };
 
