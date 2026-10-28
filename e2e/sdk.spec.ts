@@ -3151,6 +3151,14 @@ test('WDG-06 override: the composer EN/ES pair switches copy and lang in both di
 
 const repoRoot = resolve(__dirname, '..');
 const png64 = readFileSync(resolve(repoRoot, 'e2e/fixtures/valid-64x64.png'));
+const webp64 = readFileSync(resolve(repoRoot, 'e2e/fixtures/valid-64x64.webp'));
+const oversizeJpeg = readFileSync(resolve(repoRoot, 'e2e/fixtures/oversize-64mp.jpg'));
+const polyglotGif = readFileSync(resolve(repoRoot, 'e2e/fixtures/polyglot-gif-html.gif'));
+const hostileSvg = readFileSync(resolve(repoRoot, 'e2e/fixtures/hostile.svg'));
+
+/** The locked attach-refusal copy (strings.ts — composer.attach.error + hint). */
+const ATTACH_ERROR_COPY = "That file can't be attached.";
+const ATTACH_HINT_COPY = 'Use a PNG, WebP or JPEG image under 16 MP.';
 
 /**
  * The two container magics a re-encoded outgoing part can carry (R-11/M-3):
@@ -3251,4 +3259,167 @@ test('CAP-02 attach: a picked PNG reaches the preview, the review and the wire',
   expect(analysis.width, 'the attached picture decodes at its own dimensions').toBe(64);
   expect(analysis.height).toBe(64);
   expect(analysis.sampledDistinct, 'the attachment is never blanked on the way').toBeGreaterThan(1);
+});
+
+test('CAP-02 attach: WebP and JPEG are accepted', async ({ page, browserName }) => {
+  await installCaptureStub(page, browserName);
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+  await page.evaluate(() => {
+    document.title = 'CAP-02 two containers report';
+  });
+
+  const calls = await interceptIncidentPosts(page, async () => ({
+    status: 201,
+    body: JSON.stringify({ id: INTERCEPTED_ID }),
+  }));
+
+  await clickLauncher(page);
+  await waitForComposer(page);
+  await expectZoneState(page, 'image');
+
+  // WebP — the committed fixture.
+  await attachImage(page, { name: 'valid-64x64.webp', mimeType: 'image/webp', buffer: webp64 });
+  const afterWebp = await probeWidget(page);
+  expect(afterWebp.composerPreviewWidth, 'the WebP attachment reaches the preview').toBe(64);
+  expect(afterWebp.composerPreviewHeight).toBe(64);
+  expect(afterWebp.composerAttachError).toBe('');
+
+  // JPEG — built IN-PAGE (03-02's fixture is same-wave at plan authoring; and
+  // JPEG is the one container every engine's canvas encoder produces, unlike
+  // WebP). Where an engine cannot encode JPEG from a canvas its silent PNG
+  // fallback rides in as PNG bytes — a different container, same acceptance
+  // duty; chromium's assertion below proves the JPEG arm really was fed.
+  const jpegPayload = await page.evaluate(async () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 64;
+    canvas.height = 64;
+    const context = canvas.getContext('2d');
+    if (context === null) throw new Error('no 2D canvas for the JPEG payload');
+    const gradient = context.createLinearGradient(0, 0, 64, 64);
+    gradient.addColorStop(0, '#16233a');
+    gradient.addColorStop(1, '#c9a227');
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, 64, 64);
+    context.fillStyle = '#1e7a46';
+    context.fillRect(4, 4, 24, 24);
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, 'image/jpeg', 0.9);
+    });
+    if (blob === null) throw new Error('the engine produced no JPEG payload');
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let binary = '';
+    for (let at = 0; at < bytes.length; at += 0x8000) {
+      binary += String.fromCharCode(...bytes.subarray(at, at + 0x8000));
+    }
+    return { base64: btoa(binary), type: blob.type };
+  });
+  if (browserName === 'chromium') {
+    expect(jpegPayload.type, 'chromium really encoded a JPEG to attach').toBe('image/jpeg');
+  }
+  const jpegBytes = Buffer.from(jpegPayload.base64, 'base64');
+  await attachImage(page, { name: 'device-photo.jpg', mimeType: 'image/jpeg', buffer: jpegBytes });
+  const afterJpeg = await probeWidget(page);
+  expect(afterJpeg.composerPreviewWidth, 'the JPEG attachment replaces the WebP preview').toBe(64);
+  expect(afterJpeg.composerAttachError, 'an accepted format clears the refusal').toBe('');
+
+  // Review + send — the outgoing part is the sink's output, never JPEG.
+  await clickComposerReview(page);
+  await waitForReview(page);
+  await clickReviewSend(page);
+  await waitForHeadline(page, 'Report sent ✓', 15_000);
+  expect(calls, 'the two-attach walk posts exactly one report').toHaveLength(1);
+
+  const image = await readOutgoingImage(page);
+  expect(
+    wireContainer(image),
+    'a picked JPEG leaves as WebP or PNG — the single encode sink is the only producer',
+  ).toMatch(/^webp|png$/);
+  const analysis = await analyzeImagePixels(page, image);
+  expect(analysis.width, 'the second attachment is the one that sent').toBe(64);
+  expect(analysis.height).toBe(64);
+  expect(analysis.sampledDistinct).toBeGreaterThan(1);
+});
+
+test('CAP-02 reject: a non-image is refused with the inline error and no request', async ({
+  page,
+  browserName,
+}) => {
+  await installCaptureStub(page, browserName);
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+
+  const calls = await interceptIncidentPosts(page, async () => ({
+    status: 201,
+    body: JSON.stringify({ id: INTERCEPTED_ID }),
+  }));
+
+  await clickLauncher(page);
+  await waitForComposer(page);
+  await expectZoneState(page, 'image');
+  const before = await probeWidget(page);
+
+  // The picker's `accept` is decoration: a declared MIME type or extension is
+  // untrusted, so every one of these is refused on its magic bytes (V12).
+  const refusals: Array<{ name: string; mimeType: string; buffer: Buffer }> = [
+    {
+      name: 'payload.html',
+      mimeType: 'text/html',
+      buffer: Buffer.from('<!doctype html><html><body>polite hello</body></html>', 'utf8'),
+    },
+    { name: 'hostile.svg', mimeType: 'image/svg+xml', buffer: hostileSvg },
+    { name: 'polyglot.gif', mimeType: 'image/gif', buffer: polyglotGif },
+  ];
+  for (const payload of refusals) {
+    await attachImage(page, payload);
+    const refused = await probeWidget(page);
+    expect(refused.composerAttachError, `${payload.name}: visible refusal copy`).toBe(
+      ATTACH_ERROR_COPY,
+    );
+    expect(refused.composerAttachErrorHint, `${payload.name}: solution hint`).toBe(
+      ATTACH_HINT_COPY,
+    );
+    // The draft survives the refusal untouched: still the captured frame.
+    expect(refused.composerState, `${payload.name}: previous state preserved`).toBe('image');
+    expect(refused.composerPreviewWidth).toBe(before.composerPreviewWidth);
+    expect(refused.composerPreviewHeight).toBe(before.composerPreviewHeight);
+    // The attach action is re-enabled for another try.
+    expect(refused.composerAttachVisible, `${payload.name}: attach re-enabled`).toBe(true);
+  }
+  await expectNoRequest(page, calls);
+});
+
+test('CAP-02 reject: an oversized-pixel file is refused', async ({ page, browserName }) => {
+  await installCaptureStub(page, browserName);
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+
+  const calls = await interceptIncidentPosts(page, async () => ({
+    status: 201,
+    body: JSON.stringify({ id: INTERCEPTED_ID }),
+  }));
+
+  await clickLauncher(page);
+  await waitForComposer(page);
+  await expectZoneState(page, 'image');
+  const before = await probeWidget(page);
+
+  // The committed 8000×8192-declared JPEG (65.5 MP, over MAX_IMAGE_PIXELS):
+  // whichever gate answers — the decoded-bitmap size check, or an engine that
+  // refuses the inconsistent scan outright — the file is refused BEFORE a
+  // working canvas is allocated, which is the contract (T-03-18).
+  await attachImage(page, {
+    name: 'oversize.jpg',
+    mimeType: 'image/jpeg',
+    buffer: oversizeJpeg,
+  });
+  const refused = await probeWidget(page);
+  expect(refused.composerAttachError, 'over-cap dimensions are the same visible refusal').toBe(
+    ATTACH_ERROR_COPY,
+  );
+  expect(refused.composerAttachErrorHint).toBe(ATTACH_HINT_COPY);
+  expect(refused.composerState, 'the previous frame is preserved').toBe('image');
+  expect(refused.composerPreviewWidth).toBe(before.composerPreviewWidth);
+  expect(refused.composerPreviewHeight).toBe(before.composerPreviewHeight);
+  await expectNoRequest(page, calls);
 });
