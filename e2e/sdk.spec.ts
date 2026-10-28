@@ -2250,6 +2250,7 @@ async function runHidpiMaskRow(
     body: JSON.stringify({ id: INTERCEPTED_ID }),
   }));
   await clickLauncher(page);
+  await completeComposer(page, { timeout: 30_000 });
   await waitForHeadline(page, 'Report sent ✓', 30_000);
   expect(calls, 'the gesture must send exactly one report').toHaveLength(1);
 
