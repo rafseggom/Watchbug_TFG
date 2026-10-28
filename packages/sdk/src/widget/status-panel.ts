@@ -24,8 +24,10 @@ export const RETRY_MAX_ATTEMPTS = 3;
 /** `Report sent ✓` returns to the idle launcher after this pause (UI-SPEC A-5). */
 export const SENT_AUTO_DISMISS_MS = 5_000;
 
-/** The terminal failure classes of the state machine. */
-export type StatusFailure = 'capture' | 'blank' | 'network' | 'rejected';
+/** The terminal failure classes of the state machine. `compose` is the
+ * Review-entry encode failure: the frame captured, the artifact could not be
+ * produced, and the draft is still intact for a retry (WR-03). */
+export type StatusFailure = 'capture' | 'blank' | 'compose' | 'network' | 'rejected';
 
 /** Everything the panel can be asked to render. */
 export type StatusView =
@@ -317,6 +319,13 @@ export function createStatusPanel(handlers: StatusPanelHandlers): StatusPanel {
       case 'blank':
         headline.textContent = t('status.blankCapture');
         hint.textContent = t('status.blankCapture.hint');
+        break;
+      case 'compose':
+        // The capture succeeded; preparing the artifact did not. The diagnosis
+        // must not point at a screen-sharing permission the user already
+        // granted, and the draft survives for `Try again` (WR-03).
+        headline.textContent = t('status.composeFailed');
+        hint.textContent = t('status.composeFailed.hint');
         break;
       case 'network':
         headline.textContent = t('status.sendFailed');

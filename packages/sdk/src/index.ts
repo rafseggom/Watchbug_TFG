@@ -243,7 +243,18 @@ export function init(options: WatchbugInitOptions): void {
   };
 
   const panel: StatusPanel = createStatusPanel({
-    onRetry: () => flowRef.current?.retry(),
+    onRetry: () => {
+      // A COMPOSE failure never discarded the draft: send the user back to the
+      // composer with their title, note, ink and masks intact instead of
+      // spending a brand-new gesture (and a new idempotency key) on a
+      // transient encode error (WR-03). Every other failure keeps the Phase-2
+      // semantics — resend the payload, or restart the capture.
+      if (lastView.kind === 'failed' && lastView.failure === 'compose' && draft !== null) {
+        showScreen('composer');
+        return;
+      }
+      flowRef.current?.retry();
+    },
     // Dismiss (button, Escape or the 5 s auto-dismiss) returns to the idle
     // launcher, re-arms it, and drops the finished draft (UI-SPEC A-5/A-7).
     onDismiss: () => {
@@ -278,8 +289,10 @@ export function init(options: WatchbugInitOptions): void {
           return;
         }
         // No sendable artifact (a fail-closed pixel replay or an engine that
-        // will not encode): the loud capture-failure state, nothing sent (M-6).
-        onView({ kind: 'failed', failure: 'capture' });
+        // will not encode). The screen captured fine, so this is the COMPOSE
+        // failure class, not `capture`: nothing was sent, the draft survives,
+        // and `Try again` re-enters the composer with it intact (M-6 / WR-03).
+        onView({ kind: 'failed', failure: 'compose' });
         return;
       }
       // Generation check: a discard (`draft === null`), a replacement draft, a
@@ -364,10 +377,10 @@ export function init(options: WatchbugInitOptions): void {
       if (active === null) return;
       // `pendingFor` throws when `encoded` is absent (a send from a state that
       // never composed an artifact). That throw must never become an unhandled
-      // rejection behind a dead button: surface the loud failure, nothing sent
-      // (M-6 / WR-01).
+      // rejection behind a dead button: surface the loud compose failure,
+      // nothing sent (M-6 / WR-01 / WR-03).
       void active.send(current).catch(() => {
-        onView({ kind: 'failed', failure: 'capture' });
+        onView({ kind: 'failed', failure: 'compose' });
       });
     },
   });

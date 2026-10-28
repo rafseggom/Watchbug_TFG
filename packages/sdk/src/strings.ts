@@ -39,6 +39,12 @@ export const strings = {
     'Nothing was sent. Try again — if it keeps failing, the page may be too large to capture.',
   'status.sendFailed': "Couldn't send the report.",
   'status.sendFailed.hint': 'Nothing was sent. Check your connection, then try again.',
+  // WR-03: the compose-time encode failed (a fail-closed mask replay or an
+  // engine that will not encode) — the screen captured fine, so this is NOT
+  // the `capture` diagnosis, and Try again re-enters the composer with the
+  // draft intact.
+  'status.composeFailed': 'Something went wrong preparing the screenshot.',
+  'status.composeFailed.hint': 'Nothing was sent. Your report is still here — try again.',
   'status.rejected': 'The server rejected the report.',
   'action.retry': 'Try again',
   'action.dismiss': 'Dismiss',
@@ -107,6 +113,9 @@ export const stringsEs: Record<StringId, string> = {
   'status.sendFailed': 'No se pudo enviar el informe.',
   'status.sendFailed.hint':
     'No se envió nada. Revisa tu conexión e inténtalo de nuevo.',
+  'status.composeFailed': 'No se pudo preparar la captura.',
+  'status.composeFailed.hint':
+    'No se envió nada. Tu informe sigue aquí; inténtalo de nuevo.',
   'status.rejected': 'El servidor rechazó el informe.',
   'action.retry': 'Reintentar',
   'action.dismiss': 'Cerrar',
