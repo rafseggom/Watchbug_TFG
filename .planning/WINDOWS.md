@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 2
+open_count: 5
 waived_count: 0
 fixed_count: 3
-total_count: 5
-last_updated: 2026-10-25T14:32:12.543Z
+total_count: 8
+last_updated: 2026-10-28T16:47:18.578Z
 ---
 
 # Broken Windows Ledger
@@ -20,6 +20,9 @@ last_updated: 2026-10-25T14:32:12.543Z
 | 3 | 02 | stub | packages/sdk/src/index.ts | 114 | enterFlow() restores the host instead of running the capture pipeline; seam 02-02 Task 1 fills | fixed |  | 2026-10-23T20:36:46.302Z | 2026-10-24T11:31:55.361Z |
 | 4 | 02 | stub | packages/sdk/src/widget/status-panel.ts | 176 | render(view) contract complete but only idle is rendered at mount; state callback + Escape/auto-dismiss land in 02-02 Task 2 | fixed |  | 2026-10-23T20:36:55.379Z | 2026-10-24T11:31:55.926Z |
 | 5 | 02 | unmet-truth | .planning/REQUIREMENTS.md | 38 | Release-criteria wording still claims webkit exercises the WebP->PNG fallback; A-14 (02-05) records that this platform encodes real WebP and the plan was not authorised to edit R-12/REQUIREMENTS wording - owner wording delta open | fixed |  | 2026-10-24T14:39:50.992Z | 2026-10-25T14:32:12.543Z |
+| 6 | 03 | stub | packages/sdk/src/widget/composer.ts |  | composer annotate/replace buttons have no wired handler yet (optional-handler mount points; wired by 03-05 with the lazy editor) | open |  | 2026-10-28T16:47:16.734Z |  |
+| 7 | 03 | stub | packages/sdk/src/widget/composer.ts |  | composer attach/continue-text-only buttons have no wired handler yet (degraded/text-only composer mounts in 03-04) | open |  | 2026-10-28T16:47:17.791Z |  |
+| 8 | 03 | stub | packages/sdk/src/capture/pipeline.ts |  | Draft.captureNote is stored but not rendered yet; the degraded composer consumes it in 03-04 (capture failures still show the status panel) | open |  | 2026-10-28T16:47:18.578Z |  |
 
 ````json
 [
@@ -86,6 +89,45 @@ last_updated: 2026-10-25T14:32:12.543Z
     "reason": "",
     "recorded_at": "2026-10-24T14:39:50.992Z",
     "resolved_at": "2026-10-25T14:32:12.543Z",
+    "milestone": null
+  },
+  {
+    "id": 6,
+    "kind": "stub",
+    "phase": "03",
+    "file": "packages/sdk/src/widget/composer.ts",
+    "line": null,
+    "description": "composer annotate/replace buttons have no wired handler yet (optional-handler mount points; wired by 03-05 with the lazy editor)",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-10-28T16:47:16.734Z",
+    "resolved_at": null,
+    "milestone": null
+  },
+  {
+    "id": 7,
+    "kind": "stub",
+    "phase": "03",
+    "file": "packages/sdk/src/widget/composer.ts",
+    "line": null,
+    "description": "composer attach/continue-text-only buttons have no wired handler yet (degraded/text-only composer mounts in 03-04)",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-10-28T16:47:17.791Z",
+    "resolved_at": null,
+    "milestone": null
+  },
+  {
+    "id": 8,
+    "kind": "stub",
+    "phase": "03",
+    "file": "packages/sdk/src/capture/pipeline.ts",
+    "line": null,
+    "description": "Draft.captureNote is stored but not rendered yet; the degraded composer consumes it in 03-04 (capture failures still show the status panel)",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-10-28T16:47:18.578Z",
+    "resolved_at": null,
     "milestone": null
   }
 ]

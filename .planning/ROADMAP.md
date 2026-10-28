@@ -110,13 +110,13 @@ Plans:
   4. An end user can mask a region with an opaque fill that is destroyed at the pixel level and is unrecoverable from the encoded image — undecipherable even by later annotation strokes — while undo removes annotation strokes only (masks are deliberately irreversible).
   5. An end user reviews and edits the capture before sending and uses the whole widget form and editor in English or Spanish (auto-matched to browser language, manual override), while the lazy editor chunk stays ≤ 25 KB gzipped and the total runtime payload ≤ 80 KB.
 
-**Plans:** 1/7 plans executed
+**Plans:** 2/7 plans executed
 **UI hint**: yes
 
 Plans:
 **Wave 1**
 - [x] 03-01-PLAN.md — Ingest schema: screenshot optional (text-only filing) + `image/jpeg` admitted in one migration, behind a schema checkpoint (CAP-03)
-- [ ] 03-03-PLAN.md — Composer tracer: pipeline split, screen router, composer + review with one encode, core EN/ES i18n (PRV-07, WDG-06)
+- [x] 03-03-PLAN.md — Composer tracer: pipeline split, screen router, composer + review with one encode, core EN/ES i18n (PRV-07, WDG-06)
 
 **Wave 2** *(blocked on Wave 1)*
 - [ ] 03-02-PLAN.md — JPEG ingest lane: magic bytes → SOF guard → structural pass-through → autoOrient re-encode → one ext→MIME map (CAP-02 server)
@@ -229,7 +229,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 |-------|----------------|--------|-----------|
 | 1. Contracts & Ingest Slice | 4/4 | Complete    | 2026-10-13 |
 | 2. SDK Tracer Bullet: Widget, Capture & Auto-Redaction | 5/5 | Complete    | 2026-10-25 |
-| 3. Report Composer & Annotation Editor (lazy) | 1/7 | In Progress | - |
+| 3. Report Composer & Annotation Editor (lazy) | 2/7 | In Progress | - |
 | 4. Report Payload & Enrichment | 0/TBD | Not started | - |
 | 5. Secure Admin Access & Projects | 0/TBD | Not started | - |
 | 6. Triage & Data Lifecycle | 0/TBD | Not started | - |

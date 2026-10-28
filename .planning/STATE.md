@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 03
 current_phase_name: Report Composer & Annotation Editor (lazy)
 status: executing
-stopped_at: Completed 03-01-PLAN.md
-last_updated: "2026-10-28T15:14:20.853Z"
+stopped_at: Completed 03-03-PLAN.md
+last_updated: "2026-10-28T16:46:18.040Z"
 last_activity: 2026-10-28
 last_activity_desc: Phase 03 execution started
-state_head: 4a7b8b01dfd0ce75f91a4b42c6476550093d72a5
+state_head: 01fe093445c5f59e27def407c60453a6ef313db3
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 16
-  completed_plans: 10
+  completed_plans: 11
   percent: 29
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-13)
 ## Current Position
 
 Phase: 03 (Report Composer & Annotation Editor (lazy)) — EXECUTING
-Plan: 2 of 7
+Plan: 3 of 7
 Status: Ready to execute
 Last activity: 2026-10-28 — Phase 03 execution started
 
@@ -67,6 +67,7 @@ Progress: [███░░░░░░░] 29%
 | Phase 02 P04 | 50min | 3 tasks | 6 files |
 | Phase 02 P05 | 60min | 3 tasks | 6 files |
 | Phase 03 P01 | 25min | 3 tasks | 9 files |
+| Phase 03 P03 | 84 min | 3 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -127,6 +128,10 @@ Recent decisions affecting current work:
 - [Phase 03]: ﻿03-01: owner-approved migration shape executed - ONE drizzle-kit artifact 0001 carries nullable storage_key/content_type AND the image/jpeg CHECK widening (P3-D-14); decision 'approve' recorded in 03-01-SUMMARY before Task 2
 - [Phase 03]: ﻿03-01: e2e postIncident contract flipped - bytes===undefined now omits the image part entirely (reaching the route's imageless branch); the 8 pre-existing omission callers pinned with bytes: png so no existing row changed shape
 - [Phase 03]: ﻿03-01: one ext-MIME allowlist read in both directions - CONTENT_TYPE_BY_EXT typed Record<ImageExt,string> plus derived EXT_BY_CONTENT_TYPE inverse; blob route 404s on a null key BEFORE any Storage call (Pitfall 8 ternaries eliminated; 03-02 adds the jpeg arm to the same map)
+- [Phase 03]: 03-03: T3 encode order resolved per the plan text: replay mask patches FIRST, re-apply T1 as the last pixel write, then encodeLadder — the PATTERNS section-14 sketch inverts the first two; the plan acceptance criterion governs
+- [Phase 03]: 03-03: capture failures still route to the Phase-2 status panel (blank/oversize to the blank bucket, denied/no-api to the capture bucket) until 03-04 mounts the degraded composer; the failure rows stay green; 03-07 re-points them
+- [Phase 03]: 03-03: i18n split decided: core carries launcher/status/action/composer/review/mask-confirm/i18n copy in BOTH locales; the lazy chunk carries editor.* only (03-05); locale override is session-scoped in memory, never host storage (SEC-03 / UI-SPEC A-1)
+- [Phase 03]: 03-03: encoding happens at Review entry and the review canvas renders the DECODED outgoing blob — shown bytes are sent bytes; Send transmits that same blob with no re-encode (T-03-17)
 
 ### Pending Todos
 
@@ -171,6 +176,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-28T15:14:20.478Z
-Stopped at: Completed 03-01-PLAN.md
+Last session: 2026-10-28T16:45:49.010Z
+Stopped at: Completed 03-03-PLAN.md
 Resume file: None

@@ -83,7 +83,7 @@ A requirement is **Complete** when:
 - [ ] **PRV-04**: A masked region is destroyed at the pixel level and is unrecoverable from the encoded image
 - [x] **PRV-05**: The SDK never reads or transmits host cookies, storage or auth headers
 - [x] **PRV-06**: URL query strings and fragments are stripped before transmission
-- [ ] **PRV-07**: An end user can review and edit the capture before it is sent
+- [x] **PRV-07**: An end user can review and edit the capture before it is sent
 
 ### Payload & Enrichment
 
@@ -240,7 +240,7 @@ Which phases cover which requirements. **Updated during roadmap creation** — e
 | PRV-04 | Phase 3 | Pending |
 | PRV-05 | Phase 2 | Complete |
 | PRV-06 | Phase 2 | Complete |
-| PRV-07 | Phase 3 | Pending |
+| PRV-07 | Phase 3 | Complete |
 | ENR-01 | Phase 4 | Pending |
 | ENR-02 | Phase 4 | Pending |
 | ENR-03 | Phase 4 | Pending |
