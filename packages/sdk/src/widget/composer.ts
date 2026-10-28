@@ -23,12 +23,16 @@
  * at Review entry).
  *
  * Later plans mount into this frame: `Annotate image` / `Replace image` gain
- * their behaviour with the editor (03-05), `Attach image` / `Continue with
- * text only` with the degraded and text-only paths (03-04) — the buttons and
- * the `data-wb-state` / `data-wb-zone` contract exist here already.
+ * their behaviour with the editor (03-05); the file lane (CAP-02, this plan)
+ * wires `Attach image` / `Replace image` to `ManualFileCapture` behind a
+ * hidden `input[type=file]` that lives INSIDE the shadow root (INV-01), shows
+ * the refusal copy on any rejection (PATTERNS §13 — the `accept` attribute is
+ * a hint, magic bytes are the gate), and turns `Continue with text only` into
+ * the text-only state (CAP-03, P3-D-13).
  */
 import { MAX_NOTE_CHARS, MAX_TITLE_CHARS } from '@watchbug/contracts/constants';
 import type { Draft } from '../capture/pipeline.ts';
+import { createManualFileCapture } from '../capture/manual-file.ts';
 import { locale, t } from '../strings.ts';
 
 /** The counter surfaces from this many CODE POINTS up (UI-SPEC overflow). */
@@ -36,6 +40,12 @@ export const NOTE_COUNTER_VISIBLE_FROM = 4_000;
 
 /** The composer's DOM contract ids; the error is wired to the title field. */
 const TITLE_ERROR_ID = 'wb-composer-title-error';
+/** The attachment refusal's ids — error copy + its solution hint (CAP-02). */
+const ATTACH_ERROR_ID = 'wb-composer-attach-error';
+const ATTACH_HINT_ID = 'wb-composer-attach-error-hint';
+
+/** The formats the hidden picker hints at — decoration only, never validation. */
+const ATTACH_ACCEPT_HINT = 'image/png,image/webp,image/jpeg';
 
 /** The locale codes the EN/ES pair switches between (03-03 Task 3 wires it). */
 export type LocaleCode = 'en' | 'es';
@@ -210,6 +220,29 @@ export const COMPOSER_CSS = `
   overflow-wrap: anywhere;
 }
 .field-error[data-shown='true'] { display: block; }
+.composer-file {
+  /* Visually hidden, NOT display:none — the standard hidden-picker shape.
+     The file lane is driven programmatically in e2e (setInputFiles), so this
+     only governs the real-browser picker affordance. */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.attach-error { margin-top: 0; }
+.attach-error-hint {
+  margin: 2px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--wb-color-muted);
+  overflow-wrap: anywhere;
+}
+.attach-error-hint[data-shown='true'] { display: block; }
 .composer-counter {
   display: none;
   margin: 4px 0 0;
@@ -298,6 +331,12 @@ export const COMPOSER_CSS = `
   gap: 8px;
 }
 .composer-attach { margin-right: auto; }
+/* Degraded: the notice carries both actions, so the footer attach steps back
+   — at most one visible .composer-attach at any time (P3-D-13). */
+.composer[data-wb-state='degraded'] .composer-footer .composer-attach { display: none; }
+/* Text-only (A-3): the same composer minus the image zone; the footer keeps
+   its secondary Attach image as the escape hatch back to a picture. */
+.composer[data-wb-state='text-only'] .image-zone { display: none; }
 .composer-discard {
   width: 36px;
   padding: 0;
@@ -423,14 +462,41 @@ export function createComposer(handlers: ComposerHandlers): Composer {
   const notice = el('div', 'zone-notice');
   const noticeHeading = el('p', 'zone-notice-heading');
   const noticeHint = el('p', 'zone-notice-hint');
-  const continueButton = el('button', 'button composer-continue');
+  // Two inline actions in the degraded notice (P3-D-13): the picker opener
+  // and the text-only exit. The footer keeps its own `Attach image` for the
+  // image/text-only states; the degraded state hides it (CSS), so at most
+  // one `.composer-attach` is ever visible.
+  const noticeAttachButton = el('button', 'button composer-attach composer-notice-attach');
+  const continueButton = el('button', 'button composer-continue-text');
   notice.appendChild(noticeHeading);
   notice.appendChild(noticeHint);
+  notice.appendChild(noticeAttachButton);
   notice.appendChild(continueButton);
   imageZone.appendChild(preview);
   imageZone.appendChild(annotateButton);
   imageZone.appendChild(replaceButton);
   imageZone.appendChild(notice);
+
+  // The attachment refusal (CAP-02): inline error + solution hint, both
+  // referenced from the visible attach action via `aria-describedby`.
+  const attachError = el('span', 'field-error attach-error');
+  attachError.id = ATTACH_ERROR_ID;
+  attachError.setAttribute('data-wb-error', 'attach');
+  attachError.setAttribute('role', 'alert');
+  attachError.setAttribute('data-shown', 'false');
+  const attachHint = el('span', 'field-error attach-error-hint');
+  attachHint.id = ATTACH_HINT_ID;
+  attachHint.setAttribute('data-wb-error', 'attach-hint');
+  attachHint.setAttribute('data-shown', 'false');
+
+  // The hidden picker inside the shadow root (INV-01): a hostile host page
+  // cannot reach this input, so the synthetic-selection surface is exactly
+  // the research A4 analysis (user-picked bytes, magic-gated).
+  const fileInput = el('input', 'composer-file');
+  fileInput.setAttribute('type', 'file');
+  fileInput.setAttribute('accept', ATTACH_ACCEPT_HINT);
+  fileInput.setAttribute('aria-hidden', 'true');
+  fileInput.setAttribute('tabindex', '-1');
 
   // Footer: the one accent CTA, the secondary attach, the discard.
   const footer = el('div', 'composer-footer');
@@ -438,7 +504,15 @@ export function createComposer(handlers: ComposerHandlers): Composer {
   const reviewButton = el('button', 'button button--primary composer-review');
   const discardButton = el('button', 'button composer-discard');
   discardButton.textContent = '✕';
-  for (const button of [annotateButton, replaceButton, attachButton, continueButton, reviewButton, discardButton]) {
+  for (const button of [
+    annotateButton,
+    replaceButton,
+    attachButton,
+    noticeAttachButton,
+    continueButton,
+    reviewButton,
+    discardButton,
+  ]) {
     button.setAttribute('type', 'button');
   }
   footer.appendChild(attachButton);
@@ -450,6 +524,9 @@ export function createComposer(handlers: ComposerHandlers): Composer {
   composer.appendChild(titleField);
   composer.appendChild(noteField);
   composer.appendChild(imageZone);
+  composer.appendChild(attachError);
+  composer.appendChild(attachHint);
+  composer.appendChild(fileInput);
   composer.appendChild(footer);
 
   let draft: Draft | null = null;
@@ -480,6 +557,81 @@ export function createComposer(handlers: ComposerHandlers): Composer {
     if (previewContext === null) return;
     previewContext.putImageData(image, 0, 0);
   };
+
+  /**
+   * The file lane (CAP-02): one adapter, one picker. The decode is async, so
+   * every attach action is disabled while it runs (`data-wb-attaching` is the
+   * settle signal the e2e harness waits on) and a rejection keeps the
+   * previous draft state intact — never a partial mutation, never a request.
+   */
+  const manualCapture = createManualFileCapture();
+  let attaching = false;
+
+  const setAttaching = (busy: boolean): void => {
+    attaching = busy;
+    composer.setAttribute('data-wb-attaching', busy ? 'true' : 'false');
+    for (const button of [attachButton, noticeAttachButton, replaceButton]) {
+      button.disabled = busy;
+    }
+  };
+
+  const clearAttachError = (): void => {
+    attachError.setAttribute('data-shown', 'false');
+    attachHint.setAttribute('data-shown', 'false');
+    for (const button of [attachButton, noticeAttachButton]) {
+      button.removeAttribute('aria-describedby');
+    }
+  };
+
+  const showAttachError = (): void => {
+    attachError.setAttribute('data-shown', 'true');
+    attachHint.setAttribute('data-shown', 'true');
+    for (const button of [attachButton, noticeAttachButton]) {
+      button.setAttribute('aria-describedby', `${ATTACH_ERROR_ID} ${ATTACH_HINT_ID}`);
+    }
+  };
+
+  const openPicker = (): void => {
+    if (attaching || draft === null) return;
+    fileInput.click();
+  };
+
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files === null ? undefined : fileInput.files[0];
+    // Reset the picker value up front so selecting the SAME file again still
+    // fires a change event (replace-after-rejection is a real walk).
+    fileInput.value = '';
+    if (draft === null || file === undefined) return;
+    if (attaching) return;
+    setAttaching(true);
+    clearAttachError();
+    // A-05/P3-D-15: the attachment enters as pixels through the same seam the
+    // display adapter uses. `beforeRead` is a no-op here (a file has no
+    // DOM-to-bitmap registration to assert) but its throw still aborts. The
+    // blank probe NEVER runs on an attachment — a legitimately uniform photo
+    // is a valid report (research F6). T1 does not apply, masks belonged to
+    // the old frame, and `encoded` was composed from the old frame.
+    void manualCapture
+      .capture({ beforeRead: () => undefined, file })
+      .then((image) => {
+        const current = draft;
+        if (current === null) return;
+        current.image = image;
+        current.t1 = [];
+        current.masks = [];
+        current.encoded = null;
+        current.captureNote = null;
+        render(current);
+      })
+      .catch(() => {
+        // Every rejection class (format/size/decode, and anything else the
+        // engine raises) is the same visible refusal (M-6: never silent).
+        showAttachError();
+      })
+      .finally(() => {
+        setAttaching(false);
+      });
+  });
 
   const clearTitleError = (): void => {
     titleError.textContent = '';
@@ -538,17 +690,34 @@ export function createComposer(handlers: ComposerHandlers): Composer {
   annotateButton.addEventListener('click', () => {
     if (draft !== null) handlers.onAnnotate?.(draft);
   });
+  // `Attach image` (footer + degraded notice) and `Replace image` all open
+  // the same hidden picker (CAP-02); the composer owns the file lane.
+  const openAttachPicker = (): void => {
+    if (draft === null) return;
+    handlers.onAttach?.(draft);
+    openPicker();
+  };
+  attachButton.addEventListener('click', openAttachPicker);
+  noticeAttachButton.addEventListener('click', openAttachPicker);
   replaceButton.addEventListener('click', () => {
     if (draft !== null) handlers.onReplace?.(draft);
-  });
-  attachButton.addEventListener('click', () => {
-    if (draft !== null) handlers.onAttach?.(draft);
+    openPicker();
   });
   continueButton.addEventListener('click', () => {
-    if (draft !== null) handlers.onContinueTextOnly?.(draft);
+    if (draft === null || attaching) return;
+    // P3-D-13: text-only is the user's EXPLICIT choice — the state
+    // derivation (no image, no failure note) then renders
+    // `data-wb-state="text-only"`: zone hidden, footer attach kept.
+    draft.captureNote = null;
+    handlers.onContinueTextOnly?.(draft);
+    render(draft);
   });
   reviewButton.addEventListener('click', () => {
     if (draft === null) return;
+    // In the degraded state the user must first choose an action — review (and
+    // therefore any send) is inert until a picture or text-only is picked
+    // (P3-D-13: never a silent post from the diagnosis state).
+    if (draft.image === null && draft.captureNote !== null) return;
     // Review/send is blocked ONLY when the field is emptied (P3-D-02): reveal
     // the inline error, keep focus in the field, do not navigate.
     const trimmed = titleInput.value.trim();
@@ -565,6 +734,24 @@ export function createComposer(handlers: ComposerHandlers): Composer {
   discardButton.addEventListener('click', () => {
     if (draft !== null) handlers.onDiscard(draft);
   });
+
+  /**
+   * F6 (research): the notice heading is always `composer.image.none`; the
+   * hint is chosen from the existing `status.*` diagnostics so the failure's
+   * diagnosis survives the move from panel to composer — no new copy keys.
+   */
+  const noticeHintText = (current: Draft): string => {
+    switch (current.captureNote) {
+      case 'blank':
+      case 'oversize':
+        return t('status.blankCapture.hint');
+      case 'denied':
+      case 'no-api':
+        return t('status.captureFailed.hint');
+      default:
+        return t('composer.image.none.hint');
+    }
+  };
 
   /** Refresh every t()-derived label — the locale re-render path (task 3). */
   const renderCopy = (current: Draft): void => {
@@ -583,11 +770,14 @@ export function createComposer(handlers: ComposerHandlers): Composer {
     annotateButton.textContent = t('composer.annotate');
     replaceButton.textContent = t('composer.replace');
     attachButton.textContent = t('composer.attach');
+    noticeAttachButton.textContent = t('composer.attach');
     continueButton.textContent = t('composer.continueTextOnly');
     reviewButton.textContent = t('composer.review');
     discardButton.setAttribute('aria-label', t('composer.discard'));
     noticeHeading.textContent = t('composer.image.none');
-    noticeHint.textContent = t('composer.image.none.hint');
+    noticeHint.textContent = noticeHintText(current);
+    attachError.textContent = t('composer.attach.error');
+    attachHint.textContent = t('composer.attach.error.hint');
     localePair.setAttribute('aria-label', t('i18n.label'));
     enButton.textContent = t('i18n.en');
     esButton.textContent = t('i18n.es');
@@ -613,6 +803,9 @@ export function createComposer(handlers: ComposerHandlers): Composer {
       'data-wb-state',
       next.image !== null ? 'image' : next.captureNote !== null ? 'degraded' : 'text-only',
     );
+    // A fresh draft is a fresh start: a refusal shown on the previous report
+    // never rides into the next one.
+    if (reopened) clearAttachError();
 
     renderCopy(next);
     // Inputs are state: set `.value` only when it differs (no focus loss).

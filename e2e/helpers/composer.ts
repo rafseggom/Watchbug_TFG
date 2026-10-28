@@ -125,3 +125,82 @@ export async function reviewAndSend(page: Page): Promise<void> {
   await waitForReview(page);
   await clickReviewSend(page);
 }
+
+/**
+ * The file lane (CAP-02). `setInputFiles` works through the open-mode shadow
+ * root without the OS picker; the composer's `data-wb-attaching` flag is the
+ * settle signal (decode is async), so a row never observes a half-applied
+ * attachment. The two-phase wait tolerates a rejection that settles before
+ * the first poll.
+ */
+export async function attachImage(
+  page: Page,
+  file: { name: string; mimeType: string; buffer: Buffer },
+): Promise<void> {
+  await page.locator('watchbug-host input.composer-file').setInputFiles({
+    name: file.name,
+    mimeType: file.mimeType,
+    buffer: file.buffer,
+  });
+  await page
+    .waitForFunction(
+      () =>
+        (
+          document.querySelector('watchbug-host')?.shadowRoot?.querySelector('section.composer') ??
+          null
+        )?.getAttribute('data-wb-attaching') === 'true',
+      null,
+      { timeout: 3_000 },
+    )
+    .catch(() => undefined);
+  await page.waitForFunction(
+    () =>
+      (
+        document.querySelector('watchbug-host')?.shadowRoot?.querySelector('section.composer') ??
+        null
+      )?.getAttribute('data-wb-attaching') !== 'true',
+    null,
+    { timeout: 20_000 },
+  );
+}
+
+/** Wait until the composer's image zone is in `state` (DOM contract). */
+export async function expectZoneState(
+  page: Page,
+  state: 'image' | 'text-only' | 'degraded',
+): Promise<void> {
+  await page.waitForFunction(
+    (want) => {
+      const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
+      const composer = root?.querySelector('section.composer');
+      return (
+        (composer?.getAttribute('data-hidden') ?? 'true') !== 'true' &&
+        composer?.getAttribute('data-wb-state') === want
+      );
+    },
+    state,
+    { timeout: 10_000 },
+  );
+}
+
+/** Click the `Continue with text only` action inside the degraded notice. */
+export async function clickContinueTextOnly(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
+    const button = root?.querySelector('button.composer-continue-text') as HTMLElement | null;
+    if (button === null) throw new Error('clickContinueTextOnly: no .composer-continue-text');
+    button.click();
+  });
+}
+
+/** Click the ONE visible `Attach image` action (footer or degraded notice). */
+export async function clickVisibleAttach(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
+    const visible = [...(root?.querySelectorAll('button.composer-attach') ?? [])].filter(
+      (button) => button.getBoundingClientRect().width > 0,
+    );
+    if (visible.length === 0) throw new Error('clickVisibleAttach: no visible .composer-attach');
+    visible[0].click();
+  });
+}

@@ -106,14 +106,15 @@ async function preferredMimeType(): Promise<string> {
   return webpSupported ? WEBP_MIME : PNG_MIME;
 }
 
-function createCanvas(width: number, height: number): HTMLCanvasElement {
+/** Exported for `capture/manual-file.ts` (CAP-02): the same canvas helpers the ladder uses. */
+export function createCanvas(width: number, height: number): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   canvas.width = Math.max(1, Math.round(width));
   canvas.height = Math.max(1, Math.round(height));
   return canvas;
 }
 
-function context2d(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
+export function context2d(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
   const context = canvas.getContext('2d', { willReadFrequently: true });
   if (context === null) throw new Error('a 2D canvas is unavailable');
   return context;
@@ -129,16 +130,17 @@ function scaledCopy(source: HTMLCanvasElement, width: number, height: number): H
   return canvas;
 }
 
-/** Apply the devicePixelRatio clamp, MAX_IMAGE_DIM and the 16 MP ceiling. */
-function initialDimensions(width: number, height: number): { width: number; height: number } {
+/**
+ * Fit a bitmap inside the contract caps: `MAX_IMAGE_DIM` per side and the
+ * 16 MP `MAX_IMAGE_PIXELS` ceiling, floored at `MIN_EDGE_PX`. **No
+ * devicePixelRatio clamp** — that one belongs to a *captured* frame's display
+ * geometry; a picked file's pixel grid has nothing to do with the display
+ * (CAP-02, research Pattern 6). `encodeLadder` and `ManualFileCapture` share
+ * this one fitting rule.
+ */
+export function fitToCaps(width: number, height: number): { width: number; height: number } {
   let nextWidth = width;
   let nextHeight = height;
-
-  const ratio = typeof devicePixelRatio === 'number' ? devicePixelRatio : 1;
-  if (ratio > 2) {
-    nextWidth = Math.round((width * 2) / ratio);
-    nextHeight = Math.round((height * 2) / ratio);
-  }
 
   // No side may exceed MAX_IMAGE_DIM (8192) — beyond that the canvas (and
   // other engines' decoders) start failing silently instead of encoding.
@@ -160,6 +162,20 @@ function initialDimensions(width: number, height: number): { width: number; heig
     width: Math.max(MIN_EDGE_PX, nextWidth),
     height: Math.max(MIN_EDGE_PX, nextHeight),
   };
+}
+
+/** Apply the devicePixelRatio clamp, then the shared cap fit (encode ladder entry). */
+function initialDimensions(width: number, height: number): { width: number; height: number } {
+  let nextWidth = width;
+  let nextHeight = height;
+
+  const ratio = typeof devicePixelRatio === 'number' ? devicePixelRatio : 1;
+  if (ratio > 2) {
+    nextWidth = Math.round((width * 2) / ratio);
+    nextHeight = Math.round((height * 2) / ratio);
+  }
+
+  return fitToCaps(nextWidth, nextHeight);
 }
 
 /**

@@ -1,4 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { MAX_TITLE_CHARS } from '@watchbug/contracts/constants';
 import { reportSchema } from '@watchbug/contracts/schema';
 import {
@@ -26,9 +28,13 @@ import {
   waitForWidget,
 } from './helpers/capture-stubs';
 import {
+  attachImage,
   clickComposerReview,
+  clickContinueTextOnly,
   clickReviewEdit,
   clickReviewSend,
+  clickVisibleAttach,
+  expectZoneState,
   reviewAndSend,
   setLocaleToggle,
   setNote,
@@ -3136,4 +3142,113 @@ test('WDG-06 override: the composer EN/ES pair switches copy and lang in both di
   const back = await probeWidget(page);
   expect(back.composerHeading, 'the pair switches in both directions').toBe('Report a bug');
   expect(back.wrapLang).toBe('en');
+});
+
+/* ------------------------------------------------------------------ */
+/* CAP-02 — attach a picture from the device (03-04, file lane)         */
+/* CAP-03 — the degraded composer with two real ways forward (03-04)    */
+/* ------------------------------------------------------------------ */
+
+const repoRoot = resolve(__dirname, '..');
+const png64 = readFileSync(resolve(repoRoot, 'e2e/fixtures/valid-64x64.png'));
+
+/**
+ * The two container magics a re-encoded outgoing part can carry (R-11/M-3):
+ * PNG's signature and `RIFF`+`WEBP`. The picked container never survives the
+ * single encode sink — an attached JPEG leaves as WebP or PNG.
+ */
+function wireContainer(bytes: Buffer): 'png' | 'webp' | 'jpeg' | 'unknown' {
+  if (
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47
+  ) {
+    return 'png';
+  }
+  if (
+    bytes.length >= 12 &&
+    bytes.subarray(0, 4).toString('latin1') === 'RIFF' &&
+    bytes.subarray(8, 12).toString('latin1') === 'WEBP'
+  ) {
+    return 'webp';
+  }
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return 'jpeg';
+  }
+  return 'unknown';
+}
+
+test('CAP-02 attach: a picked PNG reaches the preview, the review and the wire', async ({
+  page,
+  browserName,
+}) => {
+  await installCaptureStub(page, browserName);
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+  await page.evaluate(() => {
+    document.title = 'CAP-02 attached picture report';
+  });
+
+  const calls = await interceptIncidentPosts(page, async () => ({
+    status: 201,
+    body: JSON.stringify({ id: INTERCEPTED_ID }),
+  }));
+
+  // The gesture captures as usual, so the composer opens holding the STUB
+  // frame — the attachment must REPLACE it, and the preview dimensions tell
+  // the two apart (640-wide frame vs 64-wide picture).
+  await clickLauncher(page);
+  await waitForComposer(page);
+  await expectZoneState(page, 'image');
+  const captured = await probeWidget(page);
+  expect(captured.composerPreviewWidth, 'the composer first shows the captured frame').toBe(
+    640,
+  );
+
+  // The real affordance walk on chromium: the visible `Attach image` button
+  // opens the hidden picker, and the file chooser receives the fixture bytes.
+  // Other engines set the input directly (same change-handler path).
+  if (browserName === 'chromium') {
+    const chooserPromise = page.waitForEvent('filechooser');
+    await clickVisibleAttach(page);
+    const chooser = await chooserPromise;
+    await chooser.setFiles({ name: 'valid-64x64.png', mimeType: 'image/png', buffer: png64 });
+  } else {
+    await attachImage(page, { name: 'valid-64x64.png', mimeType: 'image/png', buffer: png64 });
+  }
+  await expectZoneState(page, 'image');
+
+  // The preview canvas is redrawn from the attachment's pixels (CAP-02).
+  const attached = await probeWidget(page);
+  expect(attached.composerPreviewWidth, 'the preview is the attached picture').toBe(64);
+  expect(attached.composerPreviewHeight).toBe(64);
+  expect(attached.composerAttachError, 'a valid attachment shows no refusal').toBe('');
+
+  // Review encodes the attachment through the single sink; Send posts once.
+  await clickComposerReview(page);
+  await waitForReview(page);
+  const reviewed = await probeWidget(page);
+  expect(reviewed.reviewImageWidth, 'the review shows a real encoded artifact').toBeGreaterThan(0);
+  expect(reviewed.reviewImageHeight).toBeGreaterThan(0);
+
+  await clickReviewSend(page);
+  await waitForHeadline(page, 'Report sent ✓', 15_000);
+  expect(calls, 'the attach walk posts exactly one report').toHaveLength(1);
+
+  // P3-D-15 / A-05: the attachment joins the same flow, so its outgoing bytes
+  // are the SINK's output — WebP or PNG, never the picked container. The
+  // fetch-boundary read is engine-truthful (WebKit drops blob parts from
+  // postDataBuffer, deviation 2), and the decode proves the picture survived
+  // review: 64×64 and non-blank (the fixture's two-tone square).
+  const image = await readOutgoingImage(page);
+  expect(
+    wireContainer(image),
+    'the single encode sink re-encodes every attachment',
+  ).toMatch(/^webp|png$/);
+  const analysis = await analyzeImagePixels(page, image);
+  expect(analysis.width, 'the attached picture decodes at its own dimensions').toBe(64);
+  expect(analysis.height).toBe(64);
+  expect(analysis.sampledDistinct, 'the attachment is never blanked on the way').toBeGreaterThan(1);
 });

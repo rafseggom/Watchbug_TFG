@@ -24,6 +24,13 @@ export interface CaptureRequest {
    * throws to abort the capture; the adapter never swallows that error.
    */
   beforeRead: () => void;
+  /**
+   * The user-picked file for `ManualFileCapture` (CAP-02, P3-D-15). Additive
+   * and optional, so `DisplayMediaCapture` is untouched: the production
+   * adapter never reads this member and the composer is the only caller that
+   * ever sets it.
+   */
+  file?: File;
 }
 
 /** The seam (R-02): raw pixels in, nothing encoded. */
@@ -31,11 +38,24 @@ export interface CaptureSource {
   capture(request: CaptureRequest): Promise<ImageData>;
 }
 
+/**
+ * Why a file never became a bitmap — the attachment gate's distinguishing
+ * class (CAP-02, T-03-02): magic-prefix refusal, over-cap decoded dimensions,
+ * or a failed decode. The composer maps all three to one visible inline
+ * refusal; the reason exists so the branch can stay one `instanceof` while
+ * the diagnosis survives.
+ */
+export type CaptureUnavailableReason = 'format' | 'size' | 'decode';
+
 /** The capture could not run at all (no API, denied, unsupported surface). */
 export class CaptureUnavailableError extends Error {
-  constructor(message: string) {
+  /** Present for every attachment-gate refusal (CAP-02); absent for capture failures. */
+  readonly reason: CaptureUnavailableReason | undefined;
+
+  constructor(message: string, reason?: CaptureUnavailableReason) {
     super(message);
     this.name = 'CaptureUnavailableError';
+    this.reason = reason;
   }
 }
 

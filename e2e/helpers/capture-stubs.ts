@@ -571,6 +571,23 @@ export interface WidgetProbe {
   /** The `{used} / {max}` readout ('' while hidden below 4,000 code points). */
   composerCounter: string;
   composerCounterShown: boolean;
+  /** `canvas.composer-preview` backing-store size — 0 before any frame. */
+  composerPreviewWidth: number;
+  composerPreviewHeight: number;
+  /** The degraded notice's heading/hint copy ('' when the zone has an image). */
+  composerNoticeHeading: string;
+  composerNoticeHint: string;
+  /** Whether a VISIBLE `Attach image` action exists (footer or notice). */
+  composerAttachVisible: boolean;
+  /** Whether the `Continue with text only` action is visible. */
+  composerContinueVisible: boolean;
+  /** Whether the image zone itself is rendered (hidden in text-only state). */
+  composerZoneVisible: boolean;
+  /** The visible attach-refusal copy ('' while hidden). */
+  composerAttachError: string;
+  composerAttachErrorHint: string;
+  /** The review summary's image row — 'No image' on a text-only report. */
+  reviewNoImage: string;
 }
 
 /** Read the panel/launcher state. `probe` deliberately has no side effects. */
@@ -653,6 +670,34 @@ export async function probeWidget(page: Page): Promise<WidgetProbe> {
         (root?.querySelector('.composer-counter') as HTMLElement | null)?.textContent ?? '',
       composerCounterShown:
         root?.querySelector('.composer-counter[data-shown="true"]') !== null,
+      composerPreviewWidth:
+        (root?.querySelector('canvas.composer-preview') as HTMLCanvasElement | null)?.width ?? 0,
+      composerPreviewHeight:
+        (root?.querySelector('canvas.composer-preview') as HTMLCanvasElement | null)?.height ?? 0,
+      composerNoticeHeading:
+        (root?.querySelector('.zone-notice-heading') as HTMLElement | null)?.textContent ?? '',
+      composerNoticeHint:
+        (root?.querySelector('.zone-notice-hint') as HTMLElement | null)?.textContent ?? '',
+      composerAttachVisible:
+        [...(root?.querySelectorAll('button.composer-attach') ?? [])].some(
+          (button) => button.getBoundingClientRect().width > 0,
+        ),
+      composerContinueVisible:
+        (root?.querySelector('button.composer-continue-text')?.getBoundingClientRect().width ?? 0) >
+        0,
+      composerZoneVisible:
+        (root?.querySelector('.image-zone')?.getBoundingClientRect().width ?? 0) > 0,
+      composerAttachError:
+        (root?.querySelector(
+          'span.field-error[data-wb-error="attach"][data-shown="true"]',
+        ) as HTMLElement | null)?.textContent ?? '',
+      composerAttachErrorHint:
+        (root?.querySelector(
+          'span.field-error[data-wb-error="attach-hint"][data-shown="true"]',
+        ) as HTMLElement | null)?.textContent ?? '',
+      reviewNoImage:
+        (root?.querySelector('[data-wb-summary="image"] .summary-value') as HTMLElement | null)
+          ?.textContent ?? '',
     };
   });
 }

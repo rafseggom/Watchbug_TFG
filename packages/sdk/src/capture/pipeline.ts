@@ -130,7 +130,13 @@ export interface Draft {
   title: string;
   note: string;
   image: ImageData | null;
-  readonly t1: readonly BitmapRect[];
+  /**
+   * Writable, not `readonly`: attaching a device file REPLACES the frame
+   * (CAP-02, P3-D-15) and T1 does not apply to an attachment — there is no
+   * DOM to scan — so the composer must be able to clear it. The element type
+   * stays a frozen array; the replacement is always the whole bitmap set.
+   */
+  t1: readonly BitmapRect[];
   masks: MaskPatch[];
   encoded: EncodedImage | null;
   captureNote: CaptureNote | null;
