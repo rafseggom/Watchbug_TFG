@@ -154,17 +154,52 @@ export const stringsEs: Record<StringId, string> = {
 };
 
 /**
- * Look up a locked string, substituting `{name}` placeholders when `vars` is
- * given. Placeholder-only: no pluralisation, no `Intl` machinery. Reads the
- * active locale (set once at `init()` and switched only by the composer's
- * EN/ES pair) — the dictionary is the single source of copy, never a literal.
+ * Look up a locked string in the ACTIVE locale (set once at `init()` from
+ * `detectLocale`, switched only by the composer's EN/ES pair), substituting
+ * `{name}` placeholders when `vars` is given. Placeholder-only: no
+ * pluralisation, no `Intl` machinery. The dictionary is the single source of
+ * copy, never a literal.
  */
 export function t(id: StringId, vars?: Record<string, string | number>): string {
-  const template: string = strings[id];
+  const template: string = STRINGS[activeLocale][id];
   if (vars === undefined) return template;
   let out = template;
   for (const [name, value] of Object.entries(vars)) {
     out = out.split(`{${name}}`).join(String(value));
   }
   return out;
+}
+
+/** The two shipped locales (RNF-03). */
+export type Locale = 'en' | 'es';
+
+const STRINGS: Record<Locale, Record<StringId, string>> = {
+  en: strings,
+  es: stringsEs,
+};
+
+/**
+ * The active locale. Session-scoped IN MEMORY on purpose: an injected
+ * third-party script may not read or write the host page's storage (SEC-03 /
+ * the `sdk-no-host-storage` gate), so the manual override applies to this page
+ * load only and the next load re-detects. UI-SPEC A-1 records the deviation
+ * from the panel's persisted-selector pattern for exactly this reason.
+ */
+let activeLocale: Locale = 'en';
+
+/** WDG-06 auto-detection: `es*` → Spanish, everything else → English. */
+export function detectLocale(navigatorLanguage?: string): Locale {
+  const language =
+    navigatorLanguage ?? (typeof navigator === 'undefined' ? undefined : navigator.language);
+  return (language ?? '').toLowerCase().startsWith('es') ? 'es' : 'en';
+}
+
+/** The switcher's entry — after it, `t()` reads the new dictionary. */
+export function setLocale(locale: Locale): void {
+  activeLocale = locale;
+}
+
+/** The locale currently in force — the declared `lang` must agree with it. */
+export function locale(): Locale {
+  return activeLocale;
 }

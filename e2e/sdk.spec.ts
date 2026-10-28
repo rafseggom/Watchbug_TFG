@@ -30,6 +30,7 @@ import {
   clickReviewEdit,
   clickReviewSend,
   reviewAndSend,
+  setLocaleToggle,
   setNote,
   setTitle,
   setType,
@@ -252,11 +253,12 @@ test('INT-01: the one-gesture launcher renders 48x48 inside the open-mode shadow
   expect(rendered.liveMode).toBe('polite');
 });
 
-test('F-08: the widget content declares lang="en" so assistive tech does not inherit the host language', async ({ page }) => {
-  // The open-mode build differs from production only in SHADOW_MODE (R-14), so
-  // this is the shipped markup. `all: initial` clears the inherited `lang`, and
-  // without the attribute an English message on a `lang="es"` page would be
-  // pronounced with the page's phonetics.
+test('WDG-06: .wrap lang matches the resolved locale — English copy and lang="en" under the default locale', async ({ page }) => {
+  // Replaces the Phase 2 F-08 row (03-03 Task 3): the hard-coded `en` literal
+  // is gone — the attribute now comes from the resolved locale, which must
+  // agree with the dictionary actually rendered. `all: initial` clears the
+  // inherited `lang`, so assistive tech would otherwise read the copy in the
+  // host page's language.
   await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
 
   const languages = await page.evaluate(() => {
@@ -268,11 +270,14 @@ test('F-08: the widget content declares lang="en" so assistive tech does not inh
       // What assistive tech actually resolves for the launcher: the nearest
       // ancestor in the shadow tree that declares a language.
       launcher: launcher?.closest('[lang]')?.getAttribute('lang') ?? null,
+      // The declared locale must agree with the dictionary the launcher read.
+      launcherLabel: launcher?.getAttribute('aria-label') ?? '',
     };
   });
 
   expect(languages.content).toBe('en');
   expect(languages.launcher).toBe('en');
+  expect(languages.launcherLabel).toBe('Report a bug');
 });
 
 test('WDG-04: the IIFE lane adds exactly one global, the ESM lane adds none, and native prototypes are untouched', async ({ page, context }) => {
@@ -3029,4 +3034,106 @@ test('P3-D-02 note counter: hidden at 3,999 code points and visible at 4,000', a
   const at = await probeWidget(page);
   expect(at.composerCounterShown, 'the counter surfaces at exactly 4,000').toBe(true);
   expect(at.composerCounter).toBe('4000 / 5000');
+});
+
+test.describe('WDG-06 es', () => {
+  test.use({ locale: 'es-ES' });
+
+  test('WDG-06 es: the whole core surface renders Spanish copy with lang="es"', async ({
+    page,
+    browserName,
+  }) => {
+    await installCaptureStub(page, browserName);
+    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+    await waitForWidget(page);
+    // The transient `Enviando…` headline is short-lived: record every render.
+    await collectHeadlines(page);
+
+    const base = await page.evaluate(() => {
+      const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
+      const launcher = root?.querySelector('button.launcher') as HTMLElement | null;
+      return {
+        lang: root?.querySelector('.wrap')?.getAttribute('lang') ?? null,
+        launcherLabel: launcher?.getAttribute('aria-label') ?? '',
+      };
+    });
+    expect(base.lang, 'navigator.language es-ES resolves the Spanish dictionary').toBe('es');
+    expect(base.launcherLabel).toBe('Reportar un error');
+
+    const calls = await interceptIncidentPosts(page, async () => ({
+      status: 201,
+      body: JSON.stringify({ id: INTERCEPTED_ID }),
+    }));
+
+    await clickLauncher(page);
+    await waitForComposer(page);
+    const composing = await probeWidget(page);
+    expect(composing.composerHeading).toBe('Reportar un error');
+    expect(composing.wrapLang).toBe('es');
+
+    await clickComposerReview(page);
+    await waitForReview(page);
+    const reviewed = await page.evaluate(() => {
+      const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
+      return {
+        heading: root?.querySelector('.review-heading')?.textContent ?? '',
+        send: root?.querySelector('button.review-send')?.textContent ?? '',
+        edit: root?.querySelector('button.review-edit')?.textContent ?? '',
+        typeValue: root?.querySelector('[data-wb-summary="type"] .summary-value')?.textContent ?? '',
+      };
+    });
+    expect(reviewed.heading, 'the review heading renders in Spanish').toBe('Listo para enviar');
+    expect(reviewed.send).toBe('Enviar informe');
+    expect(reviewed.edit).toBe('Editar informe');
+    expect(reviewed.typeValue).toBe('Error');
+
+    await clickReviewSend(page);
+    await waitForHeadline(page, 'Informe enviado ✓', 15_000);
+    const headlines = await readHeadlines(page);
+    expect(headlines, 'the in-flight Sending headline renders in Spanish').toContain('Enviando…');
+    expect(headlines).toContain('Capturando…');
+    expect(calls).toHaveLength(1);
+    const after = await probeWidget(page);
+    expect(after.wrapLang).toBe('es');
+  });
+});
+
+test('WDG-06 override: the composer EN/ES pair switches copy and lang in both directions without host storage', async ({
+  page,
+  browserName,
+}) => {
+  await installCaptureStub(page, browserName);
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+
+  await clickLauncher(page);
+  await waitForComposer(page);
+  const en = await probeWidget(page);
+  expect(en.composerHeading).toBe('Report a bug');
+  expect(en.wrapLang).toBe('en');
+
+  // ES switch: every visible string and the declared language move together.
+  await setLocaleToggle(page, 'es');
+  const es = await probeWidget(page);
+  expect(es.composerHeading).toBe('Reportar un error');
+  expect(es.wrapLang).toBe('es');
+  expect(es.composerTitle, 'the draft state survives the locale re-render').toBe(en.composerTitle);
+
+  // The override is session-scoped in memory (SEC-03 / T-03-16): the static
+  // `sdk-no-host-storage` gate is the structural proof; the zero reads here
+  // are the behavioural one on the running bundle.
+  const storage = await page.evaluate(() => ({
+    local: Object.keys(localStorage).length,
+    session: Object.keys(sessionStorage).length,
+  }));
+  expect(storage, 'the locale override never touches host storage').toEqual({
+    local: 0,
+    session: 0,
+  });
+
+  // EN switch back within the same session.
+  await setLocaleToggle(page, 'en');
+  const back = await probeWidget(page);
+  expect(back.composerHeading, 'the pair switches in both directions').toBe('Report a bug');
+  expect(back.wrapLang).toBe('en');
 });

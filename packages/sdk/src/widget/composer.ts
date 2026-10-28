@@ -29,7 +29,7 @@
  */
 import { MAX_NOTE_CHARS, MAX_TITLE_CHARS } from '@watchbug/contracts/constants';
 import type { Draft } from '../capture/pipeline.ts';
-import { t } from '../strings.ts';
+import { locale, t } from '../strings.ts';
 
 /** The counter surfaces from this many CODE POINTS up (UI-SPEC overflow). */
 export const NOTE_COUNTER_VISIBLE_FROM = 4_000;
@@ -357,7 +357,7 @@ export function createComposer(handlers: ComposerHandlers): Composer {
     button.setAttribute('type', 'button');
     button.setAttribute('data-wb-locale', code);
     button.textContent = code === 'en' ? t('i18n.en') : t('i18n.es');
-    button.setAttribute('aria-pressed', String(code === 'en'));
+    button.setAttribute('aria-pressed', String(code === locale()));
   }
   localePair.appendChild(enButton);
   localePair.appendChild(esButton);
@@ -593,6 +593,8 @@ export function createComposer(handlers: ComposerHandlers): Composer {
     esButton.textContent = t('i18n.es');
     enButton.setAttribute('aria-label', t('i18n.label'));
     esButton.setAttribute('aria-label', t('i18n.label'));
+    enButton.setAttribute('aria-pressed', String(locale() === 'en'));
+    esButton.setAttribute('aria-pressed', String(locale() === 'es'));
   };
 
   const render = (next: Draft | null): void => {

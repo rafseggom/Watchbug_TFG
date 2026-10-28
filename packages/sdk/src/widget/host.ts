@@ -23,6 +23,8 @@
  * the same tag, so the isolation is strictly stronger at the same cost.
  */
 
+import { locale, type Locale } from '../strings.ts';
+
 /** The exact UI-SPEC host style — inline, `!important`, px-only. */
 export const HOST_STYLE = [
   // `display` is load-bearing, not cosmetic: a hostile `* { display: none
@@ -111,6 +113,14 @@ export interface WatchbugHost {
   readonly root: ShadowRoot;
   /** Mount point for widget surfaces inside the shadow root. */
   readonly content: HTMLElement;
+  /**
+   * Declare the language of the copy currently rendered (F-08 / WDG-06).
+   * `all: initial` on `.wrap` strips inherited properties — `lang` included —
+   * so the attribute must be RE-ASSERTED here on every locale change rather
+   * than set once at mount and trusted: it is what keeps the declared language
+   * in lockstep with the dictionary `t()` is actually reading.
+   */
+  setLang(lang: Locale): void;
   /** Hide synchronously, before `getDisplayMedia` (P2-D-05). */
   hideSync(): void;
   /** Undo `hideSync()` once raw `ImageData` exists (P2-D-05). */
@@ -144,10 +154,10 @@ export function mountHost(css: string): WatchbugHost {
   // F-08: `all: initial` clears the inherited `lang`, so without this the widget
   // copy would be annotated with the host page's (or the user's default)
   // language — e.g. English strings pronounced with Spanish phonetics on a
-  // `lang="es"` page. The copy is English-only until Phase 3 ships the locale
-  // resolver, so the declared language is pinned to `en` here; that resolver
-  // replaces this literal with the resolved locale, not the mechanism.
-  content.setAttribute('lang', 'en');
+  // `lang="es"` page. Phase 3 resolves the locale before the first render, so
+  // the declaration now comes from the dictionary actually in use — and every
+  // later change re-asserts it through `setLang`, never a caller-side literal.
+  content.setAttribute('lang', locale());
   root.appendChild(content);
 
   let hidden = false;
@@ -196,6 +206,13 @@ export function mountHost(css: string): WatchbugHost {
     element,
     root,
     content,
+    setLang(lang: Locale): void {
+      // The only writer of the declaration: `init()` resolves the locale
+      // before the first render and the composer's EN/ES pair calls this on
+      // every switch, so `.wrap[lang]` can never drift from the dictionary
+      // `t()` is reading (F-08: `all: initial` makes the re-assert load-bearing).
+      content.setAttribute('lang', lang);
+    },
     hideSync(): void {
       hidden = true;
       applyStyle();

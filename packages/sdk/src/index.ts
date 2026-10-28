@@ -38,8 +38,9 @@ import {
   type StatusPanel,
   type StatusView,
 } from './widget/status-panel.ts';
-import { createComposer, COMPOSER_CSS, type Composer } from './widget/composer.ts';
+import { createComposer, COMPOSER_CSS, type Composer, type LocaleCode } from './widget/composer.ts';
 import { createReview, REVIEW_CSS, type Review } from './widget/review.ts';
+import { detectLocale, locale, setLocale } from './strings.ts';
 
 /** Bundle identity, surfaced on the IIFE global for support/debug. */
 export const WATCHBUG_VERSION = '0.1.0';
@@ -171,10 +172,17 @@ function resolveOptions(options: WatchbugInitOptions): ResolvedInitOptions {
 export function init(options: WatchbugInitOptions): void {
   if (mounted !== null) return;
 
+  // WDG-06: resolve the locale ONCE, before anything is constructed — the
+  // launcher/panel/composer read `t()` at creation, and `mountHost` declares
+  // `.wrap[lang]` from the same module state (session-scoped, never host
+  // storage: SEC-03 / UI-SPEC A-1).
+  setLocale(detectLocale(navigator.language));
+
   const config = resolveOptions(options);
   // One shadow `<style>` carries every surface (UI-SPEC: never a second
   // stylesheet, never `adoptedStyleSheets`).
   const host = mountHost(`${HOST_CSS}\n${LAUNCHER_CSS}\n${PANEL_CSS}\n${COMPOSER_CSS}\n${REVIEW_CSS}`);
+  host.setLang(locale());
 
   const flowRef: { current: CaptureFlow | null } = { current: null };
   const launcher = createLauncher({
@@ -247,6 +255,17 @@ export function init(options: WatchbugInitOptions): void {
     onDiscard: () => {
       draft = null;
       showScreen('idle');
+    },
+    // WDG-06 manual override: flip the module locale, re-declare `lang`, and
+    // RE-RENDER the mounted surface — a locale change is never a re-lookup of
+    // cached strings, and nothing here touches host storage (SEC-03 / A-1).
+    onLocaleChange: (code: LocaleCode) => {
+      setLocale(code);
+      host.setLang(code);
+      launcher.render();
+      if (screen === 'composer' && draft !== null) composer.render(draft);
+      else if (screen === 'review' && draft !== null && draft.encoded !== null) review.render(draft);
+      else if (screen === 'status') panel.render(lastView);
     },
   });
 
