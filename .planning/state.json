@@ -11,7 +11,7 @@
     {
       "number": "2",
       "name": "SDK Tracer Bullet: Widget, Capture & Auto-Redaction",
-      "status": "in_progress"
+      "status": "complete"
     },
     {
       "number": "3",
@@ -40,9 +40,9 @@
     }
   ],
   "next": {
-    "command": "/gsd:progress --next",
-    "label": "Advance to the next step",
-    "reason": "Phase 02 of 7 · 14% · executing"
+    "command": "/gsd-progress --next",
+    "label": "Advance to the next step (plan phase 03)",
+    "reason": "Phase 3 of 7 — needs a plan"
   },
-  "updated_at": "2026-10-24T14:43:04.207Z"
+  "updated_at": "2026-10-28T14:33:31.357Z"
 }

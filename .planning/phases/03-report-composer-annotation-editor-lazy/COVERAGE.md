@@ -1,0 +1,1 @@
+No external API integration: Phase 3 ships a client-side composer + hand-rolled canvas annotation editor inside the existing Watchbug SDK, plus a server-side image-format allowlist expansion (PNG+WebP → PNG+WebP+JPEG) in `apps/api`. No third-party API, SDK, service, webhook or managed platform is integrated; the only network call remains the project's own `POST /api/incidents`.
