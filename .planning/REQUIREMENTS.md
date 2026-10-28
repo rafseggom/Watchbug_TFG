@@ -142,8 +142,8 @@ A requirement is **Complete** when:
 ### Performance Budget
 
 - [x] **PRF-01**: The injected script is ≤ 45 KB gzipped; the build fails otherwise (RNF-01)
-- [ ] **PRF-02**: Each lazy chunk is ≤ 25 KB gzipped (R-01)
-- [ ] **PRF-03**: Total runtime client payload is ≤ 80 KB gzipped (R-01)
+- [x] **PRF-02**: Each lazy chunk is ≤ 25 KB gzipped (R-01)
+- [x] **PRF-03**: Total runtime client payload is ≤ 80 KB gzipped (R-01)
 - [x] **PRF-04**: The client SDK ships zero runtime npm dependencies (R-01)
 - [ ] **PRF-05**: Injecting Watchbug lowers Lighthouse performance by ≤ 2 points (CA-03)
 
@@ -278,8 +278,8 @@ Which phases cover which requirements. **Updated during roadmap creation** — e
 | DEP-03 | Phase 5 | Pending |
 | DEP-04 | Phase 7 | Pending |
 | PRF-01 | Phase 2 | Complete |
-| PRF-02 | Phase 3 | Pending |
-| PRF-03 | Phase 3 | Pending |
+| PRF-02 | Phase 3 | Complete |
+| PRF-03 | Phase 3 | Complete |
 | PRF-04 | Phase 2 | Complete |
 | PRF-05 | Phase 7 | Pending |
 
