@@ -12,7 +12,7 @@
  * Geometry and a11y are the UI-SPEC contract: a real 48×48 `<button>` with a
  * 24×24 inline-SVG bug glyph, `aria-label` from the locked string map, and the
  * 2 px / 2 px-offset focus ring. The glyph is built with `createElementNS` —
- * never `innerHTML` (T-02-01: no HTML sink in the SDK).
+ * never an HTML-parse sink (T-02-01: textContent/createElement only).
  */
 
 import { t } from '../strings.ts';

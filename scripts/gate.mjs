@@ -149,9 +149,48 @@ const RULES = [
         ]);
       }
       if (sinks === 0) {
-        return skip(['no encode sink yet — `encodeFinal()` lands with the Annotator (Phase 3)']);
+        return skip([
+          'no encode sink found — encodeFinal() has disappeared from the lane; this is a build defect, not a pending phase (the sink shipped with 03-03)',
+        ]);
       }
       return pass(hits);
+    },
+  },
+
+  {
+    id: 'sdk-no-html-sink',
+    title: 'packages/sdk never parses HTML into the DOM',
+    ref: 'T-02-01 · SEC-05 · UI-SPEC (createElement/textContent only — the composer/editor keep it)',
+    run() {
+      const files = walk(join(repoRoot, 'packages', 'sdk', 'src'));
+      if (files.length === 0) return skip(['packages/sdk/src has no source files yet']);
+
+      // Token census, comments included — the same discipline
+      // `sdk-no-host-storage` and `sdk-single-encode-sink` run: prose that
+      // spells a counted token fails the gate, so the codebase keeps its
+      // comments phrased around it (02-04 Pitfall 1 precedent).
+      const FORBIDDEN = [
+        ['innerHTML', /\binnerHTML\b/],
+        ['outerHTML', /\bouterHTML\b/],
+        ['insertAdjacentHTML', /\binsertAdjacentHTML\b/],
+        ['document.write', /\bdocument\.write(?:ln)?\b/],
+      ];
+      const hits = [];
+      for (const file of files) {
+        readLines(file).forEach((line, i) => {
+          const at = `${rel(file)}:${i + 1}  ${line.trim()}`;
+          for (const [label, re] of FORBIDDEN) {
+            if (re.test(line)) hits.push(`[${label}] ${at}`);
+          }
+        });
+      }
+      if (hits.length > 0) {
+        return fail([
+          'the widget renders through createElement / textContent / createElementNS only — an HTML sink re-opens the stored-XSS surface inside the shadow root (SEC-05)',
+          ...hits,
+        ]);
+      }
+      return pass([`${files.length} SDK source file(s) clean of HTML-parse sinks`]);
     },
   },
 
