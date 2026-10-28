@@ -4004,3 +4004,96 @@ test('ANN-04 encoding: a non-ASCII label is drawn verbatim', async ({ page, brow
     'ink reaches the label END (the trailing check glyph) — no truncation, no escaping',
   ).toBeGreaterThanOrEqual(3);
 });
+
+/* ------------------------------------------------------------------------- */
+/* ANN-06 + WDG-06 editor rows — 03-05 Task 3                                 */
+/* ------------------------------------------------------------------------- */
+
+// Two horizontal freehand strokes in the palette-block gap rows (y 105 and
+// 160 — between the stub frame's block bands at y 63..88, 123..148 and
+// 183..208, so every sampled pixel is pure gradient and no teal block can
+// fake ink anywhere near the bands).
+const STROKE_A_FROM: BitmapPoint = [60, 105];
+const STROKE_A_TO: BitmapPoint = [240, 105];
+const STROKE_B_FROM: BitmapPoint = [60, 160];
+const STROKE_B_TO: BitmapPoint = [240, 160];
+const UNDO_BANDS = [
+  { from: STROKE_A_FROM, to: STROKE_A_TO, halfWidth: 4 },
+  { from: STROKE_B_FROM, to: STROKE_B_TO, halfWidth: 4 },
+];
+
+test('ANN-06: undo removes one stroke and never a mask', async ({ page, browserName }) => {
+  const image = await drawAndSend(page, browserName, async () => {
+    await dragOnBitmap(page, STROKE_A_FROM, STROKE_A_TO);
+    await dragOnBitmap(page, STROKE_B_FROM, STROKE_B_TO);
+    await undo(page);
+  });
+  const ink = await analyzeInk(page, image, { bands: UNDO_BANDS });
+  expect(ink.bands[0], 'the first stroke survives one undo').toBeGreaterThanOrEqual(60);
+  expect(
+    ink.bands[1],
+    'the undone stroke is gone entirely (strokes only; masks never exist on this stack — P3-D-12)',
+  ).toBe(0);
+});
+
+test('ANN-06: Ctrl/Cmd+Z matches the undo button', async ({ page, browserName }) => {
+  const image = await drawAndSend(page, browserName, async () => {
+    await dragOnBitmap(page, STROKE_A_FROM, STROKE_A_TO);
+    await dragOnBitmap(page, STROKE_B_FROM, STROKE_B_TO);
+    await undoKey(page, 'Control');
+  });
+  const ink = await analyzeInk(page, image, { bands: UNDO_BANDS });
+  expect(ink.bands[0], 'the keyboard path keeps the first stroke').toBeGreaterThanOrEqual(60);
+  expect(ink.bands[1], 'the keyboard path removed exactly one stroke').toBe(0);
+});
+
+test.describe('WDG-06 editor', () => {
+  test.use({ locale: 'es-ES' });
+
+  test('WDG-06 editor: the editor chrome localises', async ({ page, browserName }) => {
+    await installCaptureStub(page, browserName);
+    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+    await waitForWidget(page);
+
+    await clickLauncher(page);
+    await waitForComposer(page);
+    const composing = await probeWidget(page);
+    expect(composing.wrapLang, 'core resolves es before the chunk exists').toBe('es');
+    expect(composing.composerHeading).toBe('Reportar un error');
+
+    await openEditor(page);
+    const probe = await probeWidget(page);
+    expect(probe.screen).toBe('editor');
+    expect(probe.editorTitle, 'the editor dictionary resolves the locale core passed in').toBe(
+      'Anotar',
+    );
+    const chrome = await page.evaluate(() => {
+      const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
+      const labels: Record<string, string> = {};
+      for (const button of [...(root?.querySelectorAll('button.tool') ?? [])]) {
+        const tool = button.getAttribute('data-wb-tool') ?? '';
+        labels[tool] = button.getAttribute('aria-label') ?? '';
+      }
+      const done = (root?.querySelector('button.editor-done') as HTMLButtonElement | null)
+        ?.textContent;
+      const canvasLabel = root
+        ?.querySelector('canvas.editor-canvas')
+        ?.getAttribute('aria-label');
+      const undoTitle = root
+        ?.querySelector('button.tool[data-wb-tool="undo"]')
+        ?.getAttribute('title');
+      return { labels, done: done ?? '', canvasLabel: canvasLabel ?? '', undoTitle: undoTitle ?? '' };
+    });
+    expect(chrome.labels, 'every tool label renders in Spanish (WDG-06 editor)').toEqual({
+      freehand: 'Dibujar',
+      arrow: 'Flecha',
+      rectangle: 'Rectángulo',
+      text: 'Texto',
+      mask: 'Enmascarar',
+      undo: 'Deshacer',
+    });
+    expect(chrome.done).toBe('Listo');
+    expect(chrome.canvasLabel).toBe('Captura con anotaciones');
+    expect(chrome.undoTitle, 'the title attribute re-renders with the aria-label').toBe('Deshacer');
+  });
+});

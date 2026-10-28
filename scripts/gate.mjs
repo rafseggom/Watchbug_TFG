@@ -154,6 +154,74 @@ const RULES = [
       return pass(hits);
     },
   },
+
+  {
+    id: 'sdk-lazy-lane-purity',
+    title: 'the core bundle never value-imports the lazy editor lane',
+    ref: 'PRF-02 · RNF-01 · the 45 KB tier (an editor absorbed into core is a regression, not a pass)',
+    run() {
+      const files = walk(join(repoRoot, 'packages', 'sdk', 'src'));
+      if (files.length === 0) return skip(['packages/sdk/src has no source files yet']);
+
+      /** True for a relative specifier that resolves INTO the lazy lane. */
+      const isLazySpec = (spec) => {
+        const path = spec.replace(/^\.\//, '').replace(/^(\.\.\/)+/, '');
+        return (
+          /(?:^|\/)(?:annotator|strings\.editor)\.ts$/.test(path) || /(?:^|\/)annotator\//.test(path)
+        );
+      };
+
+      const offenders = [];
+      const typeOnly = [];
+      for (const file of files) {
+        const relPath = rel(file).replace(/^packages\/sdk\/src\//, '');
+        // The lane itself may import freely; everything else is core.
+        if (relPath === 'annotator.ts' || relPath === 'strings.editor.ts' || relPath.startsWith('annotator/')) {
+          continue;
+        }
+        let statementType = null; // 'type' | 'value' while inside a multi-line import
+        readLines(file).forEach((line, i) => {
+          const at = `${relPath}:${i + 1}  ${line.trim()}`;
+          const start = /^[ \t]*(?:import|export)\b/.test(line);
+          if (start) {
+            statementType = /^[ \t]*(?:import|export)\s+type\b/.test(line) ? 'type' : 'value';
+            // A side-effect import of the lane (`import './annotator/…'`) is a
+            // value import: it ships editor bytes into core.
+            const side = /^[ \t]*import\s+['"]([^'"]+)['"]/.exec(line);
+            if (side && isLazySpec(side[1])) {
+              offenders.push(`side-effect import of the lazy lane →  ${at}`);
+              statementType = null;
+            }
+          }
+          // A LITERAL dynamic import is analyzable — esbuild would inline the
+          // chunk into core (Pitfall 1). The loader's variable specifier is the
+          // only legal shape, and it names no path here.
+          const dyn = /\bimport\s*\(\s*['"]([^'"]+)['"]/.exec(line);
+          if (dyn && isLazySpec(dyn[1])) {
+            offenders.push(`literal dynamic import inlines the lane →  ${at}`);
+          }
+          const from = /\bfrom\s+['"]([^'"]+)['"]/.exec(line);
+          if (from && statementType !== null) {
+            if (isLazySpec(from[1])) {
+              if (statementType === 'type') typeOnly.push(at);
+              else offenders.push(`value import of the lazy lane →  ${at}`);
+            }
+            statementType = null;
+          }
+        });
+      }
+      if (offenders.length > 0) {
+        return fail([
+          'the lazy lane must reach core only through the variable-specifier import in widget/loader.ts',
+          ...offenders,
+        ]);
+      }
+      return pass([
+        `${files.length} SDK source file(s) scanned; the only lazy-lane boundary crossings are type-only (erased at build):`,
+        ...(typeOnly.length > 0 ? typeOnly.map((at) => `type-only →  ${at}`) : ['none']),
+      ]);
+    },
+  },
 ];
 
 /* ------------------------------------------------------------------ */
