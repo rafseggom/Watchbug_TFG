@@ -1,10 +1,11 @@
 ---
 phase: "03"
 slug: "report-composer-annotation-editor-lazy"
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: "2026-10-28"
+reviewed_at: "2026-10-28"
 ---
 
 # Phase 3 — UI Design Contract
@@ -32,7 +33,7 @@ loaded on demand):
    toolbar (freehand / arrow / rectangle / text / mask) + undo, single accent ink, destructive
    opaque mask, `Done`.
 5. **Review screen** (new, P3-D-16 / PRV-07) — the explicit "this is what will be sent" moment:
-   final flattened image + summary + `Edit` / `Send report`.
+   final flattened image + summary + `Edit report` / `Send report`.
 
 **Not covered here (locked out of Phase 3):** console-log capture, environment metadata and
 identity privacy (ENR-01…05, INT-03/04 → Phase 4); `apps/panel` (React) surfaces (Phase 5/6);
@@ -82,7 +83,7 @@ Non-exhaustive; the executor may add internal modules. All render into `host.con
 | `AnnotationEditor` | `annotator.ts` (existing stub → real) | Lazy fullscreen canvas editor; vertical toolbar + canvas + `Done` |
 | `Toolbar` (5 tools + undo) | inside `annotator.ts` | 44×44 buttons, `aria-pressed`, undo separated below |
 | `MaskConfirmDialog` | inside `annotator.ts` | Once-per-session irreversibility notice (P3-D-09) |
-| `ReviewScreen` | `widget/review.ts` (new) | Final flattened image + summary + `Edit` / `Send report` |
+| `ReviewScreen` | `widget/review.ts` (new) | Final flattened image + summary + `Edit report` / `Send report` |
 | `strings` + `stringsEs` + locale resolver | `strings.ts` (existing → extended) | EN/ES maps + `navigator.language` auto-detect (WDG-06) |
 
 Icons: inline SVG only, hand-rolled via `createElementNS` (no image/font assets) — bug glyph
@@ -102,14 +103,14 @@ on `.wrap` only (never `:host`, never `document`).
 | md | 16px | Overlay padding, section gap, field gap, canvas border inset |
 | lg | 24px | Overlay inset from viewport, toolbar↔canvas gap, header padding |
 | xl | 32px | Composer content max-width inset, review summary gaps |
-| 2xl | 48px | Toolbar width reference (44 + 2×6 padding → 56 declared separately) |
+| 2xl | 48px | Toolbar width reference (44 + 2×8 padding → 60 declared separately) |
 | 3xl | 64px | Reserved (unused this phase) |
 
 **Exceptions (non-token values permitted only here):**
 - Annotation toolbar buttons **44×44 px** hit target (44 is a multiple of 4, but a dedicated
   touch-target value, not a spacing token; ≥ 44 px per the design-guidance a11y floor).
-- Toolbar rail **56 px wide** (44 button + 6 px padding each side) — derived, not a token.
-- Editor top bar **56 px tall** (44 px `Done` button + 6 px vertical padding).
+- Toolbar rail **60 px wide** (44 button + 8 px padding each side) — derived, not a token.
+- Editor top bar **60 px tall** (44 px `Done` button + 8 px vertical padding).
 - Launcher **48×48 px** and action buttons **36 px** tall (inherited, Phase 2).
 - Focus ring **2 px** solid + **2 px** offset (border-width, not a spacing token).
 - **All values px only** — `rem`/`em` forbidden in widget CSS (H-2/H-3).
@@ -169,7 +170,7 @@ Supporting inks (text only, not part of the 60/30/10 split):
 6. Focus rings (2 px solid, 2 px offset).
 7. The in-flight spinner arc (inherited).
 
-Secondary actions (`Edit`, `Attach image`, `Replace`, `Not now`, `Dismiss`) are **never** accent —
+Secondary actions (`Edit report`, `Attach image`, `Replace image`, `Not now`, `Dismiss`) are **never** accent —
 they are `surface-alt` fill + ink text + 1 px border.
 
 **Destructive reserved for:** inline form-validation error text (empty required title),
@@ -193,8 +194,8 @@ Phase 2 — launcher + host anchoring preserved).
   elevation `0 8px 24px rgba(27,31,38,0.18)`; padding 16 px; internal sections stack at 16/24 px;
   content area scrolls (`overflow-y: auto`) if it exceeds `max-height`.
 - **Editor overlay** (P3-D-05 fullscreen): `position: fixed; inset: 0;` surface `#ffffff`; **top bar
-  56 px** (title + hint left, `Done` right, `1px solid #d6dae1` bottom border); **left toolbar rail
-  56 px** (`1px solid #d6dae1` right border); canvas area fills the remainder, backdrop
+  60 px** (title + hint left, `Done` right, `1px solid #d6dae1` bottom border); **left toolbar rail
+  60 px** (`1px solid #d6dae1` right border); canvas area fills the remainder, backdrop
   `#eef0f4`, image "contain"-fit centered with a `1px solid #d6dae1` border.
 - **Review overlay**: same frame as the composer overlay (`min(720px, …)`, 90 vh, radius 8 px,
   elevation), header + large flattened image + summary block + footer.
@@ -213,7 +214,7 @@ Phase 2 — launcher + host anchoring preserved).
 
 ```
 launcher click → capture (transient activation preserved)
-  ├─ success → composer (image present)         → [Annotate] → editor → [Done] → composer
+  ├─ success → composer (image present)         → [Annotate image] → editor → [Done] → composer
   └─ failure → composer (degraded, CAP-03)      → [Review report] → review → [Send report] → status
         ├─ [Attach image] → file picker (PNG/WebP/JPEG) → composer (image present)
         └─ [Continue with text only] → composer (text-only, no image zone)
@@ -225,9 +226,9 @@ launcher click → capture (transient activation preserved)
 |------|---------|------------|-------|
 | `launcher` | init / after terminal dismiss | launcher only | click → capture → composer |
 | `status.*` | in-flight send / terminal result | status panel (in-flight: spinner + copy; terminal: glyph + copy + buttons) | `sent` auto-dismiss 5 s / `Dismiss`; failure `Try again` / `Dismiss` (Phase 2 semantics unchanged) |
-| `composer` | capture success **or** capture failure | overlay: header, toggle, title, note, image zone, footer | `✕`/`Escape` → discard → `launcher`; `Review report` → `review`; `Annotate` → `editor`; `Attach image` → file picker |
-| `editor` | `Annotate` (lazy chunk loads) | fullscreen: top bar + toolbar + canvas | `Done` → `composer`; (no other exit while editing — see discard note) |
-| `review` | `Review report` | overlay: final flattened image + summary + footer | `Edit` → `composer` (→ annotate); `Send report` → `status.sending`; `✕`/`Escape` → `composer` |
+| `composer` | capture success **or** capture failure | overlay: header, toggle, title, note, image zone, footer | `✕`/`Escape` → discard → `launcher`; `Review report` → `review`; `Annotate image` → `editor`; `Attach image` → file picker |
+| `editor` | `Annotate image` (lazy chunk loads) | fullscreen: top bar + toolbar + canvas | `Done` → `composer`; (no other exit while editing — see discard note) |
+| `review` | `Review report` | overlay: final flattened image + summary + footer | `Edit report` → `composer` (→ annotate); `Send report` → `status.sending`; `✕`/`Escape` → `composer` |
 | `maskConfirm` | first mask drag-release of session (P3-D-09) | dialog over editor | `Mask` → apply, never re-ask this session; `Not now` → cancel mask |
 
 **Re-entrancy:** launcher disabled while any overlay is open; exactly one overlay at a time.
@@ -255,8 +256,8 @@ launcher click → capture (transient activation preserved)
 
 ### Lazy-load (PRF-02 — default, see Assumption A-2)
 
-The editor chunk loads **on demand at the `Annotate` click**, not at capture. While it fetches, the
-`Annotate` button shows an inline 12 px spinner + `Loading…` (13 px label) and is disabled; on
+The editor chunk loads **on demand at the `Annotate image` click**, not at capture. While it fetches, the
+`Annotate image` button shows an inline 12 px spinner + `Loading…` (13 px label) and is disabled; on
 error the button re-enables with the attach-error style (never a dead state). Prefetch-on-capture
 is rejected: it downloads editor bytes for reports that never annotate.
 
@@ -280,7 +281,7 @@ image zone and keeps a subtle `Attach image` affordance in the footer.
 
 - Every control is a real `<button>`/`<input>`/`<textarea>`; tool buttons have `aria-label` +
   `aria-pressed`; the toolbar is keyboard-navigable (Tab, arrow keys switch tools, Enter selects).
-- Composer opens with focus on the title input; review opens with focus on `Edit`; mask dialog is
+- Composer opens with focus on the title input; review opens with focus on `Edit report`; mask dialog is
   `role="alertdialog" aria-modal="true"` with focus moved to `Mask` on open, `Escape` = `Not now`,
   focus returned to the mask tool button on close.
 - `Escape`/`✕` discards the composer or review (returns to launcher) and closes the editor via
@@ -320,7 +321,7 @@ summary table extracts the checker-required elements. CTA labels are specific ve
 | Element | English | Español |
 |---------|---------|---------|
 | Primary CTA | **Send report** (review screen) | **Enviar informe** |
-| Secondary CTAs | Review report · Annotate · Attach image · Edit · Done | Revisar informe · Anotar · Adjuntar imagen · Editar · Listo |
+| Secondary CTAs | Review report · Annotate image · Attach image · Edit report · Done | Revisar informe · Anotar imagen · Adjuntar imagen · Editar informe · Listo |
 | Empty state heading (degraded image zone) | Capture unavailable | Captura no disponible |
 | Empty state body (solution path) | Attach an image, or continue with text only. | Adjunta una imagen o continúa solo con texto. |
 | Error state (empty title) | Add a title to continue. | Añade un título para continuar. |
@@ -362,8 +363,8 @@ locale resolver; `t(id, vars?)` unchanged. Copy lives only here; no HTML sink (S
 | `composer.image.label` | Screenshot | Captura |
 | `composer.image.none` | Capture unavailable | Captura no disponible |
 | `composer.image.none.hint` | Attach an image, or continue with text only. | Adjunta una imagen o continúa solo con texto. |
-| `composer.annotate` | Annotate | Anotar |
-| `composer.replace` | Replace | Reemplazar |
+| `composer.annotate` | Annotate image | Anotar imagen |
+| `composer.replace` | Replace image | Reemplazar imagen |
 | `composer.attach` | Attach image | Adjuntar imagen |
 | `composer.continueTextOnly` | Continue with text only | Continuar solo con texto |
 | `composer.attach.error` | That file can't be attached. | Ese archivo no se puede adjuntar. |
@@ -392,7 +393,7 @@ locale resolver; `t(id, vars?)` unchanged. Copy lives only here; no HTML sink (S
 | `review.summary.title` | Title | Título |
 | `review.summary.note` | Details | Detalles |
 | `review.summary.noImage` | No image | Sin imagen |
-| `review.edit` | Edit | Editar |
+| `review.edit` | Edit report | Editar informe |
 | `review.send` | Send report | Enviar informe |
 | `i18n.label` | Language | Idioma |
 | `i18n.en` | English | Inglés |
@@ -402,19 +403,20 @@ locale resolver; `t(id, vars?)` unchanged. Copy lives only here; no HTML sink (S
 
 ## UI Considerations
 
-Applicable state considerations resolved: 8 covered, 2 backstop, 0 unresolved.
+Applicable state considerations resolved: 9 covered, 2 backstop, 0 unresolved (probe: 60 applicable across 10 surfaces, 1 unclassified resolved manually).
 
 | Category | Element(s) | Status | Resolution / Reason |
 |----------|------------|--------|---------------------|
-| loading | annotate-button, status-panel (interactive-control) | ✅ covered | `Annotate` shows a 12 px spinner + `Loading…` while the lazy chunk fetches and is disabled; send reuses the Phase 2 `Capturing…`/`Sending…`/`Retrying…` states |
+| loading | annotate-button, status-panel (interactive-control) | ✅ covered | `Annotate image` shows a 12 px spinner + `Loading…` while the lazy chunk fetches and is disabled; send reuses the Phase 2 `Capturing…`/`Sending…`/`Retrying…` states |
 | error | composer title, attach, status-panel (form + interactive-control) | ✅ covered | Capture failure → degraded composer notice with two actions (never a dead panel); empty title and rejected attachment render documented inline error copy with a solution path; send failures reuse `status.*` |
 | empty | composer image-zone (media) | ✅ covered | No-image degraded state renders `composer.image.none` + hint + `Attach image` / `Continue with text only` |
 | partial | text-only composer, review summary (form) | ✅ covered | Text-only mode hides the image zone and keeps a footer `Attach image`; review summary shows a `No image` line for text-only reports |
-| populated | composer, review (form + media) | ✅ covered | Image present renders the large preview + `Annotate`/`Replace`; review renders flattened image + type/title/note summary |
+| populated | composer, review (form + media) | ✅ covered | Image present renders the large preview + `Annotate image`/`Replace image`; review renders flattened image + type/title/note summary |
 | zero-one-many | annotation strokes (canvas) | ✅ covered | Zero strokes → `Done` sends unannotated (annotation optional); one-to-many strokes → per-stroke undo over a ~20-entry stack (masks excluded) |
 | overflow | title, note (form) | ✅ covered | Title clamps at 200 code points; note textarea scrolls at 5,000 code points with a `used/max` counter surfacing at ≥ 4,000 |
 | long-text | review-summary note (static-content) | 🧪 backstop | Review summary renders note truncated to 280 chars + ellipsis (full note still sent); asserted in the one Playwright suite |
 | long-text | composer heading (static-content) | 🧪 backstop | `composer.heading.bug/feedback` wrap at word boundaries inside the 720 px overlay; forced long-localized-heading rendering asserted |
+| long-text | mask-confirmation dialog body (interactive-control, manually classified) | ✅ covered | `mask.confirm.body` (EN/ES) wraps at word boundaries within the 360 px dialog — fixed copy, no truncation, no loading/error state |
 
 ---
 
@@ -434,7 +436,7 @@ Applicable state considerations resolved: 8 covered, 2 backstop, 0 unresolved.
 | # | Question | Default (this contract) | Why / what could change it |
 |---|----------|--------------------------|----------------------------|
 | A-1 | Locale-override persistence vs SEC-03 "never touch host storage" | **Session-scoped in-memory** (no `localStorage`); auto-detect `navigator.language` each load | The discretion note references the P1-D-05 `localStorage` pattern, but SEC-03 + the `localStorage` grep gate forbid a third-party-injected script writing host-origin storage. A durable override would need an owner decision (possible consultation trigger) |
-| A-2 | Lazy-chunk fetch timing | On demand at the `Annotate` click, visible loading state | PRF-02's "loaded on demand"; prefetch-at-capture would download editor bytes for reports that never annotate |
+| A-2 | Lazy-chunk fetch timing | On demand at the `Annotate image` click, visible loading state | PRF-02's "loaded on demand"; prefetch-at-capture would download editor bytes for reports that never annotate |
 | A-3 | Text-only form shape | Same composer minus the image zone; footer keeps `Attach image`; primary `Review report` unchanged | CAP-03 requires text-only filing; keeping attach available preserves the escape hatch |
 | A-4 | Discard-draft confirmation | None — `✕`/`Escape` discards the draft directly (a draft is cheap to redo); no modal | Not in the locked decisions; a discard-confirm would be additive, not a contract change |
 | A-5 | Stroke width / undo depth | 3 px logical ink (× DPR in bitmap space), ~20-entry undo stack | Discretion in CONTEXT.md; thin enough not to obscure, thick enough to see; 20 ≈ the "~20" locked note |
@@ -445,15 +447,15 @@ Applicable state considerations resolved: 8 covered, 2 backstop, 0 unresolved.
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
-- [ ] Dimension 7 Inventory Provenance: PASS
+- [x] Dimension 1 Copywriting: PASS
+- [x] Dimension 2 Visuals: PASS
+- [x] Dimension 3 Color: PASS
+- [x] Dimension 4 Typography: PASS
+- [x] Dimension 5 Spacing: PASS
+- [x] Dimension 6 Registry Safety: PASS
+- [x] Dimension 7 Inventory Provenance: PASS
 
-**Approval:** pending
+**Approval:** approved 2026-10-28
 
 ---
 
