@@ -385,6 +385,7 @@ test('INT-02: one launcher gesture files a real report that returns 201 and rend
   );
 
   await clickLauncher(page);
+  await completeComposer(page);
   await waitForHeadline(page, 'Report sent ✓', 15_000);
 
   const response = await responsePromise;
@@ -475,6 +476,7 @@ test('WDG-01: the launcher is a 48x48 shadow-root button and renders disabled wh
   });
 
   await clickLauncher(page);
+  await completeComposer(page);
   await waitForHeadline(page, 'Sending…', 10_000);
 
   const inFlight = await probeWidget(page);
@@ -514,6 +516,7 @@ test('CAP-01: one gesture drives the engine capture tier to a non-blank frame an
   );
 
   await clickLauncher(page);
+  await completeComposer(page);
   await waitForHeadline(page, 'Report sent ✓', 15_000);
 
   const response = await responsePromise;
@@ -570,6 +573,7 @@ test('CAP-04: the widget host is hidden when the capture runs and its accent pix
   );
 
   await clickLauncher(page);
+  await completeComposer(page);
   await waitForHeadline(page, 'Report sent ✓', 15_000);
 
   const response = await responsePromise;
@@ -633,6 +637,7 @@ test('CAP-05: a frame wider than MAX_IMAGE_DIM is scaled to 8192 px before encod
   }));
 
   await clickLauncher(page);
+  await completeComposer(page, { timeout: 45_000 });
   await waitForHeadline(page, 'Report sent ✓', 45_000);
   expect(calls).toHaveLength(1);
 
@@ -665,6 +670,7 @@ test('CAP-05: an oversized 16 MP synthetic frame is delivered inside the 16 MP a
   }));
 
   await clickLauncher(page);
+  await completeComposer(page, { timeout: 45_000 });
   await waitForHeadline(page, 'Report sent ✓', 45_000);
   expect(calls).toHaveLength(1);
 
@@ -697,6 +703,7 @@ test.describe('CAP-05 HiDPI (deviceScaleFactor: 2)', () => {
     }));
 
     await clickLauncher(page);
+    await completeComposer(page);
     await waitForHeadline(page, 'Report sent ✓', 20_000);
     expect(calls).toHaveLength(1);
 
@@ -727,6 +734,7 @@ test.describe('CAP-05 DPR clamp (deviceScaleFactor: 3)', () => {
     }));
 
     await clickLauncher(page);
+    await completeComposer(page);
     await waitForHeadline(page, 'Report sent ✓', 20_000);
     expect(calls).toHaveLength(1);
 
@@ -762,6 +770,7 @@ test('M-3: a forced PNG encode ships as a .png / image/png part and the real API
   );
 
   await clickLauncher(page);
+  await completeComposer(page);
   await waitForHeadline(page, 'Report sent ✓', 15_000);
 
   const response = await responsePromise;
