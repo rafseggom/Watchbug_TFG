@@ -132,11 +132,15 @@ function scaledCopy(source: HTMLCanvasElement, width: number, height: number): H
 
 /**
  * Fit a bitmap inside the contract caps: `MAX_IMAGE_DIM` per side and the
- * 16 MP `MAX_IMAGE_PIXELS` ceiling, floored at `MIN_EDGE_PX`. **No
- * devicePixelRatio clamp** — that one belongs to a *captured* frame's display
- * geometry; a picked file's pixel grid has nothing to do with the display
- * (CAP-02, research Pattern 6). `encodeLadder` and `ManualFileCapture` share
- * this one fitting rule.
+ * 16 MP `MAX_IMAGE_PIXELS` ceiling, with `MIN_EDGE_PX` as a **scale-preserving**
+ * floor. **No devicePixelRatio clamp** — that one belongs to a *captured*
+ * frame's display geometry; a picked file's pixel grid has nothing to do with
+ * the display (CAP-02, research Pattern 6). `encodeLadder` and
+ * `ManualFileCapture` share this one fitting rule.
+ *
+ * The floor never acts per axis: a 20×400 banner or a 10×10 icon stays
+ * proportional (the aspect ratio is the user's picture, and a one-axis floor
+ * would hand `ManualFileCapture` a ~60 % horizontally distorted upscale — WR-02).
  */
 export function fitToCaps(width: number, height: number): { width: number; height: number } {
   let nextWidth = width;
@@ -158,10 +162,23 @@ export function fitToCaps(width: number, height: number): { width: number; heigh
     nextHeight = Math.round(nextHeight * factor);
   }
 
-  return {
-    width: Math.max(MIN_EDGE_PX, nextWidth),
-    height: Math.max(MIN_EDGE_PX, nextHeight),
-  };
+  // The floor is a second, scale-preserving pass: grow BOTH axes by the one
+  // factor that lifts the shorter side to `MIN_EDGE_PX` (or leave the picture
+  // alone when it already clears the floor). Rounding lands the driving axis on
+  // the floor exactly, since its factor is `MIN_EDGE_PX / thatSide`.
+  if (
+    nextWidth >= 1 &&
+    nextHeight >= 1 &&
+    (nextWidth < MIN_EDGE_PX || nextHeight < MIN_EDGE_PX)
+  ) {
+    const grow = Math.max(MIN_EDGE_PX / nextWidth, MIN_EDGE_PX / nextHeight);
+    if (grow > 1) {
+      nextWidth = Math.round(nextWidth * grow);
+      nextHeight = Math.round(nextHeight * grow);
+    }
+  }
+
+  return { width: Math.max(1, nextWidth), height: Math.max(1, nextHeight) };
 }
 
 /** Apply the devicePixelRatio clamp, then the shared cap fit (encode ladder entry). */
