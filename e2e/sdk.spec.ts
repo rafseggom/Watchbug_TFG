@@ -875,6 +875,7 @@ test('P2-D-12: a sparse but real page (white with one corner detail) is not blan
   }));
 
   await clickLauncher(page);
+  await completeComposer(page);
   await waitForHeadline(page, 'Report sent ✓', 20_000);
   expect(calls).toHaveLength(1);
 });
@@ -984,6 +985,10 @@ test('P2-D-03: a transient 500 retries with the same Idempotency-Key and the sam
 
   // The retry window is the observable in-flight state for both the retry copy
   // and the launcher's disabled rendering (UI-SPEC loading lift, WDG-01).
+  // With the composer the request is only issued by the walk, and the locked
+  // headline sequence below still runs Capturing… -> Sending… -> Retrying…
+  // because Capturing… rides the capture stage the walk opens the composer on.
+  await completeComposer(page);
   await waitForHeadline(page, 'Retrying (1 of 3)…', 10_000);
   const duringRetry = await probeWidget(page);
   expect(duringRetry.panelHidden).toBe('false');
@@ -1036,6 +1041,7 @@ test('P2-D-03: a contract 400 fails immediately, renders the server message and 
   }));
 
   await clickLauncher(page);
+  await completeComposer(page);
   await waitForHeadline(page, 'The server rejected the report.', 15_000);
 
   const failed = await probeWidget(page);
@@ -1070,6 +1076,7 @@ test('UI-SPEC backstop: a long server reason renders truncated to 240 chars with
   }));
 
   await clickLauncher(page);
+  await completeComposer(page);
   await waitForHeadline(page, 'The server rejected the report.', 15_000);
 
   const failed = await probeWidget(page);
@@ -1093,6 +1100,7 @@ test('UI-SPEC A-5/A-7: sent auto-dismisses after 5 s and Escape dismisses a term
   }));
 
   await clickLauncher(page);
+  await completeComposer(page);
   await waitForHeadline(page, 'Report sent ✓', 15_000);
   const sentAt = Date.now();
 
@@ -1117,6 +1125,7 @@ test('UI-SPEC A-5/A-7: sent auto-dismisses after 5 s and Escape dismisses a term
   }));
 
   await clickLauncher(page);
+  await completeComposer(page);
   await waitForHeadline(page, 'The server rejected the report.', 15_000);
   await page.keyboard.press('Escape');
   await page.waitForFunction(
