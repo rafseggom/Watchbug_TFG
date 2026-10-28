@@ -78,7 +78,14 @@ export function putPatch(target: ImageData, patch: MaskPatch): void {
   const source = pixels.data;
   for (let y = 0; y < height; y += 1) {
     const from = y * width * 4;
-    const row = source.subarray(from, from + width * 4);
+    // Copy-then-normalise (LW-01): `source` is the draft's RETAINED history —
+    // replayed by `rebakeMasks` and re-sent on the next round trip — so alpha is
+    // forced on a copy, never in place through a `subarray` view of the source.
+    // (Today every producer already writes alpha 255, so the old in-place
+    // version was a no-op; the moment one does not, it would silently rewrite
+    // the draft's mask patches instead of normalising the write.)
+    const row = new Uint8ClampedArray(width * 4);
+    row.set(source.subarray(from, from + width * 4));
     // The masking contract is flat opaque (alpha 255); normalise it on the way
     // in rather than trusting the producer's alpha channel.
     for (let at = 3; at < row.length; at += 4) {
