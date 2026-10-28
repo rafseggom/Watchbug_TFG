@@ -4477,12 +4477,20 @@ test('ANN-05 mask-mode: the toggle shows only for the mask tool and defaults to 
 test('PRV-04 pixelate: block-averaged, grid-snapped and opaque', async ({ page, browserName }) => {
   let blockPx = 0;
   const expected = { left: 0, top: 0, right: 0, bottom: 0 };
+  // H-1's own scale for the tracer frame: the value core derives
+  // (`transformFor(frame, window).scaleX`) and threads onto the draft, which
+  // the editor multiplies the measured cap height by (HG-02). Read in-page so
+  // it is the same `innerWidth` the SDK reads, not an assumption about it.
+  const bitmapPerCssPx = await page.evaluate(
+    (frameWidth) => frameWidth / Math.max(1, window.innerWidth),
+    MASK_FRAME.width,
+  );
   const { image } = await maskAndSend(
     page,
     browserName,
     async (asked) => {
       // Opt in behind the toggle (P3-D-10), then drive the same drag.
-      blockPx = await measureBlockSize(page);
+      blockPx = await measureBlockSize(page, bitmapPerCssPx);
       await setMaskMode(page, 'pixelate');
       const committed = await maskDrag(page, asked);
       const snapped = snapOutwardExpected(committed, blockPx);

@@ -244,8 +244,15 @@ export function createEditor(options: AnnotatorOpenOptions): Promise<AnnotatorRe
       try {
         const style = currentMaskStyle();
         // Pixelate measures the platform's own cap height per bake (never an
-        // assumed constant); fill ignores the block size.
-        const blockPx = style === 'pixelate' ? blockSizeFor(capHeightPx(context)) : 0;
+        // assumed constant) and converts it from logical px into BITMAP px with
+        // the draft frame's scale (HG-02): on a DPR-2 capture the page's glyphs
+        // are twice as tall in bitmap space, and the R-13 floor ("a block
+        // swallows at least two glyph rows") is a bitmap-space property. Fill
+        // ignores the block size.
+        const blockPx =
+          style === 'pixelate'
+            ? blockSizeFor(capHeightPx(context) * options.bitmapPerCssPx)
+            : 0;
         // Append-only: the patch is destroyed pixels only, and it NEVER
         // touches the stroke stack (ANN-06 / Pitfall 4).
         masks.push(bakeMask(base, context, rect, style, blockPx));

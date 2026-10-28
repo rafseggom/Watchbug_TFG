@@ -714,6 +714,9 @@ export function createComposer(
           masks: current.masks,
           mount: layer,
           ink: resolveInk(),
+          // The frame's own bitmap-per-CSS-px scale: the pixelation floor is a
+          // bitmap-space property (R-13 / HG-02).
+          bitmapPerCssPx: current.bitmapPerCssPx,
           maskConfirm: {
             title: t('mask.confirm.title'),
             body: t('mask.confirm.body'),
@@ -767,6 +770,10 @@ export function createComposer(
         current.image = image;
         current.t1 = [];
         current.masks = [];
+        // A picked file's pixel grid has nothing to do with the display, so the
+        // captured frame's scale no longer describes it: the neutral `1` keeps
+        // the pixelation floor measured in the attachment's own pixels (CAP-02).
+        current.bitmapPerCssPx = 1;
         current.encoded = null;
         current.captureNote = null;
         render(current);

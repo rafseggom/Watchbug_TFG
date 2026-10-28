@@ -113,7 +113,15 @@ export type CaptureNote = 'denied' | 'no-api' | 'blank' | 'oversize';
 
 /** What the capture stage resolves to: a redacted frame, or a loud reason. */
 export type CaptureOutcome =
-  | { ok: true; image: ImageData; t1: BitmapRect[] }
+  | {
+      ok: true;
+      image: ImageData;
+      t1: BitmapRect[];
+      /** The frame's bitmap-per-CSS-pixel scale at the read instant (the same
+       * transform H-1 maps `t1` through). Carried to the editor so the
+       * R-13 pixelation floor is measured in BITMAP space (HG-02). */
+      bitmapPerCssPx: number;
+    }
   | { ok: false; captureNote: CaptureNote };
 
 /**
@@ -142,6 +150,15 @@ export interface Draft {
   masks: MaskPatch[];
   encoded: EncodedImage | null;
   captureNote: CaptureNote | null;
+  /**
+   * The frame's bitmap-per-CSS-pixel scale at the read instant, or `1` when no
+   * display frame exists (a text-only draft, or an attached file whose pixel
+   * grid has nothing to do with the display). The editor's pixelation floor
+   * multiplies the measured cap height by it, so an R-13 block always swallows
+   * two glyph rows in BITMAP space — on a DPR-2 capture the page's glyphs are
+   * twice as tall as the editor's unscaled measurement assumes (HG-02).
+   */
+  bitmapPerCssPx: number;
   idempotencyKey: string;
 }
 
@@ -238,7 +255,7 @@ export async function runCaptureStage(deps: CaptureStageDeps): Promise<CaptureOu
       if (target !== null) t1.push(target);
     }
     fillBitmapRects(image, t1, MASK_RGB, MASK_ALPHA_OPAQUE);
-    return { ok: true, image, t1 };
+    return { ok: true, image, t1, bitmapPerCssPx: transform.scaleX };
   } catch {
     return { ok: false, captureNote: 'denied' };
   }
@@ -422,6 +439,7 @@ export function createCaptureFlow(deps: CaptureFlowDeps): CaptureFlow {
           masks: [],
           encoded: null,
           captureNote: stage.captureNote,
+          bitmapPerCssPx: 1,
           idempotencyKey,
         });
         return;
@@ -439,6 +457,7 @@ export function createCaptureFlow(deps: CaptureFlowDeps): CaptureFlow {
         masks: [],
         encoded: null,
         captureNote: null,
+        bitmapPerCssPx: stage.bitmapPerCssPx,
         idempotencyKey,
       });
     } finally {

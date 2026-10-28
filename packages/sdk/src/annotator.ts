@@ -44,6 +44,13 @@ export interface AnnotatorOpenOptions {
   mount: HTMLElement;
   /** The accent ink, resolved from `--wb-color-accent` by core (P3-D-07). */
   ink: string;
+  /**
+   * The frame's bitmap-per-CSS-pixel scale (core's H-1 transform, `1` for an
+   * attached file or a frame-less draft). The pixelation floor measures its
+   * cap height in logical px, so it must multiply by this to reach the BITMAP
+   * space the page's glyphs actually occupy on a HiDPI capture (R-13, HG-02).
+   */
+  bitmapPerCssPx: number;
   /** The four core-owned `mask.confirm.*` strings for 03-06's dialog. */
   maskConfirm: {
     title: string;

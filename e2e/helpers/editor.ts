@@ -257,13 +257,18 @@ export function snapOutwardExpected(
 /**
  * The pixelate row's independent block-size oracle: mirrors the SDK's
  * measurement discipline (assign the 15 px label font with the read-back
- * fallback, `measureText('H').actualBoundingBoxAscent`,
- * `max(8, ceil(2 * cap))`) without importing any SDK module. The SAME engine
- * that paints the mask answers this probe, so the grid the row checks is the
- * grid the tool computed, derived twice.
+ * fallback, `measureText('H').actualBoundingBoxAscent`, `max(8, ceil(2 * cap))`)
+ * without importing any SDK module. The SAME engine that paints the mask
+ * answers this probe, so the grid the row checks is the grid the tool computed,
+ * derived twice.
+ *
+ * `bitmapPerCssPx` is the captured frame's own bitmap-per-CSS-pixel scale (the
+ * H-1 transform core threads onto the draft). The cap height is measured in
+ * logical px, so the SDK multiplies it by that scale before the `max(8, …)`
+ * floor — the R-13 "two glyph rows" floor is a BITMAP-space property (HG-02).
  */
-export async function measureBlockSize(page: Page): Promise<number> {
-  return page.evaluate(() => {
+export async function measureBlockSize(page: Page, bitmapPerCssPx: number): Promise<number> {
+  return page.evaluate((scale) => {
     const canvas = document.createElement('canvas');
     canvas.width = 1;
     canvas.height = 1;
@@ -273,8 +278,8 @@ export async function measureBlockSize(page: Page): Promise<number> {
     if (!ctx.font.includes('15px')) ctx.font = '15px sans-serif';
     const ascent = ctx.measureText('H').actualBoundingBoxAscent;
     const cap = Number.isFinite(ascent) && ascent > 0 ? ascent : 15;
-    return Math.max(8, Math.ceil(2 * cap));
-  });
+    return Math.max(8, Math.ceil(2 * cap * scale));
+  }, bitmapPerCssPx);
 }
 
 /** Select the mask style on the `.mask-mode` mini-toggle (03-06, P3-D-10). */
