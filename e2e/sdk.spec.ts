@@ -2753,14 +2753,18 @@ test('P2-D-01: the auto-title is document.title truncated to the first 200 code 
     body: JSON.stringify({ id: INTERCEPTED_ID }),
   }));
 
+  const expectedTitle = [...longTitle].slice(0, MAX_TITLE_CHARS).join('');
   await clickLauncher(page);
+  // P2-D-01 -> P3-D-02: the composer prefills exactly the clamped auto-title
+  // and the segment defaults to `bug` — asserted on the form surface before
+  // the walk, and on the wire after it.
+  await completeComposer(page, { expectPrefilledTitle: expectedTitle, expectDefaultType: 'bug' });
   await waitForHeadline(page, 'Report sent ✓', 15_000);
   expect(calls, 'the gesture must send exactly one report').toHaveLength(1);
 
   const meta = interceptedMeta(calls[0]);
   expect(meta.type).toBe('bug');
 
-  const expectedTitle = [...longTitle].slice(0, MAX_TITLE_CHARS).join('');
   expect([...expectedTitle].length, 'expected title spans 200 code points').toBe(200);
   expect(typeof meta.title).toBe('string');
   expect(
@@ -2798,6 +2802,7 @@ test('self-hosted: the widget makes zero third-party network requests — only t
   }));
 
   await clickLauncher(page);
+  await completeComposer(page);
   await waitForHeadline(page, 'Report sent ✓', 15_000);
 
   // Non-vacuity: the flow really did reach the API on this origin.
@@ -2913,6 +2918,7 @@ test('S-8: a cross-origin loading script refuses to init without an explicit end
   );
   await waitForWidget(page);
   await clickLauncher(page);
+  await completeComposer(page);
   await waitForHeadline(page, 'Report sent ✓', 15_000);
 
   expect(calls, 'the explicit endpoint is honoured').toHaveLength(1);
