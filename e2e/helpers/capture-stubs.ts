@@ -537,6 +537,40 @@ export interface WidgetProbe {
   hostDisplay: string;
   hostPosition: string;
   hostZIndex: string;
+  /** The router's screen: `idle | status | composer | editor | review`. */
+  screen: string | null;
+  /** `section.composer` exists and is not hidden. */
+  composerOpen: boolean;
+  /** `data-wb-state` = `image | text-only | degraded`. */
+  composerState: string | null;
+  /** The live title-field value (what the user currently sees). */
+  composerTitle: string;
+  /** The pressed segment's `data-wb-type`. */
+  composerType: string | null;
+  /** The visible title-validation copy ('' while hidden). */
+  composerError: string;
+  /** `section.review` exists and is not hidden. */
+  reviewOpen: boolean;
+  /** The summary title row's value (the draft title exactly as reviewed). */
+  reviewTitle: string;
+  /** The summary type row's value — a localized string, never the wire id. */
+  reviewType: string;
+  /** The decoded outgoing artifact's dimensions, on the review canvas. */
+  reviewImageWidth: number;
+  reviewImageHeight: number;
+  /** `.wrap[lang]` — the declared locale; must agree with the dictionary. */
+  wrapLang: string | null;
+  /** The composer overlay's rendered width in CSS pixels. */
+  composerWidth: number;
+  /** The composer heading's rendered copy (EN/ES assertions). */
+  composerHeading: string;
+  /** The in-field aria-invalid flag on the title input. */
+  composerTitleAriaInvalid: string | null;
+  /** Whether focus currently sits on the title input (blocked-review row). */
+  titleFocused: boolean;
+  /** The `{used} / {max}` readout ('' while hidden below 4,000 code points). */
+  composerCounter: string;
+  composerCounterShown: boolean;
 }
 
 /** Read the panel/launcher state. `probe` deliberately has no side effects. */
@@ -557,6 +591,17 @@ export async function probeWidget(page: Page): Promise<WidgetProbe> {
     const launcherRect = launcher?.getBoundingClientRect() ?? null;
     const hostStyle = host?.getAttribute('style') ?? '';
     const computed = host === null || host === undefined ? null : getComputedStyle(host);
+
+    const wrap = root?.querySelector('.wrap') as HTMLElement | null;
+    const composerSection = root?.querySelector('section.composer') as HTMLElement | null;
+    const reviewSection = root?.querySelector('section.review') as HTMLElement | null;
+    const composerOpen =
+      composerSection !== null && composerSection.getAttribute('data-hidden') !== 'true';
+    const titleInput = root?.querySelector('.composer-title') as HTMLInputElement | null;
+    const errorShown = root?.querySelector(
+      'span.field-error[data-wb-error="title"][data-shown="true"]',
+    ) as HTMLElement | null;
+    const reviewCanvas = root?.querySelector('canvas.review-image') as HTMLCanvasElement | null;
 
     return {
       hostPresent: host !== null,
@@ -580,6 +625,34 @@ export async function probeWidget(page: Page): Promise<WidgetProbe> {
       hostDisplay: computed?.display ?? '',
       hostPosition: computed?.position ?? '',
       hostZIndex: computed?.zIndex ?? '',
+      screen: wrap?.getAttribute('data-wb-screen') ?? null,
+      composerOpen,
+      composerState: composerSection?.getAttribute('data-wb-state') ?? null,
+      composerTitle: titleInput?.value ?? '',
+      composerType:
+        root?.querySelector('button.segment[aria-pressed="true"]')?.getAttribute('data-wb-type') ??
+        null,
+      composerError: errorShown?.textContent ?? '',
+      reviewOpen:
+        reviewSection !== null && reviewSection.getAttribute('data-hidden') !== 'true',
+      reviewTitle:
+        root?.querySelector('[data-wb-summary="title"] .summary-value')?.textContent ?? '',
+      reviewType:
+        root?.querySelector('[data-wb-summary="type"] .summary-value')?.textContent ?? '',
+      reviewImageWidth: reviewCanvas?.width ?? 0,
+      reviewImageHeight: reviewCanvas?.height ?? 0,
+      wrapLang: wrap?.getAttribute('lang') ?? null,
+      composerWidth:
+        composerSection === null ? 0 : Math.round(composerSection.getBoundingClientRect().width),
+      composerHeading:
+        (root?.querySelector('.composer-heading') as HTMLElement | null)?.textContent ?? '',
+      composerTitleAriaInvalid: titleInput?.getAttribute('aria-invalid') ?? null,
+      titleFocused:
+        titleInput !== null && root !== null && root.activeElement === titleInput,
+      composerCounter:
+        (root?.querySelector('.composer-counter') as HTMLElement | null)?.textContent ?? '',
+      composerCounterShown:
+        root?.querySelector('.composer-counter[data-shown="true"]') !== null,
     };
   });
 }

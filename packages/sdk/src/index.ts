@@ -14,19 +14,38 @@
  *    must be `import type` (or its Zod-free `constants` module) so Zod is
  *    erased at compile time.
  *
- * `init()` is a thin, validated mount: it owns the config and the launcher's
- * flow-entry seam. The capture → redaction → encode → send pipeline lands in
- * 02-02 behind that same seam, at the same call site the gesture handler
- * already invokes in the click's task (P2-D-02/05 — transient activation).
+ * Phase 3 adds the screen router (research Pattern 5): one `Screen` union
+ * decides which surface owns the widget — the launcher (`idle`), the 320 px
+ * status panel (`status`, in-flight and terminal SEND states only, P3-D-04),
+ * the composer overlay, the (03-05) editor slot, or the review overlay. The
+ * surfaces are appended once and shown/hidden by the router; exactly one is
+ * visible at a time and the launcher is disabled while any overlay is open.
+ * `onView` feeds the panel exactly as in Phase 2 — the panel's `StatusView`
+ * union is untouched.
  */
 
-import { createCaptureFlow, type CaptureFlow } from './capture/pipeline.ts';
+import {
+  createCaptureFlow,
+  encodeFinal,
+  type CaptureFlow,
+  type Draft,
+} from './capture/pipeline.ts';
 import { HOST_CSS, mountHost, type WatchbugHost } from './widget/host.ts';
 import { createLauncher, LAUNCHER_CSS, type Launcher } from './widget/launcher.ts';
-import { createStatusPanel, PANEL_CSS, type StatusPanel } from './widget/status-panel.ts';
+import {
+  createStatusPanel,
+  PANEL_CSS,
+  type StatusPanel,
+  type StatusView,
+} from './widget/status-panel.ts';
+import { createComposer, COMPOSER_CSS, type Composer } from './widget/composer.ts';
+import { createReview, REVIEW_CSS, type Review } from './widget/review.ts';
 
 /** Bundle identity, surfaced on the IIFE global for support/debug. */
 export const WATCHBUG_VERSION = '0.1.0';
+
+/** The surface the router currently shows. `editor` mounts with 03-05. */
+export type Screen = 'idle' | 'status' | 'composer' | 'editor' | 'review';
 
 /** Public options for `Watchbug.init()` (INT-02). */
 export interface WatchbugInitOptions {
@@ -55,6 +74,8 @@ interface MountedWidget {
   host: WatchbugHost;
   launcher: Launcher;
   panel: StatusPanel;
+  composer: Composer;
+  review: Review;
   config: ResolvedInitOptions;
 }
 
@@ -139,30 +160,100 @@ function resolveOptions(options: WatchbugInitOptions): ResolvedInitOptions {
 }
 
 /**
- * Flow wiring (P2-D-02/05). `runCaptureFlow` is invoked *synchronously* by the
- * launcher's click handler, in the same task as the user gesture, so the
- * capture call placed at the top of the pipeline inherits transient activation.
- * `flowRef` exists only because the launcher and the panel are constructed
- * before the flow can be; the indirection never introduces an `await`.
+ * Flow wiring (P2-D-02/05, P3-D-01). The capture call still runs in the
+ * launcher click's own task (transient activation), but the gesture now ends
+ * at the composer, not at the wire: `onDraft` hands the already-redacted
+ * frame to the router, `Review report` runs the single `encodeFinal`, and
+ * only `Send report` posts. `flowRef` exists because the launcher and the
+ * panel are constructed before the flow can be; the indirection never
+ * introduces an `await` in the click's task.
  */
 export function init(options: WatchbugInitOptions): void {
   if (mounted !== null) return;
 
   const config = resolveOptions(options);
-  const host = mountHost(`${HOST_CSS}\n${LAUNCHER_CSS}\n${PANEL_CSS}`);
+  // One shadow `<style>` carries every surface (UI-SPEC: never a second
+  // stylesheet, never `adoptedStyleSheets`).
+  const host = mountHost(`${HOST_CSS}\n${LAUNCHER_CSS}\n${PANEL_CSS}\n${COMPOSER_CSS}\n${REVIEW_CSS}`);
 
   const flowRef: { current: CaptureFlow | null } = { current: null };
   const launcher = createLauncher({
     hide: () => host.hideSync(),
     onActivate: () => flowRef.current?.start(),
   });
+
+  // --- router state (one widget instance: module-level would be ceremony) ---
+  let screen: Screen = 'idle';
+  let draft: Draft | null = null;
+  let lastView: StatusView = { kind: 'idle' };
+
+  /** The single transition point: exactly one surface visible, Escape owned
+   * by the visible one (its listener installs when it opens). */
+  const showScreen = (next: Screen): void => {
+    screen = next;
+    host.content.setAttribute('data-wb-screen', next);
+    panel.render(next === 'status' ? lastView : { kind: 'idle' });
+    composer.render(next === 'composer' && draft !== null ? draft : null);
+    review.render(
+      next === 'review' && draft !== null && draft.encoded !== null ? draft : null,
+    );
+    if (next === 'idle') launcher.setDisabled(false);
+    if (next === 'composer' || next === 'review' || next === 'editor') launcher.setDisabled(true);
+  };
+
+  /** `onView` feeds the status panel exactly as in Phase 2 (Pattern 5). */
+  const onView = (view: StatusView): void => {
+    lastView = view;
+    if (view.kind === 'idle') {
+      showScreen('idle');
+      return;
+    }
+    showScreen('status');
+  };
+
   const panel: StatusPanel = createStatusPanel({
     onRetry: () => flowRef.current?.retry(),
     // Dismiss (button, Escape or the 5 s auto-dismiss) returns to the idle
-    // launcher and re-arms it (UI-SPEC A-5/A-7).
+    // launcher, re-arms it, and drops the finished draft (UI-SPEC A-5/A-7).
     onDismiss: () => {
-      panel.render({ kind: 'idle' });
-      launcher.setDisabled(false);
+      draft = null;
+      showScreen('idle');
+    },
+  });
+
+  /** Review entry encodes ONCE (T-03-17); the review shows these exact bytes. */
+  const reviewDraft = async (): Promise<void> => {
+    const current = draft;
+    if (current === null || current.image === null || screen !== 'composer') return;
+    try {
+      current.encoded = await encodeFinal(current.image, current.t1, current.masks);
+    } catch {
+      // No sendable artifact (a fail-closed pixel replay or an engine that
+      // will not encode): the loud capture-failure state, nothing sent (M-6).
+      onView({ kind: 'failed', failure: 'capture' });
+      return;
+    }
+    showScreen('review');
+  };
+
+  const composer: Composer = createComposer({
+    onReview: () => {
+      void reviewDraft();
+    },
+    // Discard (button or Escape) drops the draft without confirmation
+    // (UI-SPEC A-4) and re-arms the launcher (P3-D-04).
+    onDiscard: () => {
+      draft = null;
+      showScreen('idle');
+    },
+  });
+
+  const review: Review = createReview({
+    // The round-trip is lossless: the draft object is untouched between the
+    // two surfaces, so `Edit report` lands back on the same fields/image.
+    onEdit: () => showScreen('composer'),
+    onSend: (current) => {
+      void flowRef.current?.send(current);
     },
   });
 
@@ -170,14 +261,20 @@ export function init(options: WatchbugInitOptions): void {
     host,
     launcher,
     config,
-    onView: (view) => panel.render(view),
+    onView,
+    onDraft: (created) => {
+      draft = created;
+      showScreen('composer');
+    },
   });
   flowRef.current = flow;
 
-  panel.render({ kind: 'idle' });
+  showScreen('idle');
   host.content.appendChild(launcher.element);
   host.content.appendChild(panel.element);
-  mounted = { host, launcher, panel, config };
+  host.content.appendChild(composer.element);
+  host.content.appendChild(review.element);
+  mounted = { host, launcher, panel, composer, review, config };
 }
 
 export default { WATCHBUG_VERSION, init };

@@ -1,25 +1,32 @@
 /**
- * `runCaptureFlow` — the strictly ordered orchestration behind one gesture
- * (CAP-01, CAP-04/05, P2-D-02/05/06/12, A-05, SEC-02).
+ * The gesture stage and delivery classification behind one report
+ * (CAP-01, CAP-04/05, P2-D-02/05/06/12, A-05, SEC-02, PRV-07).
  *
- * The order is the security property, not an implementation detail:
+ * Phase 3 splits the Phase-2 linear flow at the pixel boundary: `runCapture
+ * Stage()` ends at the already-redacted frame and resolves it to a human (the
+ * composer), and `encodeFinal` (re-exported below, defined in
+ * `image/encode.ts`) is the only path from a draft to sendable bytes. The
+ * security ordering is unchanged:
  *
  *   hide host → capture (getDisplayMedia in the gesture's own task)
  *     → assert hidden immediately before the pixel read
- *     → restore host → blank probe → **destructive redaction** → encode → send
+ *     → restore host → blank probe → **destructive T1 redaction**
  *
- * No encoded byte exists before `Redactor.redact()` runs: the capture seam only
- * yields `ImageData` (A-05) and `encodeLadder` is the single encode sink.
+ * No encoded byte exists before the redaction lands: the capture seam only
+ * yields `ImageData` (A-05) and the encode ladder stays the single sink. The
+ * encode and the send now happen at Review and at Send report respectively —
+ * with the review screen showing the exact artifact in between (T-03-17).
  *
  * Every failure path is a **visible terminal state** (M-6): a silently blank
- * image is never sent, and a capture that never produced a frame becomes a loud
- * `Capture` failure rather than a panel stuck on `Capturing…`.
+ * image is never sent, and a capture that never produced a frame becomes a
+ * loud failure the panel (later: the degraded composer) announces.
  */
-import { MAX_IMAGE_PIXELS } from '@watchbug/contracts/constants';
+import { MASK_ALPHA_OPAQUE, MAX_IMAGE_PIXELS } from '@watchbug/contracts/constants';
 import { createDisplayMediaCapture, type CaptureSource } from './capture-source.ts';
 import { encodeLadder, type EncodedImage } from '../image/encode.ts';
-import { createDomRedactor, type Redactor } from '../redact/redactor.ts';
-import type { RectLike } from '../redact/geometry.ts';
+import { createDomRedactor, fillBitmapRects, MASK_RGB, type Redactor } from '../redact/redactor.ts';
+import { toBitmapRect, transformFor, type BitmapRect, type RectLike } from '../redact/geometry.ts';
+import type { MaskPatch } from '../redact/masks.ts';
 import {
   buildMeta,
   filenameFor,
@@ -31,6 +38,9 @@ import {
 import type { StatusView } from '../widget/status-panel.ts';
 import type { Launcher } from '../widget/launcher.ts';
 import type { WatchbugHost } from '../widget/host.ts';
+
+/** The compose-time encode entry — one name, one place, one sink behind it. */
+export { encodeFinal } from '../image/encode.ts';
 
 /** Thrown by the pipeline's own invariant hook; never swallowed. */
 export class PipelineInvariantError extends Error {
@@ -86,16 +96,157 @@ export interface CaptureFlowConfig {
   endpoint: string;
 }
 
+/**
+ * Why there is no working image. The four values choose the degraded composer's
+ * notice copy when 03-04 mounts it (research F6 keeps the existing `status.*`
+ * diagnostics as the hint source); today the flow maps them onto the loud
+ * `status.failed` states exactly as Phase 2 did.
+ *  - `denied`   — the picker was dismissed, a refused surface, or the redaction
+ *    scan itself failed (fail-closed: never an unredacted frame, T-02-10).
+ *  - `no-api`   — this browser does not expose tab capture at all.
+ *  - `blank`    — the uniform-frame refusal (P2-D-12).
+ *  - `oversize` — the beyond-cap frame refusal (P2-D-12, same bucket).
+ */
+export type CaptureNote = 'denied' | 'no-api' | 'blank' | 'oversize';
+
+/** What the capture stage resolves to: a redacted frame, or a loud reason. */
+export type CaptureOutcome =
+  | { ok: true; image: ImageData; t1: BitmapRect[] }
+  | { ok: false; captureNote: CaptureNote };
+
+/**
+ * The composed report between capture and send (C-2 contract).
+ *
+ * `image` is the ONE flattened working bitmap (already T1-redacted; the editor
+ * mutates it in place), `t1` are the auto-redaction rects **in bitmap space,
+ * measured at the pixel-read instant** (WR-01 / H-1 — never re-derived from
+ * the live viewport at export), and `masks` are post-mask patches in creation
+ * order (T2: only destroyed pixels exist here; they survive editor
+ * round-trips). `encoded` is the single artifact `encodeFinal` produced at
+ * Review entry — the exact bytes `Send report` transmits (T-03-17).
+ */
+export interface Draft {
+  type: ReportMeta['type'];
+  title: string;
+  note: string;
+  image: ImageData | null;
+  readonly t1: readonly BitmapRect[];
+  masks: MaskPatch[];
+  encoded: EncodedImage | null;
+  captureNote: CaptureNote | null;
+  idempotencyKey: string;
+}
+
+export interface CaptureStageDeps {
+  host: WatchbugHost;
+  launcher: Launcher;
+  /** The in-flight `Capturing…` state stays the panel's (P3-D-04). */
+  onView: (view: StatusView) => void;
+  capture: CaptureSource;
+  redactor: Redactor;
+  /** The viewport the frame is registered against (H-1 mapping input). */
+  view: Window;
+}
+
+/**
+ * True when this browser cannot expose tab capture at all — the classification
+ * between `no-api` and `denied` after a capture throw. Reads the same global
+ * the production adapter guards on (`capture-source.ts`); on the e2e seam tier
+ * the adapter short-circuits before touching it, and a seam that throws still
+ * lands in `denied` — the loud capture-failed state either way.
+ */
+function lacksDisplayMediaApi(): boolean {
+  const media = typeof navigator === 'undefined' ? undefined : navigator.mediaDevices;
+  return media === undefined || typeof media.getDisplayMedia !== 'function';
+}
+
+/**
+ * Everything one gesture does up to (and including) the destructive T1
+ * redaction — the exact Phase-2 ordering, stopped at the pixel boundary so a
+ * human sits between the frame and the encode.
+ *
+ * `t1` is computed AT THE READ INSTANT: the rects `beforeRead` collected are
+ * mapped through `transformFor(image.width, image.height, view.innerWidth,
+ * view.innerHeight)` and `toBitmapRect` against the frame that was just read,
+ * so a layout shift, zoom or resize between capture and export can never move
+ * a mask out from under its secret (WR-01 / H-1).
+ *
+ * FAIL CLOSED (T-02-10): a capture or redaction error resolves to a note —
+ * never to an unredacted or partially redacted frame. The caller renders the
+ * loud terminal state; nothing is encoded, nothing is sent.
+ */
+export async function runCaptureStage(deps: CaptureStageDeps): Promise<CaptureOutcome> {
+  const { host, launcher, onView, capture, redactor, view } = deps;
+  // P2-D-05: hidden before the capture call (the launcher already did this in
+  // its handler; this keeps the invariant true for every entry path).
+  host.hideSync();
+  launcher.setDisabled(true);
+  onView({ kind: 'capturing' });
+
+  // WR-01: the mask rects are measured inside `beforeRead`, the same instant
+  // the pixels are read, so a layout shift in between cannot move a secret
+  // out from under its mask. The host is `display:none` at that instant, so
+  // the widget itself cannot contribute a rect.
+  const measured: { rects: RectLike[] | null } = { rects: null };
+  let image: ImageData | null = null;
+  try {
+    // P2-D-06: the assertion runs inside the adapter, immediately before
+    // the pixel read — it throws rather than producing a frame with the
+    // widget in it.
+    image = await capture.capture({
+      beforeRead: () => {
+        if (!host.isHidden()) {
+          throw new PipelineInvariantError('the widget host was visible at pixel-read time');
+        }
+        measured.rects = redactor.collect();
+      },
+    });
+  } catch {
+    return { ok: false, captureNote: lacksDisplayMediaApi() ? 'no-api' : 'denied' };
+  } finally {
+    // The host is restored as soon as the raw frame exists (P2-D-05) — and on
+    // EVERY exit, because a failure surface rendered into a `display:none`
+    // host is not the visible terminal state M-6 requires (FX-01, Pitfall 12).
+    host.restore();
+  }
+
+  if (image === null) return { ok: false, captureNote: 'denied' };
+
+  const probe = blankProbe(image);
+  if (probe.blank) {
+    return { ok: false, captureNote: probe.reason === 'oversize' ? 'oversize' : 'blank' };
+  }
+
+  // SEC-02/T-02-03: destructive fill on the raw pixels, before any encode can
+  // exist. `measured.rects` is set by every `CaptureSource` that honours
+  // `beforeRead`; the fallback re-measures so a misbehaving seam degrades to a
+  // later measurement, never to unredacted bytes (T-02-10).
+  try {
+    const rects = measured.rects ?? redactor.collect();
+    const transform = transformFor(image.width, image.height, view.innerWidth, view.innerHeight);
+    const t1: BitmapRect[] = [];
+    for (const rect of rects) {
+      const target = toBitmapRect(rect, transform, image.width, image.height);
+      if (target !== null) t1.push(target);
+    }
+    fillBitmapRects(image, t1, MASK_RGB, MASK_ALPHA_OPAQUE);
+    return { ok: true, image, t1 };
+  } catch {
+    return { ok: false, captureNote: 'denied' };
+  }
+}
+
 export interface CaptureFlowDeps {
   host: WatchbugHost;
   launcher: Launcher;
   config: CaptureFlowConfig;
-  /** Single sink for every state the panel renders. */
+  /** Single sink for every state the panel renders (in-flight / terminal). */
   onView: (view: StatusView) => void;
+  /** A successfully captured, T1-redacted frame becomes a draft (composer). */
+  onDraft: (draft: Draft) => void;
   /** Injection points for the flow's collaborators (e2e seam / future sources). */
   capture?: CaptureSource;
   redactor?: Redactor;
-  encode?: (image: ImageData) => Promise<EncodedImage>;
   send?: (payload: {
     blob: Blob;
     filename: string;
@@ -104,10 +255,12 @@ export interface CaptureFlowDeps {
   }) => Promise<SendResult>;
 }
 
-/** The gesture-facing surface: both methods are safe to call synchronously. */
+/** The gesture-facing surface: `start()` is safe to call synchronously. */
 export interface CaptureFlow {
   /** Start a fresh report (mints a fresh idempotency key). */
   start(): void;
+  /** Transmit the draft's already-encoded artifact — the review's exact bytes. */
+  send(draft: Draft): Promise<void>;
   /** `Try again`: resend the failed payload, or restart the gesture. */
   retry(): void;
 }
@@ -150,10 +303,9 @@ function newIdempotencyKey(): string {
  * `capture.capture()`.
  */
 export function createCaptureFlow(deps: CaptureFlowDeps): CaptureFlow {
-  const { host, launcher, config, onView } = deps;
+  const { host, launcher, config, onView, onDraft } = deps;
   const capture = deps.capture ?? createDisplayMediaCapture(host.element);
   const redactor = deps.redactor ?? createDomRedactor(document, window);
-  const encode = deps.encode ?? encodeLadder;
   const send =
     deps.send ??
     ((payload: PendingSend): Promise<SendResult> =>
@@ -188,14 +340,31 @@ export function createCaptureFlow(deps: CaptureFlowDeps): CaptureFlow {
     }
   }
 
-  async function runFromGesture(): Promise<void> {
+  /** The prepared multipart payload for one draft's encoded artifact. */
+  function pendingFor(draft: Draft): PendingSend {
+    const encoded = draft.encoded;
+    if (encoded === null) {
+      throw new PipelineInvariantError('send called before encodeFinal produced the artifact');
+    }
+    return {
+      blob: encoded.blob,
+      filename: filenameFor(encoded.mimeType),
+      meta: {
+        type: draft.type,
+        title: draft.title,
+        // The note rides the wire only when non-empty (the contract's `note`
+        // is optional; an absent field keeps empty-note reports byte-stable).
+        note: draft.note.length > 0 ? draft.note : undefined,
+        // R-08: path only, measured at send as in Phase 2.
+        url: buildMeta(document, location).url,
+      },
+      idempotencyKey: draft.idempotencyKey,
+    };
+  }
+
+  async function runGesture(): Promise<void> {
     try {
-      // P2-D-05: hidden before the capture call (the launcher already did this
-      // in its handler; this keeps the invariant true for a retry path too).
-      host.hideSync();
       launcher.setDisabled(true);
-      pendingSend = null;
-      onView({ kind: 'capturing' });
 
       // WR-03 / I-2: minted BEFORE the capture, so a missing CSPRNG is a loud
       // visible failure here and never a request carrying a guessable key.
@@ -211,72 +380,40 @@ export function createCaptureFlow(deps: CaptureFlowDeps): CaptureFlow {
         return;
       }
 
-      // WR-01: the mask rects are measured inside `beforeRead`, the same instant
-      // the pixels are read, so a layout shift in between cannot move a secret
-      // out from under its mask. The host is `display:none` at that instant, so
-      // the widget itself cannot contribute a rect.
-      const measured: { rects: RectLike[] | null } = { rects: null };
-      let image: ImageData | null = null;
-      try {
-        // P2-D-06: the assertion runs inside the adapter, immediately before
-        // the pixel read — it throws rather than producing a frame with the
-        // widget in it.
-        image = await capture.capture({
-          beforeRead: () => {
-            if (!host.isHidden()) {
-              throw new PipelineInvariantError('the widget host was visible at pixel-read time');
-            }
-            measured.rects = redactor.collect();
-          },
+      const stage = await runCaptureStage({
+        host,
+        launcher,
+        onView,
+        capture,
+        redactor,
+        view: window,
+      });
+
+      if (!stage.ok) {
+        pendingSend = null;
+        // Until the degraded composer mounts (03-04), the capture failures keep
+        // the Phase-2 loud states: `blank` and `oversize` share the blank
+        // bucket, everything else the capture bucket (research F6).
+        onView({
+          kind: 'failed',
+          failure:
+            stage.captureNote === 'blank' || stage.captureNote === 'oversize' ? 'blank' : 'capture',
         });
-      } catch {
-        onView({ kind: 'failed', failure: 'capture' });
-      } finally {
-        // The host is restored as soon as the raw frame exists (P2-D-05).
-        host.restore();
-      }
-
-      if (image === null) return;
-
-      const probe = blankProbe(image);
-      if (probe.blank) {
-        onView({ kind: 'failed', failure: 'blank' });
         return;
       }
 
-      // SEC-02/T-02-03: destructive fill on the raw pixels, before any encode.
-      // FAIL CLOSED (T-02-10): a redaction error — DOM scan failure, geometry
-      // mapping failure — must never fall open to unredacted bytes. It
-      // short-circuits HERE, before the encode and send steps, into the loud
-      // terminal failure state (M-6): nothing is encoded, nothing is sent,
-      // and the panel tells the user. The locked UI-SPEC copy set has no
-      // dedicated redaction headline, so the capture-failure state carries it
-      // (its load-bearing sentence is "Nothing was sent." — dedicated copy,
-      // if wanted, belongs with the Phase 3 composer).
-      try {
-        // `measured.rects` is set by every `CaptureSource` that honours
-        // `beforeRead`; the fallback re-measures so a misbehaving seam degrades
-        // to a later measurement, never to unredacted bytes (T-02-10).
-        redactor.redact(image, measured.rects ?? undefined);
-      } catch {
-        onView({ kind: 'failed', failure: 'capture' });
-        return;
-      }
-
-      let encoded: EncodedImage;
-      try {
-        encoded = await encode(image);
-      } catch {
-        // No sendable artifact — the capture state is the honest one (there is
-        // no separate "encode failed" state in the approved UI contract).
-        onView({ kind: 'failed', failure: 'capture' });
-        return;
-      }
-
-      await deliver({
-        blob: encoded.blob,
-        filename: filenameFor(encoded.mimeType),
-        meta: buildMeta(document, location),
+      pendingSend = null;
+      onDraft({
+        // P3-D-03: the composer's segmented control starts at `bug`, matching
+        // the launcher label; P3-D-02: the title prefills, editable.
+        type: 'bug',
+        title: buildMeta(document, location).title,
+        note: '',
+        image: stage.image,
+        t1: stage.t1,
+        masks: [],
+        encoded: null,
+        captureNote: null,
         idempotencyKey,
       });
     } finally {
@@ -287,7 +424,11 @@ export function createCaptureFlow(deps: CaptureFlowDeps): CaptureFlow {
   function start(): void {
     if (running) return;
     running = true;
-    void runFromGesture();
+    void runGesture();
+  }
+
+  async function sendDraft(draft: Draft): Promise<void> {
+    await deliver(pendingFor(draft));
   }
 
   function retry(): void {
@@ -305,5 +446,5 @@ export function createCaptureFlow(deps: CaptureFlowDeps): CaptureFlow {
     start();
   }
 
-  return { start, retry };
+  return { start, send: sendDraft, retry };
 }

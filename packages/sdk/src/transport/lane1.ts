@@ -32,8 +32,11 @@ export const SEND_TIMEOUT_MS = 15_000;
 
 /** The CA-01 `meta` shape the SDK sends — explicit fields only, never a spread. */
 export interface ReportMeta {
-  type: 'bug';
+  /** What the user filed (P3-D-03; the contract's enum is `bug | feedback`). */
+  type: 'bug' | 'feedback';
   title: string;
+  /** Optional detail note (CAP-03), clamped by the composer to code points. */
+  note?: string;
   url: string;
 }
 
@@ -77,20 +80,21 @@ interface AttemptOutcome {
 }
 
 /**
- * Build the meta part (P2-D-01/PRV-06). `document.title` is host-controlled and
- * untrusted, so it is clamped here and again by the server; `location.pathname`
- * is used rather than `href` so a query string (`?token=…`) can never ride
- * along (R-08).
+ * The composer's prefill (P3-D-02): `document.title` clamped by CODE POINTS
+ * — matching the Zod `.max(MAX_TITLE_CHARS)` semantics the server validates
+ * against (`slice(0, MAX_TITLE_CHARS)` counts UTF-16 units, so a non-BMP-heavy
+ * title would be cut short of the cap, and a unit-boundary cut could split a
+ * surrogate pair) — and `location.pathname` only, never `href`, so a query
+ * string (`?secret=`) can never ride along (R-08).
+ *
+ * `document.title` is host-controlled and untrusted, so the value is clamped
+ * here and again by the server. The composer owns the final title/type/note;
+ * this helper only seeds them.
  */
-export function buildMeta(doc: Document, loc: Location): ReportMeta {
+export function buildMeta(doc: Document, loc: Location): Pick<ReportMeta, 'title' | 'url'> {
   const rawTitle = (doc.title ?? '').trim();
   const title = rawTitle.length > 0 ? rawTitle : 'Untitled page';
   return {
-    type: 'bug',
-    // Truncated by CODE POINTS, matching the Zod `.max(MAX_TITLE_CHARS)` cap
-    // the server validates against: `slice(0, MAX_TITLE_CHARS)` counts UTF-16
-    // code units, so a non-BMP-heavy title would be cut short of the cap (and a
-    // unit-boundary cut could split a surrogate pair).
     title: [...title].slice(0, MAX_TITLE_CHARS).join(''),
     url: loc.pathname.slice(0, MAX_URL_PATH_CHARS),
   };

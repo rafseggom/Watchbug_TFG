@@ -25,6 +25,17 @@ import {
   waitForHeadline,
   waitForWidget,
 } from './helpers/capture-stubs';
+import {
+  clickComposerReview,
+  clickReviewEdit,
+  clickReviewSend,
+  reviewAndSend,
+  setNote,
+  setTitle,
+  setType,
+  waitForComposer,
+  waitForReview,
+} from './helpers/composer';
 
 /**
  * The SDK post endpoint, matched by **one shared RegExp**. `page.unroute`
@@ -2808,4 +2819,69 @@ test('S-8: a cross-origin loading script refuses to init without an explicit end
     destinations,
     'the report must never be posted to the loading script origin',
   ).not.toContain('http://localhost:8080/api/incidents');
+});
+
+/* ------------------------------------------------------------------------- */
+/* Composition rows — 03-03 (PRV-07, P3-D-02/03/04, WDG-06)                    */
+/* ------------------------------------------------------------------------- */
+
+test('PRV-07: review shows the flattened artifact and Send posts it exactly once', async ({
+  page,
+  browserName,
+}) => {
+  await installCaptureStub(page, browserName);
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+  await page.evaluate(() => {
+    document.title = 'PRV-07 flattened artifact';
+  });
+
+  const calls = await interceptIncidentPosts(page, async () => ({
+    status: 201,
+    body: JSON.stringify({ id: INTERCEPTED_ID }),
+  }));
+
+  // One gesture now lands in the COMPOSER with the image, not on the wire.
+  await clickLauncher(page);
+  await waitForComposer(page);
+  const composing = await probeWidget(page);
+  expect(composing.screen).toBe('composer');
+  expect(composing.composerOpen).toBe(true);
+  expect(composing.composerState).toBe('image');
+  expect(composing.composerTitle).toBe('PRV-07 flattened artifact');
+
+  // Review entry encodes once and shows the decoded outgoing artifact.
+  await clickComposerReview(page);
+  await waitForReview(page);
+  const reviewed = await probeWidget(page);
+  expect(reviewed.reviewOpen).toBe(true);
+  expect(reviewed.screen).toBe('review');
+  expect(reviewed.reviewImageWidth, 'the review canvas is the encoded artifact').toBeGreaterThan(0);
+  expect(reviewed.reviewImageHeight).toBeGreaterThan(0);
+  expect(reviewed.reviewTitle).toBe('PRV-07 flattened artifact');
+  expect(reviewed.reviewType.toLowerCase()).toBe('bug');
+
+  // Edit report returns to the composer with the draft intact (lossless).
+  await clickReviewEdit(page);
+  await waitForComposer(page);
+  const edited = await probeWidget(page);
+  expect(edited.composerOpen).toBe(true);
+  expect(edited.composerTitle).toBe('PRV-07 flattened artifact');
+  expect(edited.composerState).toBe('image');
+
+  // Back to review, then send exactly once — the reviewed bytes are the sent
+  // bytes (T-03-17: no re-encode at send, the intercepted part decodes).
+  await clickComposerReview(page);
+  await waitForReview(page);
+  await clickReviewSend(page);
+  await waitForHeadline(page, 'Report sent ✓', 15_000);
+  expect(calls, 'the composer walk posts exactly one report').toHaveLength(1);
+
+  const meta = interceptedMeta(calls[0]);
+  expect(meta.type).toBe('bug');
+  expect(meta.title).toBe('PRV-07 flattened artifact');
+  const image = await readOutgoingImage(page);
+  const analysis = await analyzeImagePixels(page, image);
+  expect(analysis.width, 'the sent image part decodes').toBeGreaterThan(0);
+  expect(analysis.height).toBeGreaterThan(0);
 });

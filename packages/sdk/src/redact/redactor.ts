@@ -29,7 +29,16 @@
  */
 import { MASK_ALPHA_OPAQUE } from '@watchbug/contracts/constants';
 import { INPUT_VALUE_FAMILIES, TEXT_FAMILIES, type PatternFamily } from './patterns.ts';
-import { toBitmapRect, transformFor, type RectLike } from './geometry.ts';
+import { toBitmapRect, transformFor, type BitmapRect, type RectLike } from './geometry.ts';
+import { MASK_RGB, type MaskRgb } from './masks.ts';
+
+/**
+ * The fill colour lives in the leaf `./masks.ts` so the lazy mask lane can
+ * reach it without importing this module (and with it, `patterns.ts`).
+ * Re-exported here because every T1 call site's path predates the split (R-18:
+ * one definition, re-exported — never a second copy).
+ */
+export { MASK_RGB } from './masks.ts';
 
 /** The SEC-01 selector set. One scan, both structural families. */
 export const SENSITIVE_SELECTOR = 'input[type="password"], [data-watchbug-sensitive]';
@@ -39,9 +48,6 @@ export const VALUE_SCAN_SELECTOR = 'input, textarea';
 
 /** Parents whose text never renders (no rects) and never reaches the pixels. */
 const UNRENDERED_PARENTS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE']);
-
-/** The fill colour. Flat, opaque, and the only masking primitive (R-13). */
-const MASK_RGB = { r: 0, g: 0, b: 0 } as const;
 
 /** A CSS transform matrix that is a pure translation (see `isUntransformedPath`). */
 const PURE_TRANSLATE = /^matrix\(\s*1\s*,\s*0\s*,\s*0\s*,\s*1\s*,/;
@@ -314,6 +320,56 @@ export function fillRects(
   }
 
   return masked;
+}
+
+/**
+ * Paint already-bitmap-space rects into `image` — the viewport-free sibling of
+ * `fillRects` for `encodeFinal()`'s T1 re-run. The rects come off the draft
+ * exactly as measured at the pixel-read instant (WR-01 / H-1), so nothing here
+ * is ever re-derived from the live viewport at export time.
+ *
+ * Both passes are flat opaque writes (R-13), which makes the re-run idempotent
+ * over the already-redacted draft. FAIL CLOSED (S-3): a non-finite rect
+ * throws — a silently skipped re-fill is the fall-open this path forbids.
+ */
+export function fillBitmapRects(
+  image: ImageData,
+  rects: readonly BitmapRect[],
+  rgb: MaskRgb,
+  alpha: number,
+): number {
+  if (rects.length === 0) return 0;
+  const { data, width, height } = image;
+  let painted = 0;
+
+  for (const rect of rects) {
+    if (
+      !Number.isFinite(rect.left) ||
+      !Number.isFinite(rect.top) ||
+      !Number.isFinite(rect.right) ||
+      !Number.isFinite(rect.bottom)
+    ) {
+      throw new Error('fillBitmapRects: non-finite rect (refusing to guess a mask region)');
+    }
+    const left = Math.max(0, rect.left);
+    const top = Math.max(0, rect.top);
+    const right = Math.min(width, rect.right);
+    const bottom = Math.min(height, rect.bottom);
+    if (right <= left || bottom <= top) continue;
+    painted += 1;
+    for (let y = top; y < bottom; y += 1) {
+      let index = (y * width + left) * 4;
+      for (let x = left; x < right; x += 1) {
+        data[index] = rgb.r;
+        data[index + 1] = rgb.g;
+        data[index + 2] = rgb.b;
+        data[index + 3] = alpha;
+        index += 4;
+      }
+    }
+  }
+
+  return painted;
 }
 
 /**

@@ -22,7 +22,11 @@ import {
   MAX_ENCODED_IMAGE_BYTES,
   MAX_IMAGE_DIM,
   MAX_IMAGE_PIXELS,
+  MASK_ALPHA_OPAQUE,
 } from '@watchbug/contracts/constants';
+import { putPatch, MASK_RGB, type MaskPatch } from '../redact/masks.ts';
+import { fillBitmapRects } from '../redact/redactor.ts';
+import type { BitmapRect } from '../redact/geometry.ts';
 
 /** The agreed soft target; the 2 MB contract cap is the hard stop (CAP-05). */
 export const TARGET_ENCODED_IMAGE_BYTES = 800 * 1024;
@@ -197,4 +201,32 @@ export async function encodeLadder(image: ImageData): Promise<EncodedImage> {
   }
   // Between the soft target and the hard ceiling: still sendable.
   return last;
+}
+
+/**
+ * The single compose-time encode entry (C-2 / PRV-07 / T-03-17): it runs at
+ * Review entry, and the artifact it returns is the one `Send report` transmits
+ * — "what you see is what is sent" made structural.
+ *
+ * The order is the invariant ROADMAP § Phase 3 T3 locks: replay every baked
+ * mask patch FIRST (completing the masking operations), then re-apply T1 as
+ * the last pixel write before the encode, then hand off to `encodeLadder` —
+ * the SDK's only sink. Nothing can sit ink- or draft-side above an
+ * auto-redacted region, and both passes are flat opaque fills, so re-running
+ * T1 over the already-redacted draft is idempotent.
+ *
+ * A `putPatch` / `fillBitmapRects` throw (S-3 fail-closed) propagates to the
+ * caller, which renders the loud no-send state; nothing is ever encoded from a
+ * partially replayed draft.
+ */
+export async function encodeFinal(
+  image: ImageData,
+  t1: readonly BitmapRect[],
+  masks: readonly MaskPatch[],
+): Promise<EncodedImage> {
+  for (const patch of masks) {
+    putPatch(image, patch);
+  }
+  fillBitmapRects(image, t1, MASK_RGB, MASK_ALPHA_OPAQUE);
+  return encodeLadder(image);
 }
