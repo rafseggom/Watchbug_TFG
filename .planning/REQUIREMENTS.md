@@ -56,7 +56,7 @@ A requirement is **Complete** when:
 - [x] **WDG-03**: The widget never leaks styles, classes or CSS variables into the host document
 - [x] **WDG-04**: The host page gains exactly one global (`window.Watchbug`) and no native prototype is modified
 - [x] **WDG-05**: The widget renders above all host content regardless of host stacking context or layout
-- [ ] **WDG-06**: An end user can use the widget in English or Spanish, auto-matched to browser language with a manual override
+- [x] **WDG-06**: An end user can use the widget in English or Spanish, auto-matched to browser language with a manual override
 
 ### Capture
 
@@ -68,10 +68,10 @@ A requirement is **Complete** when:
 
 ### Annotation
 
-- [ ] **ANN-01**: An end user can draw freehand on the capture
-- [ ] **ANN-02**: An end user can draw arrows
-- [ ] **ANN-03**: An end user can draw rectangles
-- [ ] **ANN-04**: An end user can add text labels
+- [x] **ANN-01**: An end user can draw freehand on the capture
+- [x] **ANN-02**: An end user can draw arrows
+- [x] **ANN-03**: An end user can draw rectangles
+- [x] **ANN-04**: An end user can add text labels
 - [ ] **ANN-05**: An end user can mask a region with an opaque fill
 - [ ] **ANN-06**: An end user can undo annotation strokes (masks are deliberately irreversible)
 
@@ -222,16 +222,16 @@ Which phases cover which requirements. **Updated during roadmap creation** — e
 | WDG-03 | Phase 2 | Complete |
 | WDG-04 | Phase 2 | Complete |
 | WDG-05 | Phase 2 | Complete |
-| WDG-06 | Phase 3 | Pending |
+| WDG-06 | Phase 3 | Complete |
 | CAP-01 | Phase 2 | Complete |
 | CAP-02 | Phase 3 | Complete |
 | CAP-03 | Phase 3 | Complete |
 | CAP-04 | Phase 2 | Complete |
 | CAP-05 | Phase 2 | Complete |
-| ANN-01 | Phase 3 | Pending |
-| ANN-02 | Phase 3 | Pending |
-| ANN-03 | Phase 3 | Pending |
-| ANN-04 | Phase 3 | Pending |
+| ANN-01 | Phase 3 | Complete |
+| ANN-02 | Phase 3 | Complete |
+| ANN-03 | Phase 3 | Complete |
+| ANN-04 | Phase 3 | Complete |
 | ANN-05 | Phase 3 | Pending |
 | ANN-06 | Phase 3 | Pending |
 | PRV-01 | Phase 2 | Complete |

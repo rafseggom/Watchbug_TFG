@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 03
 current_phase_name: Report Composer & Annotation Editor (lazy)
 status: executing
-stopped_at: Completed 03-04-PLAN.md
-last_updated: "2026-10-28T18:47:44.026Z"
+stopped_at: Completed 03-05-PLAN.md
+last_updated: "2026-10-28T20:18:02.637Z"
 last_activity: 2026-10-28
 last_activity_desc: Phase 03 execution started
-state_head: 982062b7c5e6c3a6391402b14700082a1f52f6e7
+state_head: 948178b42ed08bb97ece36b09660e913aff86cae
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 16
-  completed_plans: 13
+  completed_plans: 14
   percent: 29
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-13)
 ## Current Position
 
 Phase: 03 (Report Composer & Annotation Editor (lazy)) — EXECUTING
-Plan: 5 of 7
+Plan: 6 of 7
 Status: Ready to execute
 Last activity: 2026-10-28 — Phase 03 execution started
 
@@ -70,6 +70,7 @@ Progress: [███░░░░░░░] 29%
 | Phase 03 P03 | 84 min | 3 tasks | 14 files |
 | Phase 03 P02 | 17min | 3 tasks | 12 files |
 | Phase 03 P04 | 48min | 3 tasks | 11 files |
+| Phase 03 P05 | 82 min | 3 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -141,6 +142,10 @@ Recent decisions affecting current work:
 - [Phase 03]: 03-04: ManualFileCapture is standalone (never a DisplayMediaCapture wrapper, P3-D-13); blankProbe never runs on attachments (F6); attach size refusal is arm-agnostic (decoded-bitmap 'size' or engine 'decode' both satisfy the contract, A4)
 - [Phase 03]: 03-04: capture failures now route to the degraded composer (data-wb-state=degraded) with the F6 hint mapping (denied/no-api to status.captureFailed.hint, blank/oversize to status.blankCapture.hint) - the six failure rows were re-pointed in 03-04 itself, 03-07 keeps only the 41 one-shot rows; the no-CSPRNG exit stays a panel state
 - [Phase 03]: 03-04: SendPayload.blob widened to Blob|null - postOnce omits the image part entirely; the text-only lane files real 201s through 03-01's imageless branch (CAP-03 client half complete)
+- [Phase 03]: 03-05: chunk URL derives ONLY from the core bundle's own URL (T-03-20); the retry passes through a ?retry= buster after a failure because engines cache failed dynamic-import fetches in the module map (probe-disproved the bare memo-clear retry; happy path stays exactly one bare .mjs request)
+- [Phase 03]: 03-05: one-bitmap editor model - open() mutates and resolves the draft's OWN ImageData, flattens committed vector strokes into base.data at Done via one readback; no createImageBitmap in the lane; undo = pop + redraw from base (C-2/A-04 true by construction)
+- [Phase 03]: 03-05: editor locale/ink/maskConfirm are core-resolved and passed in AnnotatorOpenOptions - the chunk carries no dictionary and no colour literal; EDITOR_CSS appends exactly once to the data-wb-core style element (one shadow stylesheet, no adoptedStyleSheets)
+- [Phase 03]: 03-05: check-size lazy lane gates max(.js,.mjs) <= 25 KB with a >= 2 KB anti-inline floor on BOTH twins (min-twin, stronger than floor-on-max); gate.mjs sdk-lazy-lane-purity fails value/side-effect/literal-dynamic core imports of the lane, allows the single type-only crossing in widget/loader.ts
 
 ### Pending Todos
 
@@ -185,6 +190,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-28T18:47:43.335Z
-Stopped at: Completed 03-04-PLAN.md
+Last session: 2026-10-28T20:17:44.275Z
+Stopped at: Completed 03-05-PLAN.md
 Resume file: None
