@@ -125,3 +125,11 @@ validated: "2026-10-28"
 ### 2026-10-28 — validate-phase (post-execution audit)
 - Gaps found: 0 · Resolved: 27 · Escalated: 2 (pre-existing Manual-Only rows, unchanged)
 - Seeded draft rows rewritten against executed plans 03-01…03-07; every automated row verified green inside the full `npm run verify` pass at `432b24b` (453 tests, 3 projects) and per-plan `-g` runs in each SUMMARY.
+
+## Validation Audit 2026-10-28
+
+| Metric | Count |
+|---|---|
+| Gaps found | 0 |
+| Resolved | 27 |
+| Escalated | 2 |
