@@ -41,7 +41,13 @@ export interface ReportMeta {
 }
 
 export interface SendPayload {
-  blob: Blob;
+  /**
+   * The reviewed artifact, or `null` on the meta-only (text-only) lane
+   * (CAP-03): `postOnce` then appends no `image` part at all — the body is
+   * still validated and sanitised server-side by the same pipeline (03-01),
+   * so "no image" is never "no validation" (T-03-19).
+   */
+  blob: Blob | null;
   /** Filename for the multipart part; derived from the sniffed type. */
   filename: string;
   meta: ReportMeta;
@@ -135,7 +141,12 @@ async function readCreatedId(response: Response): Promise<string | null> {
 async function postOnce(options: SendOptions): Promise<AttemptOutcome> {
   const form = new FormData();
   form.append('meta', JSON.stringify(options.meta));
-  form.append('image', options.blob, options.filename);
+  // The `image` part is conditional (CAP-03): a text-only report posts the
+  // meta part alone; `filenameFor` is untouched because a meta-only body
+  // never names a file.
+  if (options.blob !== null) {
+    form.append('image', options.blob, options.filename);
+  }
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), SEND_TIMEOUT_MS);

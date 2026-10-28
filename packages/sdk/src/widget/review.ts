@@ -90,6 +90,7 @@ export const REVIEW_CSS = `
   border: 1px solid var(--wb-color-border);
   background: var(--wb-color-surface-alt);
 }
+.review-image[data-wb-empty='true'] { display: none; }
 .review-summary {
   margin: 16px 0;
   display: flex;
@@ -287,6 +288,9 @@ export function createReview(handlers: ReviewHandlers): Review {
     heading.textContent = t('review.title');
     sendNoteLine.textContent = t('review.sendNote');
     canvas.setAttribute('aria-label', t('composer.image.label'));
+    // A text-only review (CAP-03) shows the summary's `No image` line and no
+    // canvas box at all — there are no encoded bytes to display.
+    canvas.setAttribute('data-wb-empty', String(next.encoded === null));
 
     typeRow.label.textContent = t('composer.type.label');
     typeRow.value.textContent = next.type === 'bug' ? t('composer.type.bug') : t('composer.type.feedback');

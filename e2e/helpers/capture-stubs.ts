@@ -206,8 +206,9 @@ export interface CaptureStubOptions {
    *  - `prompt-rejected` — `getDisplayMedia` rejects with `NotAllowedError`
    *  - `non-tab-surface` — a track reporting `displaySurface: 'window'`
    *  - `beyond-cap` — an ImageData over MAX_IMAGE_PIXELS (seam: canvas-free)
+   *  - `no-display-media` — the navigator carries no `mediaDevices` at all
    */
-  failure?: 'prompt-rejected' | 'non-tab-surface' | 'beyond-cap';
+  failure?: 'prompt-rejected' | 'non-tab-surface' | 'beyond-cap' | 'no-display-media';
 }
 
 /** 4700×3600 = 16,920,000 px — above MAX_IMAGE_PIXELS (16,777,216). */
@@ -229,6 +230,25 @@ function promptRejectedStub(): string {
       return Promise.reject(new DOMException('Permission denied', 'NotAllowedError'));
     }
   });
+})();`;
+}
+
+/**
+ * A navigator with NO `mediaDevices` at all — the CAP-03 no-API shape (iOS
+ * Safari, older engines). The production adapter's first guard clause throws
+ * on it and `runCaptureStage` classifies the failure as `no-api`, which is
+ * exactly the distinction the degraded composer's hint mapping proves.
+ */
+function noDisplayMediaStub(): string {
+  return String.raw`(() => {
+  Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: undefined });
+  // The init script runs at document creation — documentElement may not
+  // exist yet, so the non-vacuity marker is written as soon as it does.
+  var mark = function () {
+    document.documentElement.setAttribute('data-wb-stub-invoked', 'no-display-media');
+  };
+  if (document.documentElement !== null) mark();
+  else document.addEventListener('DOMContentLoaded', mark, { once: true });
 })();`;
 }
 
@@ -438,6 +458,10 @@ export async function installCaptureStub(
   }
   if (options.failure === 'non-tab-surface') {
     await page.addInitScript({ content: nonTabSurfaceStub() });
+    return;
+  }
+  if (options.failure === 'no-display-media') {
+    await page.addInitScript({ content: noDisplayMediaStub() });
     return;
   }
 

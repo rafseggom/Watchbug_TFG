@@ -769,7 +769,11 @@ async function expectNoRequest(page: Page, calls: PostCall[]): Promise<void> {
   expect(calls, 'no POST /api/incidents attempt may be made').toHaveLength(0);
 }
 
-test('P2-D-12: a uniform capture aborts to the blank state before any request', async ({ page, browserName }) => {
+test('CAP-03: a blank capture never posts before the user chooses', async ({ page, browserName }) => {
+  // Re-pointed from the P2-D-12 blank row by 03-04 Task 3 (the plan's chosen
+  // migration, not a duplicate): a uniform frame now opens the DEGRADED
+  // composer instead of the Phase-2 panel — the blank diagnosis survives as
+  // the notice hint (F6) and nothing posts until an action is chosen.
   // Default tier per engine: chromium/firefox probe a solid frame straight
   // out of the real <video> path, webkit out of the seam.
   await installCaptureStub(page, browserName, { uniform: true });
@@ -782,14 +786,42 @@ test('P2-D-12: a uniform capture aborts to the blank state before any request', 
   }));
 
   await clickLauncher(page);
-  await waitForHeadline(page, 'The capture came back blank.', 10_000);
+  await expectZoneState(page, 'degraded');
 
   const failed = await probeWidget(page);
-  expect(failed.hint).toBe(BLANK_HINT);
-  expect(failed.headlineRole).toBe('alert');
-  expect(failed.actionsVisible).toBe(true);
-  expect(failed.retryVisible).toBe(true);
-  expect(failed.dismissVisible).toBe(true);
+  expect(failed.composerState).toBe('degraded');
+  expect(failed.composerNoticeHeading).toBe('Capture unavailable');
+  expect(failed.composerNoticeHint, 'the blank diagnosis keeps its distinct hint (F6)').toBe(
+    BLANK_HINT,
+  );
+  // Two real exits, never a dead panel (P3-D-13).
+  expect(failed.composerAttachVisible).toBe(true);
+  expect(failed.composerContinueVisible).toBe(true);
+
+  // The Review action is inert in the degraded state — choosing an action is
+  // the only way forward, and an inert click still posts nothing (T-03-01).
+  await clickComposerReview(page);
+  await page.waitForTimeout(300);
+  const inert = await probeWidget(page);
+  expect(inert.screen, 'Review from the degraded state does not navigate').toBe('composer');
+  expect(inert.composerState).toBe('degraded');
+
+  // Exit 1 works from this state: the notice's Attach image reaches the same
+  // preview flow as a replace from the image state (Task 1's lane).
+  if (browserName === 'chromium') {
+    const chooserPromise = page.waitForEvent('filechooser');
+    await clickVisibleAttach(page);
+    const chooser = await chooserPromise;
+    await chooser.setFiles({ name: 'valid-64x64.png', mimeType: 'image/png', buffer: png64 });
+  } else {
+    await attachImage(page, { name: 'valid-64x64.png', mimeType: 'image/png', buffer: png64 });
+  }
+  await expectZoneState(page, 'image');
+  const recovered = await probeWidget(page);
+  expect(recovered.composerPreviewWidth, 'attach from degraded yields the Task-1 preview').toBe(64);
+  expect(recovered.composerPreviewHeight).toBe(64);
+
+  // Still nothing posted — the user never pressed Send.
   await expectNoRequest(page, calls);
 });
 
@@ -812,10 +844,11 @@ test('P2-D-12: a sparse but real page (white with one corner detail) is not blan
   expect(calls).toHaveLength(1);
 });
 
-test('P2-D-12: a frame beyond the supported canvas cap aborts to the blank state', async ({ page, browserName }) => {
+test('P2-D-12: a frame beyond the supported canvas cap aborts to the blank bucket of the degraded composer', async ({ page, browserName }) => {
   // Seam tier on every engine: the 16,920,000 px frame is allocated
   // canvas-free, so the pipeline's area probe — not an engine canvas limit —
-  // is what rejects it.
+  // is what rejects it. Re-pointed by 03-04: `oversize` shares the blank
+  // hint bucket in the degraded composer (F6), never the Phase-2 panel.
   await installCaptureStub(page, browserName, { tier: 'seam', failure: 'beyond-cap' });
   await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
   await waitForWidget(page);
@@ -826,11 +859,13 @@ test('P2-D-12: a frame beyond the supported canvas cap aborts to the blank state
   }));
 
   await clickLauncher(page);
-  await waitForHeadline(page, 'The capture came back blank.', 10_000);
+  await expectZoneState(page, 'degraded');
 
   const failed = await probeWidget(page);
-  expect(failed.hint).toBe(BLANK_HINT);
-  expect(failed.headlineRole).toBe('alert');
+  expect(failed.composerNoticeHeading).toBe('Capture unavailable');
+  expect(failed.composerNoticeHint).toBe(BLANK_HINT);
+  expect(failed.composerAttachVisible).toBe(true);
+  expect(failed.composerContinueVisible).toBe(true);
   await expectNoRequest(page, calls);
 });
 
@@ -844,20 +879,24 @@ test('OQ-1: a non-tab capture surface is refused loudly and nothing is sent', as
     body: JSON.stringify({ id: INTERCEPTED_ID }),
   }));
 
+  // Re-pointed by 03-04: the refusal is now the degraded composer (P3-D-13) —
+  // still loud, still request-free, still the surface policy answering.
   await clickLauncher(page);
-  await waitForHeadline(page, "Couldn't capture the screen.", 10_000);
+  await expectZoneState(page, 'degraded');
 
   // The fake ran and the SDK refused IT — not a missing-API shortcut — so the
   // refusal is the surface policy (browser/window/screen comparison) itself.
   expect(await page.locator('html').getAttribute('data-wb-stub-invoked')).toBe('non-tab-surface');
 
   const failed = await probeWidget(page);
-  expect(failed.hint).toBe(CAPTURE_HINT);
-  expect(failed.headlineRole).toBe('alert');
+  expect(failed.composerNoticeHeading).toBe('Capture unavailable');
+  expect(failed.composerNoticeHint).toBe(CAPTURE_HINT);
+  expect(failed.composerAttachVisible).toBe(true);
+  expect(failed.composerContinueVisible).toBe(true);
   await expectNoRequest(page, calls);
 });
 
-test('CAP-01: a rejected capture prompt renders the capture-failed state with its hint and both actions', async ({ page, browserName }) => {
+test('CAP-01: a rejected capture prompt opens the degraded composer with its hint and both actions', async ({ page, browserName }) => {
   await installCaptureStub(page, browserName, { failure: 'prompt-rejected' });
   await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
   await waitForWidget(page);
@@ -867,17 +906,21 @@ test('CAP-01: a rejected capture prompt renders the capture-failed state with it
     body: JSON.stringify({ id: INTERCEPTED_ID }),
   }));
 
+  // Re-pointed by 03-04: the loud state for a denied prompt is now the
+  // degraded composer (P3-D-13) — never the dead failure panel, never a
+  // silent file dialog. The locked diagnostic copy still surfaces (M-6).
   await clickLauncher(page);
-  await waitForHeadline(page, "Couldn't capture the screen.", 10_000);
+  await expectZoneState(page, 'degraded');
 
   expect(await page.locator('html').getAttribute('data-wb-stub-invoked')).toBe('prompt-rejected');
 
   const failed = await probeWidget(page);
-  // The locked copy (strings.ts) — hint present, never a silent no-op (M-6).
-  expect(failed.hint).toBe(CAPTURE_HINT);
-  expect(failed.actionsVisible).toBe(true);
-  expect(failed.retryVisible).toBe(true);
-  expect(failed.dismissVisible).toBe(true);
+  expect(failed.composerNoticeHeading, 'the notice heading (strings.ts)').toBe(
+    'Capture unavailable',
+  );
+  expect(failed.composerNoticeHint, 'the denied diagnosis keeps its hint (F6)').toBe(CAPTURE_HINT);
+  expect(failed.composerAttachVisible, 'exit 1: Attach image').toBe(true);
+  expect(failed.composerContinueVisible, 'exit 2: Continue with text only').toBe(true);
   await expectNoRequest(page, calls);
 });
 
@@ -2073,8 +2116,10 @@ test('S-7 guard: a transformed same-origin frame is refused loudly — nothing i
     body: JSON.stringify({ id: INTERCEPTED_ID }),
   }));
 
+  // Re-pointed by 03-04: "refused loudly" is now the degraded composer — the
+  // transformed frame never becomes a draft and nothing is sent (FX-02).
   await clickLauncher(page);
-  await waitForHeadline(page, "Couldn't capture the screen.", 10_000);
+  await expectZoneState(page, 'degraded');
   await expectNoRequest(page, calls);
 });
 
@@ -2287,13 +2332,17 @@ test('fail-closed: a redaction scan error lands in the loud capture-failed state
     body: JSON.stringify({ id: INTERCEPTED_ID }),
   }));
 
+  // Re-pointed by 03-04: the fail-closed loud state for a broken redaction
+  // scan is the degraded composer (P3-D-13), not the Phase-2 panel.
   await clickLauncher(page);
-  await waitForHeadline(page, "Couldn't capture the screen.", 10_000);
+  await expectZoneState(page, 'degraded');
 
   const failed = await probeWidget(page);
-  expect(failed.headlineRole).toBe('alert');
-  expect(failed.hint).toBe(CAPTURE_HINT);
-  expect(failed.actionsVisible).toBe(true);
+  expect(failed.composerNoticeHint, 'the fail-closed note rides the denied hint (F6)').toBe(
+    CAPTURE_HINT,
+  );
+  expect(failed.composerAttachVisible).toBe(true);
+  expect(failed.composerContinueVisible).toBe(true);
 
   // Non-vacuity: the scan provocation really fired -- so the failure is
   // redaction's, not capture's -- and the flow short-circuited before
@@ -3422,4 +3471,136 @@ test('CAP-02 reject: an oversized-pixel file is refused', async ({ page, browser
   expect(refused.composerPreviewWidth).toBe(before.composerPreviewWidth);
   expect(refused.composerPreviewHeight).toBe(before.composerPreviewHeight);
   await expectNoRequest(page, calls);
+});
+
+test('CAP-03: a denied capture opens the degraded composer with both actions and files text-only', async ({
+  page,
+  browserName,
+}) => {
+  await installCaptureStub(page, browserName, { failure: 'prompt-rejected' });
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+  await page.evaluate(() => {
+    document.title = 'CAP-03 text-only report';
+  });
+
+  // Real compose stack (the plan's chosen proof): inspect the outgoing
+  // request, then let the ENGINE send it untouched — the 201 comes from
+  // Fastify's imageless branch, not from a mock (03-01's lane).
+  const posts: Buffer[] = [];
+  await page.route(INCIDENT_POST_RE, async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.continue();
+      return;
+    }
+    posts.push(route.request().postDataBuffer() ?? Buffer.alloc(0));
+    await route.continue();
+  });
+
+  await clickLauncher(page);
+  await expectZoneState(page, 'degraded');
+  const degraded = await probeWidget(page);
+  expect(degraded.composerNoticeHeading).toBe('Capture unavailable');
+  expect(degraded.composerNoticeHint).toBe(CAPTURE_HINT);
+  expect(degraded.composerAttachVisible).toBe(true);
+  expect(degraded.composerContinueVisible).toBe(true);
+
+  // Nothing posts while the diagnosis sits on screen (T-03-01): give a
+  // would-be request time to land before counting.
+  await page.waitForTimeout(600);
+  expect(posts, 'zero POST /api/incidents before the user chooses').toHaveLength(0);
+
+  await clickContinueTextOnly(page);
+  await expectZoneState(page, 'text-only');
+  const textOnly = await probeWidget(page);
+  expect(textOnly.composerZoneVisible, 'the image zone is hidden').toBe(false);
+  expect(textOnly.composerAttachVisible, 'the footer keeps Attach image').toBe(true);
+
+  // The prefilled title (document.title) is a real draft title — review now.
+  await clickComposerReview(page);
+  await waitForReview(page);
+  const reviewed = await probeWidget(page);
+  expect(reviewed.reviewOpen).toBe(true);
+  expect(reviewed.reviewNoImage, 'review shows the No image line (UI-SPEC A-3)').toBe('No image');
+  expect(reviewed.reviewTitle).toBe('CAP-03 text-only report');
+  expect(reviewed.reviewImageWidth, 'a text-only review displays no canvas').toBe(0);
+
+  const responsePromise = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/incidents') && response.request().method() === 'POST',
+  );
+  await clickReviewSend(page);
+  await waitForHeadline(page, 'Report sent ✓', 15_000);
+  const response = await responsePromise;
+  expect(response.status(), 'the meta-only body files a REAL 201').toBe(201);
+
+  expect(posts, 'exactly one request').toHaveLength(1);
+  const body = posts[0].toString('utf8');
+  expect(body).toContain('name="meta"');
+  expect(body, 'a text-only body carries NO image part').not.toContain('name="image"');
+  const metaPart = multipartPart(posts[0], 'meta');
+  expect(metaPart).not.toBeNull();
+  const meta = JSON.parse(metaPart!.toString('utf8')) as Record<string, unknown>;
+  expect(meta.type).toBe('bug');
+  expect(meta.title).toBe('CAP-03 text-only report');
+});
+
+test('CAP-03 no-API: a browser without getDisplayMedia can still file text-only feedback', async ({
+  page,
+  browserName,
+}) => {
+  // iOS Safari shape: the navigator carries no mediaDevices at all — the
+  // capture classification distinguishes `no-api` from a prompt denial, but
+  // the composer exit is the same two real choices (P3-D-13, CAP-03).
+  await installCaptureStub(page, browserName, { failure: 'no-display-media' });
+  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+  await waitForWidget(page);
+  await page.evaluate(() => {
+    document.title = 'CAP-03 no-API feedback';
+  });
+
+  const posts: Buffer[] = [];
+  await page.route(INCIDENT_POST_RE, async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.continue();
+      return;
+    }
+    posts.push(route.request().postDataBuffer() ?? Buffer.alloc(0));
+    await route.continue();
+  });
+
+  await clickLauncher(page);
+  await expectZoneState(page, 'degraded');
+
+  // Non-vacuity: the provocation ran — the browser really has no capture API
+  // in this context, it is not a stubbed denial.
+  expect(await page.locator('html').getAttribute('data-wb-stub-invoked')).toBe(
+    'no-display-media',
+  );
+  const degraded = await probeWidget(page);
+  expect(degraded.composerNoticeHint, 'the no-api diagnosis keeps the capture-failed hint').toBe(
+    CAPTURE_HINT,
+  );
+  await page.waitForTimeout(600);
+  expect(posts, 'nothing posts from the degraded state').toHaveLength(0);
+
+  await clickContinueTextOnly(page);
+  await expectZoneState(page, 'text-only');
+  await clickComposerReview(page);
+  await waitForReview(page);
+  const reviewed = await probeWidget(page);
+  expect(reviewed.reviewNoImage).toBe('No image');
+
+  const responsePromise = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/incidents') && response.request().method() === 'POST',
+  );
+  await clickReviewSend(page);
+  await waitForHeadline(page, 'Report sent ✓', 15_000);
+  const response = await responsePromise;
+  expect(response.status(), 'text-only feedback files a REAL 201 without any capture API').toBe(
+    201,
+  );
+  expect(posts).toHaveLength(1);
+  expect(posts[0].toString('utf8'), 'meta-only multipart body').not.toContain('name="image"');
 });

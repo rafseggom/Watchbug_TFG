@@ -18,8 +18,9 @@
  * with the review screen showing the exact artifact in between (T-03-17).
  *
  * Every failure path is a **visible terminal state** (M-6): a silently blank
- * image is never sent, and a capture that never produced a frame becomes a
- * loud failure the panel (later: the degraded composer) announces.
+ * image is never sent, and a capture that never produced a frame opens the
+ * degraded composer (P3-D-13) — a visible diagnosis with two real exits,
+ * never a dead panel and never an auto-popped file dialog.
  */
 import { MASK_ALPHA_OPAQUE, MAX_IMAGE_PIXELS } from '@watchbug/contracts/constants';
 import { createDisplayMediaCapture, type CaptureSource } from './capture-source.ts';
@@ -97,10 +98,11 @@ export interface CaptureFlowConfig {
 }
 
 /**
- * Why there is no working image. The four values choose the degraded composer's
- * notice copy when 03-04 mounts it (research F6 keeps the existing `status.*`
- * diagnostics as the hint source); today the flow maps them onto the loud
- * `status.failed` states exactly as Phase 2 did.
+ * Why there is no working image. The four values choose the degraded
+ * composer's notice hint (P3-D-13 mounted by 03-04; research F6 keeps the
+ * existing `status.*` diagnostics as the hint source — the heading is always
+ * `composer.image.none`): `denied`/`no-api` take `status.captureFailed.hint`,
+ * `blank`/`oversize` take `status.blankCapture.hint`.
  *  - `denied`   — the picker was dismissed, a refused surface, or the redaction
  *    scan itself failed (fail-closed: never an unredacted frame, T-02-10).
  *  - `no-api`   — this browser does not expose tab capture at all.
@@ -254,7 +256,7 @@ export interface CaptureFlowDeps {
   capture?: CaptureSource;
   redactor?: Redactor;
   send?: (payload: {
-    blob: Blob;
+    blob: Blob | null;
     filename: string;
     meta: ReportMeta;
     idempotencyKey: string;
@@ -272,7 +274,8 @@ export interface CaptureFlow {
 }
 
 interface PendingSend {
-  blob: Blob;
+  /** `null` on the meta-only (text-only) lane — never an absent validation. */
+  blob: Blob | null;
   filename: string;
   meta: ReportMeta;
   idempotencyKey: string;
@@ -346,8 +349,23 @@ export function createCaptureFlow(deps: CaptureFlowDeps): CaptureFlow {
     }
   }
 
-  /** The prepared multipart payload for one draft's encoded artifact. */
+  /** The prepared multipart payload for one draft: image lane or meta-only lane. */
   function pendingFor(draft: Draft): PendingSend {
+    const meta: ReportMeta = {
+      type: draft.type,
+      title: draft.title,
+      // The note rides the wire only when non-empty (the contract's `note`
+      // is optional; an absent field keeps empty-note reports byte-stable).
+      note: draft.note.length > 0 ? draft.note : undefined,
+      // R-08: path only, measured at send as in Phase 2.
+      url: buildMeta(document, location).url,
+    };
+    if (draft.image === null) {
+      // CAP-03 text-only: no pixels exist to encode, so the body is meta-only
+      // — the same optional-screenshot contract 03-01 proved server-side. The
+      // client cannot add fields; `postOnce` simply omits the `image` part.
+      return { blob: null, filename: '', meta, idempotencyKey: draft.idempotencyKey };
+    }
     const encoded = draft.encoded;
     if (encoded === null) {
       throw new PipelineInvariantError('send called before encodeFinal produced the artifact');
@@ -355,15 +373,7 @@ export function createCaptureFlow(deps: CaptureFlowDeps): CaptureFlow {
     return {
       blob: encoded.blob,
       filename: filenameFor(encoded.mimeType),
-      meta: {
-        type: draft.type,
-        title: draft.title,
-        // The note rides the wire only when non-empty (the contract's `note`
-        // is optional; an absent field keeps empty-note reports byte-stable).
-        note: draft.note.length > 0 ? draft.note : undefined,
-        // R-08: path only, measured at send as in Phase 2.
-        url: buildMeta(document, location).url,
-      },
+      meta,
       idempotencyKey: draft.idempotencyKey,
     };
   }
@@ -396,14 +406,23 @@ export function createCaptureFlow(deps: CaptureFlowDeps): CaptureFlow {
       });
 
       if (!stage.ok) {
+        // P3-D-13 / T-03-01: a failed capture opens the DEGRADED composer —
+        // a visible diagnosis with two real exits (Attach image / Continue
+        // with text only), never the Phase-2 failure panel and never an
+        // auto-popped file dialog. Nothing posts until the user chooses; the
+        // idempotency key minted for this gesture rides whichever report the
+        // choice becomes.
         pendingSend = null;
-        // Until the degraded composer mounts (03-04), the capture failures keep
-        // the Phase-2 loud states: `blank` and `oversize` share the blank
-        // bucket, everything else the capture bucket (research F6).
-        onView({
-          kind: 'failed',
-          failure:
-            stage.captureNote === 'blank' || stage.captureNote === 'oversize' ? 'blank' : 'capture',
+        onDraft({
+          type: 'bug',
+          title: buildMeta(document, location).title,
+          note: '',
+          image: null,
+          t1: [],
+          masks: [],
+          encoded: null,
+          captureNote: stage.captureNote,
+          idempotencyKey,
         });
         return;
       }

@@ -21,7 +21,9 @@
  * surfaces are appended once and shown/hidden by the router; exactly one is
  * visible at a time and the launcher is disabled while any overlay is open.
  * `onView` feeds the panel exactly as in Phase 2 — the panel's `StatusView`
- * union is untouched.
+ * union is untouched. CAPTURE failures are not panel states: a failed capture
+ * opens the composer in its degraded state (P3-D-13) and nothing posts until
+ * the user chooses attach or text-only (CAP-03).
  */
 
 import {
@@ -203,7 +205,13 @@ export function init(options: WatchbugInitOptions): void {
     panel.render(next === 'status' ? lastView : { kind: 'idle' });
     composer.render(next === 'composer' && draft !== null ? draft : null);
     review.render(
-      next === 'review' && draft !== null && draft.encoded !== null ? draft : null,
+      // A review opens on an encoded artifact OR on a text-only draft (no
+      // pixels, `encoded` stays null — the summary then shows `No image`).
+      // A degraded draft never reaches `review`: the composer blocks Review
+      // until the user picks attach or text-only (P3-D-13).
+      next === 'review' && draft !== null && (draft.encoded !== null || draft.image === null)
+        ? draft
+        : null,
     );
     if (next === 'idle') launcher.setDisabled(false);
     if (next === 'composer' || next === 'review' || next === 'editor') launcher.setDisabled(true);
@@ -230,18 +238,29 @@ export function init(options: WatchbugInitOptions): void {
   });
 
   /** Review entry encodes ONCE per entry (T-03-17); the review shows these
-   * exact bytes. Returning from the review re-validates the draft fields. */
+   * exact bytes. Returning from the review re-validates the draft fields.
+   * A text-only draft has no pixels: `encodeFinal` is skipped, `encoded`
+   * stays null and the summary's `No image` line keeps the "this is what
+   * will be sent" moment honest (CAP-03, UI-SPEC A-3). */
   const reviewDraft = async (): Promise<void> => {
     const current = draft;
-    if (current === null || current.image === null) return;
+    if (current === null) return;
     if (screen !== 'composer' && screen !== 'review') return;
-    try {
-      current.encoded = await encodeFinal(current.image, current.t1, current.masks);
-    } catch {
-      // No sendable artifact (a fail-closed pixel replay or an engine that
-      // will not encode): the loud capture-failure state, nothing sent (M-6).
-      onView({ kind: 'failed', failure: 'capture' });
-      return;
+    if (current.image !== null) {
+      try {
+        current.encoded = await encodeFinal(current.image, current.t1, current.masks);
+      } catch {
+        // No sendable artifact (a fail-closed pixel replay or an engine that
+        // will not encode): the loud capture-failure state, nothing sent (M-6).
+        onView({ kind: 'failed', failure: 'capture' });
+        return;
+      }
+    } else {
+      // The composer only calls onReview outside the degraded state; belt
+      // and braces, normalize an un-chosen draft to text-only here so no
+      // stale encode can ride a replaced frame.
+      current.encoded = null;
+      current.captureNote = null;
     }
     showScreen('review');
   };
@@ -264,7 +283,12 @@ export function init(options: WatchbugInitOptions): void {
       host.setLang(code);
       launcher.render();
       if (screen === 'composer' && draft !== null) composer.render(draft);
-      else if (screen === 'review' && draft !== null && draft.encoded !== null) review.render(draft);
+      else if (
+        screen === 'review' &&
+        draft !== null &&
+        (draft.encoded !== null || draft.image === null)
+      )
+        review.render(draft);
       else if (screen === 'status') panel.render(lastView);
     },
   });
