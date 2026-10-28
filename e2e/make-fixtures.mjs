@@ -8,6 +8,9 @@
  *   e2e/fixtures/valid-64x64.webp — WebP via canvas.toBlob('image/webp')
  *     (chromium encodes WebP natively; the webkit project in `npm run verify`
  *      exercises the runtime fallback path against this same fixture)
+ *   e2e/fixtures/valid-64x64.jpg  — JPEG via canvas.toBlob('image/jpeg')
+ *     (the P3-D-14 server lane; asserted `blob.type === 'image/jpeg'` the same
+ *      way as the WebP branch before the bytes are written)
  */
 import { chromium } from '@playwright/test';
 import { writeFileSync, mkdirSync } from 'node:fs';
@@ -53,8 +56,35 @@ const webpBase64 = await page.evaluate(async () => {
   return btoa(binary);
 });
 
+const jpegBase64 = await page.evaluate(async () => {
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#2f6feb';
+  ctx.fillRect(0, 0, 64, 64);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(8, 8, 48, 48);
+  // quality 0.9: the fixture is submitted input, not a stored artifact — the
+  // harden stage re-encodes at its own explicit quality regardless.
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+  if (blob.type !== 'image/jpeg') throw new Error(`expected image/jpeg, got ${blob.type}`);
+  const buf = await blob.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  // The 3-byte SOI+marker prefix the server sniffer keys on (research F1):
+  // a 4-byte JFIF check would reject libvips' own output, so assert the
+  // fixture at least carries the prefix the lane accepts.
+  if (!(bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff)) {
+    throw new Error(`fixture does not start with the JPEG magic prefix FF D8 FF`);
+  }
+  let binary = '';
+  bytes.forEach((b) => { binary += String.fromCharCode(b); });
+  return btoa(binary);
+});
+
 await browser.close();
 
 writeFileSync(join(outDir, 'valid-64x64.png'), Buffer.from(pngBase64, 'base64'));
 writeFileSync(join(outDir, 'valid-64x64.webp'), Buffer.from(webpBase64, 'base64'));
+writeFileSync(join(outDir, 'valid-64x64.jpg'), Buffer.from(jpegBase64, 'base64'));
 console.log(`fixtures written to ${outDir}`);

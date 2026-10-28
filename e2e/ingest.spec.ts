@@ -34,6 +34,7 @@ const INCIDENTS_LIST_RE = /\/api\/incidents(\?.*)?$/;
 
 const png = readFileSync(resolve(repoRoot, 'e2e/fixtures/valid-64x64.png'));
 const webp = readFileSync(resolve(repoRoot, 'e2e/fixtures/valid-64x64.webp'));
+const jpeg = readFileSync(resolve(repoRoot, 'e2e/fixtures/valid-64x64.jpg'));
 
 // The published JSON Schema artifact must exist and be the committed contract.
 const publishedSchema = JSON.parse(
@@ -193,6 +194,91 @@ test('webp fixture ingests and serves image/webp', async ({ request }) => {
   const bytes = Buffer.from(await image.body());
   expect(bytes.subarray(0, 4).toString('latin1')).toBe('RIFF');
   expect(bytes.subarray(8, 12).toString('latin1')).toBe('WEBP');
+});
+
+/**
+ * Decode the stored blob in a real browser and report the bitmap dimensions —
+ * artifact-level proof of what the stored container actually *is* after the
+ * harden re-encode (orientation included), not what its headers claim. The
+ * panel origin is already same-origin with `/api` through nginx (A-10).
+ */
+async function servedImageDims(
+  page: import('@playwright/test').Page,
+  id: string,
+): Promise<{ width: number; height: number }> {
+  await page.goto('/');
+  return page.evaluate(async (imageId: string) => {
+    const res = await fetch(`/api/incidents/${imageId}/image`);
+    if (!res.ok) throw new Error(`blob route answered ${res.status}`);
+    const bitmap = await createImageBitmap(await res.blob());
+    const dims = { width: bitmap.width, height: bitmap.height };
+    bitmap.close();
+    return dims;
+  }, id);
+}
+
+test('JPEG: a real JPEG ingests, stores image/jpeg and the blob route serves it as a JPEG', async ({ request, page }) => {
+  // P3-D-14 / CAP-02 server leg: JPEG is the third accepted container. Every
+  // JPEG row is a direct-HTTP request — the SDK never encodes JPEG, so this
+  // lane is the server's own contract and is proven at the artifact level.
+  const idem = `e2e-jpeg-${randomUUID()}`;
+  const created = await postIncident(request, {
+    key: KEY,
+    idempotencyKey: idem,
+    meta: { ...META, title: 'JPEG upload path' },
+    bytes: jpeg,
+    filename: 'shot.jpg',
+    mime: 'image/jpeg',
+  });
+  expect(created.status).toBe(201);
+  const id = created.body.id as string;
+
+  // The stored row names JPEG — never the ternary's silent `image/webp`
+  // mislabel (Pitfall 8 / T-03-03): read through the list projection.
+  const list = (await (await request.get('/api/incidents')).json()) as Array<Record<string, unknown>>;
+  expect(list.find((r) => r.id === id)?.contentType).toBe('image/jpeg');
+
+  // The full hardened header set, same as the PNG row asserts, with the
+  // filename ext falling out of the one ext→MIME map.
+  const image = await request.get(`/api/incidents/${id}/image`);
+  expect(image.status()).toBe(200);
+  expect(image.headers()['content-type']).toBe('image/jpeg');
+  expect(image.headers()['x-content-type-options']).toBe('nosniff');
+  expect(image.headers()['content-disposition']).toBe('attachment; filename="screenshot.jpeg"');
+  expect(image.headers()['content-security-policy']).toContain("default-src 'none'");
+  expect(image.headers()['cross-origin-resource-policy']).toBe('same-origin');
+
+  // Artifact level: the served bytes are the server's own re-encode — a JPEG
+  // (FF D8 FF magic) whose fourth byte is NOT the JFIF E0 marker, because
+  // libvips output starts SOI→DQT (`FF DB`). The sniffer's 3-byte signature
+  // is what admits it, proven by re-submitting these very bytes below.
+  const served = Buffer.from(await image.body());
+  expect(served.subarray(0, 3)).toEqual(Buffer.from([0xff, 0xd8, 0xff]));
+  expect(served[3]).not.toBe(0xe0);
+  expect(served.length).toBeGreaterThan(0);
+
+  // The stored container decodes in a real browser at the declared size:
+  // the two-tone 64×64 fixture survives sniff → pass-through → guard →
+  // re-encode → serve as a genuine 64×64 JPEG.
+  expect(await servedImageDims(page, id)).toEqual({ width: 64, height: 64 });
+
+  // Round-trip admission of the engine's OWN output: submit the served
+  // libvips bytes (non-E0 header) back as a new report. 201 + `image/jpeg`
+  // means the sniffer, the JPEG structure arm, the SOF guard and the
+  // STORAGE_KEY grammar (Storage.put never throws on a `.jpeg` key) all
+  // agree on the third extension.
+  const idem2 = `e2e-jpeg-rt-${randomUUID()}`;
+  const again = await postIncident(request, {
+    key: KEY,
+    idempotencyKey: idem2,
+    meta: { ...META, title: 'JPEG round-trip' },
+    bytes: served,
+    filename: 'stored.jpeg',
+    mime: 'image/jpeg',
+  });
+  expect(again.status).toBe(201);
+  const list2 = (await (await request.get('/api/incidents')).json()) as Array<Record<string, unknown>>;
+  expect(list2.find((r) => r.id === again.body.id)?.contentType).toBe('image/jpeg');
 });
 
 test('ING-03: same Idempotency-Key replays the same id and stores one row', async ({ request }) => {

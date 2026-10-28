@@ -3,12 +3,17 @@ import type { ImageExt } from '@watchbug/contracts/types';
 
 /**
  * Stage 3: decode-bomb guard — **from the headers, before any decode**
- * (Pattern 2c). A16 MP image advertised by a hostile file must never reach a
+ * (Pattern 2c). A 16 MP image advertised by a hostile file must never reach a
  * decoder, so width/height are read straight out of the container header:
  *
  * - PNG: `IHDR` at the fixed offset (width/height, big-endian, bytes 16–23).
  * - WebP: `VP8X` canvas (24-bit LE), or the `VP8 ` frame header, or the `VP8L`
  *   bitstream header — whichever chunk the file actually starts with.
+ * - JPEG: the first SOFn marker (`0xC0`–`0xCF` excluding `0xC4`/`0xC8`/`0xCC`)
+ *   reached by walking marker segments from SOI. This reads ONLY the header —
+ *   past SOS lies entropy-coded scan data and this walker deliberately never
+ *   goes there (the structural control for JPEG is the `harden.ts` re-encode,
+ *   research F1/A3).
  *
  * Limits: `w`, `h ≤ MAX_IMAGE_DIM` (8192) and `w × h ≤ MAX_IMAGE_PIXELS`
  * (16,777,216 — A-06 / P1-D-10; the looser 25 MP figure was superseded).
@@ -63,10 +68,66 @@ function readWebpDimensions(buf: Buffer): { width: number; height: number } | nu
   return null;
 }
 
+/**
+ * JPEG dimensions from the first SOFn marker, reached by walking the header's
+ * marker segments from SOI. Segment shape: `FF <marker> <len:2 BE> <payload>`,
+ * except the standalone markers (`FF D9` EOI, `FF 01` TEM, `FF D0`–`FF D7`
+ * RSTn) which carry no length. The SOFn payload is
+ * `[precision:1][height:2 BE][width:2 BE]` after its own length field.
+ *
+ * This is a **header** walker only: any malformed traversal returns `null`
+ * (→ the fail-closed 400 in `assertDecodeSafe`). It deliberately never parses
+ * past SOS — entropy-coded scan data has no length field and belongs to the
+ * `harden.ts` re-encode, not to a hand-written parser (research F1/A3).
+ */
+function readJpegDimensions(buf: Buffer): { width: number; height: number } | null {
+  if (buf.length < 4 || buf[0] !== 0xff || buf[1] !== 0xd8) return null;
+
+  let offset = 2;
+  while (offset + 4 <= buf.length) {
+    if (buf[offset] !== 0xff) return null; // every marker starts with FF
+    const marker = buf[offset + 1];
+
+    // Standalone markers: no length field, no payload — skip and continue.
+    if (marker === 0xd9 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+      offset += 2;
+      continue;
+    }
+
+    // SOFn (baseline through lossless, minus DNL C4 / JPEG8 C8 / codec CC):
+    // the first one seen declares the frame the guard must bound.
+    if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+      if (offset + 9 > buf.length) return null;
+      return { width: buf.readUInt16BE(offset + 7), height: buf.readUInt16BE(offset + 5) };
+    }
+
+    // Any other segment (APPn, DQT, DHT, DAC…) is explicit — step over it by
+    // its declared length. SOS (0xDA) lands here too: reaching it without a
+    // preceding SOFn means the header carries no readable dimensions.
+    const length = buf.readUInt16BE(offset + 2);
+    if (length < 2) return null; // a segment cannot claim fewer than 2 bytes
+    offset += 2 + length;
+  }
+  return null;
+}
+
 /** Header-derived dimensions, or `null` when the container header is unusable. */
 export function readDimensions(bytes: Uint8Array, ext: ImageExt): { width: number; height: number } | null {
   const buf = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
-  return ext === 'png' ? readPngDimensions(buf) : readWebpDimensions(buf);
+  switch (ext) {
+    case 'png':
+      return readPngDimensions(buf);
+    case 'webp':
+      return readWebpDimensions(buf);
+    case 'jpeg':
+      return readJpegDimensions(buf);
+    default: {
+      // Exhaustiveness guard (P3-D-14): a fourth container must get its own
+      // header reader here, never silently reuse another arm.
+      const exhausted: never = ext;
+      throw new TypeError(`unhandled image extension in dimension guard: ${String(exhausted)}`);
+    }
+  }
 }
 
 export function assertDecodeSafe(bytes: Uint8Array, ext: ImageExt): GuardResult {

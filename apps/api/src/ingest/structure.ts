@@ -154,10 +154,44 @@ function stripWebp(buf: Buffer): Strip {
  * Validate the container and return the bytes with metadata dropped — or the
  * reason the file is rejected. Runs after the magic-byte sniff and before the
  * decode-bomb guard, so no codec ever sees an unvalidated container.
+ *
+ * The `switch` is exhaustive over `ImageExt` by construction: every container
+ * is an explicit arm and the unreachable default FAILS CLOSED — a fourth
+ * extension can never silently reuse another rule (the binary-ternary class
+ * that would have stored a JPEG as `image/webp`, Pitfall 8).
  */
 export function validateStructure(bytes: Uint8Array, ext: ImageExt): StructureResult {
   const buf = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
-  const stripped = ext === 'png' ? stripPng(buf) : stripWebp(buf);
-  if ('error' in stripped) return { ok: false, message: `image rejected: ${stripped.error}` };
-  return { ok: true, bytes: stripped.bytes };
+  switch (ext) {
+    case 'png': {
+      const stripped = stripPng(buf);
+      if ('error' in stripped) return { ok: false, message: `image rejected: ${stripped.error}` };
+      return { ok: true, bytes: stripped.bytes };
+    }
+    case 'webp': {
+      const stripped = stripWebp(buf);
+      if ('error' in stripped) return { ok: false, message: `image rejected: ${stripped.error}` };
+      return { ok: true, bytes: stripped.bytes };
+    }
+    case 'jpeg':
+      // JPEG passes through UNCHANGED, deliberately (P3-D-14, research F1/A3):
+      // a JPEG-equivalent structural walker would have to parse entropy-coded
+      // scan data (byte-stuffed `FF 00` escapes, restart intervals, progressive
+      // scans, multi-picture/MPPO files) — a buggy walker is a worse control
+      // than no walker, because it adds attack surface of its own. The JPEG
+      // control stack is instead: (1) the 3-byte magic allowlist here upstream,
+      // (2) the SOF header-dimension guard in `guard.ts`, which runs BEFORE
+      // any decoder and is where this file's bytes go next, and (3) the
+      // mandatory sharp root re-encode in `harden.ts`, which is the documented
+      // hardening backend: only libvips' own output ever reaches storage, so a
+      // polyglot or trailing-data payload is reduced to the pixels one decoder
+      // actually produced. This module is a guard, not the control — its
+      // docblock has said so since Phase 1.
+      return { ok: true, bytes: buf };
+    default: {
+      // Unreachable while ImageExt is closed; kept fail-closed so it stays so.
+      const exhausted: never = ext;
+      return { ok: false, message: `image rejected: no structural rule for extension ${String(exhausted)}` };
+    }
+  }
 }

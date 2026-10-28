@@ -61,15 +61,19 @@ const DAY_MS = 86_400_000;
 const MAX_IDEMPOTENCY_KEY_CHARS = 256;
 
 /** Server-side ext→MIME allowlist — the stored value never decides its own response headers. */
-const CONTENT_TYPE_BY_EXT: Record<ImageExt, string> = { png: 'image/png', webp: 'image/webp' };
+const CONTENT_TYPE_BY_EXT: Record<ImageExt, string> = {
+  png: 'image/png',
+  webp: 'image/webp',
+  jpeg: 'image/jpeg',
+};
 
 /**
  * The **one** inverse of `CONTENT_TYPE_BY_EXT`, derived from it at module
  * scope so the two mappings can never drift (Pitfall 8 — the binary-ternary
  * class that would store a JPEG as `image/webp`). The blob route reads `ext`
- * from here; `image/jpeg` joins the pair when 03-02 adds the JPEG lane, and
- * until then a stored `'image/jpeg'` row resolves to `undefined` here and
- * answers the structured 500 — never a guessed MIME (T-03-09).
+ * from here; with the P3-D-14 JPEG lane both directions carry `image/jpeg`,
+ * and an unknown value still answers the structured 500 — never a guessed
+ * MIME (T-03-09).
  */
 const EXT_BY_CONTENT_TYPE: ReadonlyMap<string, ImageExt> = new Map(
   (Object.entries(CONTENT_TYPE_BY_EXT) as [ImageExt, string][]).map(([ext, mime]) => [mime, ext]),
@@ -272,7 +276,7 @@ export async function registerIncidentsRoutes(app: FastifyInstance, deps: RouteD
       if (sniffed === null) {
         return badRequest(
           reply,
-          'image is neither PNG nor WebP (magic bytes); SVG, GIF and HTML are never accepted',
+          'image is neither PNG, WebP nor JPEG (magic bytes); SVG, GIF and HTML are never accepted',
         );
       }
 
