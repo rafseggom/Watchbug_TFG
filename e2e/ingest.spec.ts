@@ -35,6 +35,8 @@ const INCIDENTS_LIST_RE = /\/api\/incidents(\?.*)?$/;
 const png = readFileSync(resolve(repoRoot, 'e2e/fixtures/valid-64x64.png'));
 const webp = readFileSync(resolve(repoRoot, 'e2e/fixtures/valid-64x64.webp'));
 const jpeg = readFileSync(resolve(repoRoot, 'e2e/fixtures/valid-64x64.jpg'));
+const oversizeJpeg = readFileSync(resolve(repoRoot, 'e2e/fixtures/oversize-64mp.jpg'));
+const polyglotGif = readFileSync(resolve(repoRoot, 'e2e/fixtures/polyglot-gif-html.gif'));
 
 // The published JSON Schema artifact must exist and be the committed contract.
 const publishedSchema = JSON.parse(
@@ -279,6 +281,106 @@ test('JPEG: a real JPEG ingests, stores image/jpeg and the blob route serves it 
   expect(again.status).toBe(201);
   const list2 = (await (await request.get('/api/incidents')).json()) as Array<Record<string, unknown>>;
   expect(list2.find((r) => r.id === again.body.id)?.contentType).toBe('image/jpeg');
+});
+
+test('JPEG decode-bomb: a >16 MP JPEG is rejected before sharp', async ({ request }) => {
+  // T-03-11: the 8000×8192 SOFn (65,536,000 px > MAX_IMAGE_PIXELS) is refused
+  // from the header by guard.ts. Artifact level: no row and no blob exist for
+  // this key afterwards — sharp never opened the file and the WR-03 path was
+  // never entered.
+  const idem = `e2e-jpeg-bomb-${randomUUID()}`;
+  const rowsBefore = ((await (await request.get('/api/incidents')).json()) as unknown[]).length;
+  const blobsBefore = blobCount();
+  const created = await postIncident(request, {
+    key: KEY,
+    idempotencyKey: idem,
+    meta: { ...META, title: 'JPEG decode-bomb probe' },
+    bytes: oversizeJpeg,
+    filename: 'bomb.jpg',
+    mime: 'image/jpeg',
+  });
+  expect(created.status).toBe(400);
+  expect(String(created.body.message)).toContain('MAX_IMAGE_PIXELS');
+
+  // Nothing was stored: the list never gained a row and the attachments volume
+  // never gained a file (workers=1, so the before/after counts are this row's).
+  const rowsAfter = ((await (await request.get('/api/incidents')).json()) as Array<Record<string, unknown>>)
+    .filter((r) => r.title === 'JPEG decode-bomb probe').length;
+  expect(rowsAfter).toBe(0);
+  expect((await (await request.get('/api/incidents')).json()) as unknown[]).toHaveLength(rowsBefore);
+  expect(blobCount()).toBe(blobsBefore);
+});
+
+test('JPEG header: a truncated JPEG is rejected', async ({ request }) => {
+  // The first 40 bytes of the valid fixture carry SOI + APP0 and die inside
+  // the DQT segment — no SOFn was ever reached. Fail-closed contract: a
+  // structured 400 naming the unreadable JPEG header, never a 500 and never a
+  // decode attempt (assertDecodeSafe's null path, readDimensions never runs a
+  // codec).
+  const created = await postIncident(request, {
+    key: KEY,
+    idempotencyKey: `e2e-jpeg-truncated-${randomUUID()}`,
+    meta: { ...META, title: 'Truncated JPEG probe' },
+    bytes: jpeg.subarray(0, 40),
+    filename: 'truncated.jpg',
+    mime: 'image/jpeg',
+  });
+  expect(created.status).toBe(400);
+  expect(String(created.body.message)).toContain('JPEG header is missing or unreadable');
+});
+
+test('JPEG boundary: a side above MAX_IMAGE_DIM is rejected', async ({ request }) => {
+  // SOF0 declaring 9000×100: total area 900,000 px is UNDER the pixel cap, so
+  // the per-side arm is the one that answers — the two JPEG bounds are
+  // independent guards, each with its own refusal. Synthetic header: the
+  // guard only ever reads these bytes (no committed fixture needed).
+  const wideSideJpeg = Buffer.from([
+    0xff, 0xd8, // SOI
+    0xff, 0xc0, 0x00, 0x11, 0x08, // SOF0, length 17, precision 8
+    0x00, 0x64, // height  100
+    0x23, 0x28, // width  9000 (> MAX_IMAGE_DIM 8192)
+    0xff, 0xd9, // EOI
+  ]);
+  const created = await postIncident(request, {
+    key: KEY,
+    idempotencyKey: `e2e-jpeg-wide-${randomUUID()}`,
+    meta: { ...META, title: 'JPEG wide-side probe' },
+    bytes: wideSideJpeg,
+    filename: 'wide.jpg',
+    mime: 'image/jpeg',
+  });
+  expect(created.status).toBe(400);
+  expect(String(created.body.message)).toContain('MAX_IMAGE_DIM');
+});
+
+test('format allowlist: SVG and GIF are still rejected and the copy names JPEG', async ({ request }) => {
+  // P3-D-14 widens the allowlist to three containers — it does NOT loosen it.
+  // The committed polyglot GIF/HTML fixture and the hostile SVG must keep
+  // failing the magic-byte gate, and the client-facing copy now names all
+  // three accepted formats (C-3).
+  const svg = await postIncident(request, {
+    key: KEY,
+    idempotencyKey: `e2e-allowlist-svg-${randomUUID()}`,
+    meta: { ...META, title: 'Allowlist SVG probe' },
+    bytes: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><rect width="64" height="64"/></svg>'),
+    filename: 'shot.svg',
+    mime: 'image/svg+xml',
+  });
+  expect(svg.status).toBe(400);
+  expect(String(svg.body.message)).toContain('PNG');
+  expect(String(svg.body.message)).toContain('WebP');
+  expect(String(svg.body.message)).toContain('JPEG');
+
+  const gif = await postIncident(request, {
+    key: KEY,
+    idempotencyKey: `e2e-allowlist-gif-${randomUUID()}`,
+    meta: { ...META, title: 'Allowlist GIF probe' },
+    bytes: polyglotGif,
+    filename: 'polyglot.gif',
+    mime: 'image/gif',
+  });
+  expect(gif.status).toBe(400);
+  expect(String(gif.body.message)).toContain('JPEG');
 });
 
 test('ING-03: same Idempotency-Key replays the same id and stores one row', async ({ request }) => {

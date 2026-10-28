@@ -11,6 +11,11 @@
  *   e2e/fixtures/valid-64x64.jpg  — JPEG via canvas.toBlob('image/jpeg')
  *     (the P3-D-14 server lane; asserted `blob.type === 'image/jpeg'` the same
  *      way as the WebP branch before the bytes are written)
+ *   e2e/fixtures/oversize-64mp.jpg — a real 64×64 JPEG whose SOFn marker is
+ *     RE-declared as 8000×8192 (65,536,000 px > MAX_IMAGE_PIXELS). The decode-
+ *     bomb guard reads only the header, so the synthetic-SOF route (PLAN, Task
+ *     2: "keep the script browser-only") produces exactly the hostile shape a
+ *     small file declaring a huge canvas has — no 64 MP browser canvas needed.
  */
 import { chromium } from '@playwright/test';
 import { writeFileSync, mkdirSync } from 'node:fs';
@@ -82,9 +87,56 @@ const jpegBase64 = await page.evaluate(async () => {
   return btoa(binary);
 });
 
+const oversizeBase64 = await page.evaluate(async () => {
+  // Encode the same two-tone 64×64 canvas, then re-declare the SOFn frame as
+  // 8000×8192. A real 64 MP browser canvas is memory-bound and flaky; the
+  // decode-bomb guard never decodes — it reads ONLY the header — so a
+  // SOF-patched ordinary JPEG is the faithful hostile shape (PLAN Task 2
+  // sanctions the synthetic-SOF route with exactly this note).
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#2f6feb';
+  ctx.fillRect(0, 0, 64, 64);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(8, 8, 48, 48);
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+  if (blob.type !== 'image/jpeg') throw new Error(`expected image/jpeg, got ${blob.type}`);
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  if (!(bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff)) {
+    throw new Error('fixture does not start with the JPEG magic prefix FF D8 FF');
+  }
+  // Walk to the first SOFn the same way the server guard does: standalone
+  // markers carry no length; everything else is an explicit segment.
+  let off = 2;
+  while (off + 4 <= bytes.length) {
+    if (bytes[off] !== 0xff) throw new Error('marker walk desynced');
+    const marker = bytes[off + 1];
+    if (marker === 0xd9 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+      off += 2;
+      continue;
+    }
+    const length = (bytes[off + 2] << 8) | bytes[off + 3];
+    const isSof = marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc;
+    if (isSof) {
+      // [precision:1][height:2 BE][width:2 BE] after the length field.
+      bytes[off + 5] = 0x1f; bytes[off + 6] = 0x40; // height 8000 (≤ MAX_IMAGE_DIM)
+      bytes[off + 7] = 0x20; bytes[off + 8] = 0x00; // width  8192 (≤ MAX_IMAGE_DIM)
+      // 65,536,000 px — over MAX_IMAGE_PIXELS on a file that stays tiny.
+      let binary = '';
+      bytes.forEach((b) => { binary += String.fromCharCode(b); });
+      return btoa(binary);
+    }
+    off += 2 + length;
+  }
+  throw new Error('no SOF marker found in the encoded JPEG');
+});
+
 await browser.close();
 
 writeFileSync(join(outDir, 'valid-64x64.png'), Buffer.from(pngBase64, 'base64'));
 writeFileSync(join(outDir, 'valid-64x64.webp'), Buffer.from(webpBase64, 'base64'));
 writeFileSync(join(outDir, 'valid-64x64.jpg'), Buffer.from(jpegBase64, 'base64'));
+writeFileSync(join(outDir, 'oversize-64mp.jpg'), Buffer.from(oversizeBase64, 'base64'));
 console.log(`fixtures written to ${outDir}`);
