@@ -35,6 +35,7 @@ import {
   clickReviewEdit,
   clickReviewSend,
   clickVisibleAttach,
+  completeComposer,
   expectZoneState,
   reviewAndSend,
   setLocaleToggle,
@@ -1840,6 +1841,7 @@ async function runRedactionRow(
   }));
 
   await clickLauncher(page);
+  await completeComposer(page);
   await waitForHeadline(page, 'Report sent ✓', 20_000);
   expect(calls, 'the gesture must send exactly one report').toHaveLength(1);
 
@@ -1983,6 +1985,7 @@ test('PRV-02: a Luhn-valid card sequence masks while its Luhn-invalid lookalike 
     body: JSON.stringify({ id: INTERCEPTED_ID }),
   }));
   await clickLauncher(page);
+  await completeComposer(page);
   await waitForHeadline(page, 'Report sent ✓', 20_000);
   expect(calls, 'the gesture must send exactly one report').toHaveLength(1);
 

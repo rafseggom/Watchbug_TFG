@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 
 /**
  * Composer/review harness (03-03 Wave-0 gap: the DOM contract is fixed by the
@@ -10,9 +10,11 @@ import type { Page } from '@playwright/test';
  * activation (only the launcher gesture does, and `clickLauncher` keeps
  * using the real trusted mouse click).
  *
- * `completeComposer` — the assertion-free walk the ~30 migrated Phase-2 rows
- * will use — is authored with its final form and its first caller in 03-07
- * Task 1; nothing in waves 1-4 calls it.
+ * `completeComposer` — the assertion-free walk every migrated Phase-2 row
+ * uses — was authored here by 03-07 Task 1 with its first caller
+ * (`runRedactionRow`). It never waits for `Report sent` itself: the caller
+ * keeps its own terminal assertion, which is what distinguishes a send that
+ * landed from one that merely navigated.
  */
 
 /** Wait until the composer overlay owns the screen (data-wb-screen). */
@@ -203,4 +205,81 @@ export async function clickVisibleAttach(page: Page): Promise<void> {
     if (visible.length === 0) throw new Error('clickVisibleAttach: no visible .composer-attach');
     visible[0].click();
   });
+}
+
+/** What `completeComposer` may check or fill before walking to Send. */
+export interface CompleteComposerOptions {
+  /** Type into the title field ONLY when provided. */
+  title?: string;
+  /** Type into the note field ONLY when provided. */
+  note?: string;
+  /** Click that bug/feedback segment ONLY when provided. */
+  type?: 'bug' | 'feedback';
+  /** Assert the prefilled title (P2-D-01 -> P3-D-02: prefill = document.title clamped). */
+  expectPrefilledTitle?: string;
+  /** Assert the default segment (P3-D-03: `bug`). */
+  expectDefaultType?: 'bug' | 'feedback';
+  /**
+   * Poll timeout for the composer/review waits. Default 10 s; rows whose
+   * Review-entry encode is heavy (the CAP-05 16 MP / 8192 px frames) pass a
+   * larger budget — it is a wait timeout, never an assertion.
+   */
+  timeout?: number;
+}
+
+/**
+ * The shared one-walk-closes-the-form helper for the migrated Phase-2 rows
+ * (research F4 / PATTERNS S-8): wait for the composer, optionally check the
+ * prefill, apply any provided fields, walk `Review report → review → Send
+ * report`, and return ONCE THE REQUEST HAS BEEN ISSUED.
+ *
+ * Deliberately assertion-free about pixels, request counts or terminal copy —
+ * the caller keeps its own terminal assertion (`waitForHeadline('Report sent
+ * ✓')`, the intercepted meta, the decoded bytes). The request-issued edge is
+ * the observable `data-wb-screen === 'status'` switch: `deliver()` renders the
+ * status panel synchronously at the Send click (pipeline.ts `onView
+ * {kind: 'sending'}` before its first `await`), so the poll returns as soon
+ * as the POST is in flight — before any reply can land.
+ */
+export async function completeComposer(
+  page: Page,
+  options: CompleteComposerOptions = {},
+): Promise<void> {
+  const timeout = options.timeout ?? 10_000;
+  await waitForComposer(page, timeout);
+  if (options.expectPrefilledTitle !== undefined || options.expectDefaultType !== undefined) {
+    const prefill = await page.evaluate(() => {
+      const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
+      return {
+        title: (root?.querySelector('.composer-title') as HTMLInputElement | null)?.value ?? '',
+        type:
+          root?.querySelector('button.segment[aria-pressed="true"]')?.getAttribute('data-wb-type') ??
+          null,
+      };
+    });
+    if (options.expectPrefilledTitle !== undefined) {
+      expect(prefill.title, 'composer prefills the title the row expects').toBe(
+        options.expectPrefilledTitle,
+      );
+    }
+    if (options.expectDefaultType !== undefined) {
+      expect(prefill.type, 'the default segment is what the row expects').toBe(
+        options.expectDefaultType,
+      );
+    }
+  }
+  if (options.title !== undefined) await setTitle(page, options.title);
+  if (options.note !== undefined) await setNote(page, options.note);
+  if (options.type !== undefined) await setType(page, options.type);
+  await clickComposerReview(page);
+  await waitForReview(page, timeout);
+  await clickReviewSend(page);
+  await page.waitForFunction(
+    () =>
+      (
+        document.querySelector('watchbug-host')?.shadowRoot?.querySelector('.wrap') ?? null
+      )?.getAttribute('data-wb-screen') === 'status',
+    null,
+    { timeout: 15_000 },
+  );
 }
