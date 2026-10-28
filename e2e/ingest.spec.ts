@@ -293,6 +293,106 @@ test('CAP-03 text-only: a meta-only submission stores a row with no screenshot',
   expect(typeof body.message).toBe('string');
 });
 
+test('CAP-03 text-only concurrent: one idempotency key, one row, no blob', async ({ request }) => {
+  // Same helper pair as the image-bearing race row above, minus the `image`
+  // part: the uniqueness index, not application code, is the dedupe guarantee,
+  // and the imageless path must not change that (ING-03 holds either way).
+  const idem = `e2e-textonly-race-${randomUUID()}`;
+  const meta = { ...META, title: 'Text-only race probe' };
+  const before = blobCount();
+  const [a, b] = await Promise.all([
+    postIncident(request, { key: KEY, idempotencyKey: idem, meta }),
+    postIncident(request, { key: KEY, idempotencyKey: idem, meta }),
+  ]);
+
+  // One create wins; the loser replays — with the same id, exactly as the
+  // image-bearing race row proves.
+  const statuses = [a.status, b.status].sort();
+  expect(statuses[0]).toBe(200);
+  expect(statuses[1]).toBe(201);
+  expect(a.body.id).toBe(b.body.id);
+
+  const list = await (await request.get('/api/incidents')).json() as Array<Record<string, unknown>>;
+  const rows = list.filter((r) => r.id === a.body.id);
+  expect(rows).toHaveLength(1);
+  expect(rows[0].contentType).toBeNull();
+
+  // Neither attempt wrote a blob.
+  expect(blobCount()).toBe(before);
+});
+
+test('CAP-03 text-only: the blob route never 500s', async ({ request }) => {
+  const idem = `e2e-textonly-404-${randomUUID()}`;
+  const created = await postIncident(request, {
+    key: KEY,
+    idempotencyKey: idem,
+    meta: { ...META, title: 'Imageless 404 probe' },
+  });
+  expect(created.status).toBe(201);
+
+  const res = await request.get(`/api/incidents/${created.body.id as string}/image`);
+  expect(res.status()).toBe(404);
+  const body = (await res.json()) as Record<string, unknown>;
+  expect(typeof body.message).toBe('string');
+  // A JSON error body: the response carries no `image/*` content type and the
+  // route never opens the volume for a null key (T-03-08's read-side mirror).
+  expect(res.headers()['content-type']).toContain('application/json');
+  expect(String(res.headers()['content-type'])).not.toMatch(/^image\//);
+});
+
+test('CAP-03 text-only: the panel lists it', async ({ page, request }) => {
+  const probe = `Text-only panel probe ${randomUUID().slice(0, 8)}`;
+  // Deliberate asymmetry with the existing panel row above: that one passes
+  // `bytes: png` because it asserts a RENDERED screenshot; this one omits
+  // `bytes` because it asserts the ABSENCE of one. Neither row's assertions
+  // nor `bytes` argument is edited here — both belong to Task 2.
+  const created = await postIncident(request, {
+    key: KEY,
+    idempotencyKey: `e2e-textonly-panel-${randomUUID()}`,
+    meta: { ...META, title: probe },
+  });
+  expect(created.status).toBe(201);
+
+  await page.goto('/');
+  // Title renders as list text plus the auto-selected detail heading — the
+  // existing panel row's shape, intercepting nothing.
+  await expect(page.getByText(probe, { exact: true })).toHaveCount(2);
+
+  // Open the detail pane: NO screenshot element exists for the imageless
+  // report — ReportDetail gates the img on a non-null content type, so a
+  // broken-image element is never emitted.
+  await page.getByRole('button', { name: new RegExp(probe) }).click();
+  await expect(page.getByAltText(new RegExp(`Screenshot for report: ${probe}`))).toHaveCount(0);
+  await expect(page.locator('img')).toHaveCount(0);
+});
+
+test('CAP-03 text-only: a meta-only post without X-Project-Key gets the same structured 401', async ({ request }) => {
+  // Raw request: the helper always sets the header, and this row's point is
+  // the header being ABSENT (precedent: the raw multipart builder below
+  // composes its own request). The request-level guards — body caps, rate
+  // limits, origin gate, project-key gate — sit in the preHandler chain and
+  // run before the imageless branch exists, so an optional image must never
+  // mean an optional guard (T-03-06).
+  const res = await request.post('/api/incidents', {
+    multipart: { meta: JSON.stringify({ ...META, title: 'No key meta-only probe' }) },
+    headers: { 'Idempotency-Key': `e2e-textonly-nokey-${randomUUID()}` },
+  });
+  expect(res.status()).toBe(401);
+  const imagelessBody = (await res.json()) as Record<string, unknown>;
+
+  // Byte-for-byte the body an image-bearing submission gets for the same class
+  // of key failure (ING-04's no-oracle 401): missing, malformed and unknown
+  // keys stay indistinguishable across both submission shapes.
+  const bearing = await postIncident(request, {
+    key: 'wkbt_ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ',
+    idempotencyKey: `e2e-textonly-401pair-${randomUUID()}`,
+    meta: META,
+    bytes: png,
+  });
+  expect(bearing.status).toBe(401);
+  expect(imagelessBody).toEqual(bearing.body);
+});
+
 test('panel renders the row and its screenshot (P1-D-04, SEC-05 pass 2)', async ({ page, request }) => {
   // Ensure at least one row exists for the panel to show. The title carries a
   // script tag: SEC-05 pass 1 (server-side sanitize-html) must strip it before
