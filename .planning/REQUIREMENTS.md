@@ -31,7 +31,7 @@ These are the property-level invariants from `mission-brief.md` §5. Each must b
 A requirement is **Complete** when:
 
 1. It is implemented within the constraints in `PROJECT.md` and `resolution-record.md` §5.
-2. It is covered by an assertion in the single e2e suite **or** by `npm run check:size` — no other test artefact is created (R-12).
+2. It is covered by an assertion in the e2e suite (capped at ≤20 core journeys per R-19), or by `npm run check:size`, or by the appropriate test type in the six-type taxonomy (R-19 amends R-12) — unit, integration, contract, VRT, or packaging.
 3. Its security-sensitive behaviour is verified at the **artifact level** (encoded bytes, HTTP response, stored row), not at a function boundary.
 4. It is committed, and the change is reflected in `.planning/ROADMAP.md` traceability.
 
@@ -197,7 +197,7 @@ Explicitly excluded. Documented to prevent scope creep.
 | Managed multi-tenant SaaS, subscriptions, payment gateways | §2 non-goal. Excludes the *hosting model*, not R-06's multiple projects per install. |
 | OAuth2 / SSO with third-party providers | §2 non-goal. |
 | Multi-user panel accounts and roles | R-05 — single admin by design. Avoids a whole AUTH family (signup, email verification, password reset, SMTP). |
-| Unit-test suites and coverage thresholds | R-12 — owner policy. Verification is e2e + property assertions only. |
+| Coverage thresholds | R-12/R-19 — no coverage vanity metrics. Unit/integration/contract/VRT/packaging tests are in scope per the six-type taxonomy; coverage % is not a gate. |
 | TFG *memoria* and user documentation site | R-03 — parallel track. |
 | Mobile / non-web SDKs | Web-first. |
 | CSS overlay or gaussian-blur masking | SEC-02 + R-13 — a security prohibition, not a scope choice. Reversible by deconvolution. |

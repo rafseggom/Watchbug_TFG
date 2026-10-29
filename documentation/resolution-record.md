@@ -42,6 +42,7 @@ Amendments to a governing document are appended to that document as an `## Enmie
 | R-16 | `AGENTS.md` is non-authoritative | ✓ Approved | Owner |
 | R-17 | **No calendar-driven descoping** — scope is cut by coherence, never by deadline pressure | ✓ Approved | Owner |
 | R-18 | **Reuse-first code creation** — search and reuse existing code before writing new | ✓ Approved | Owner |
+| R-19 | **Six-type test taxonomy amends R-12** — e2e reserved for ≤20 core journeys; unit/integration/contract/VRT/packaging added | ✓ Approved | Owner |
 
 ◆ = taken by the agent under the owner's explicit "take your own decisions with the quality gate in mind" authorisation. **Override window open until the next interaction.** Reversing either is a one-entry change here plus a `git revert`.
 
@@ -221,6 +222,39 @@ Owner statement: *"Whatever decision is in AGENTS.md is not final and I did not 
 - **DRY sobre la lógica de dominio:** matemáticas de redacción (masking), constantes de límites, formatters y validación de esquema — fuente única de verdad en `packages/contracts`.
 - **Excepciones:** la reutilización nunca se fuerza si rompería los puertos `R-02`, el presupuesto cero-deps del SDK (`RNF-04`/`PRF-04`) o cualquier invariante `SEC`/`INV`; reutilización entre workspaces solo a través de `packages/contracts`.
 - **Alcance:** aplica desde la Fase 1 en adelante y no cambia la política de verificación `R-12`.
+
+### R-19 · Six-type test taxonomy amends R-12
+
+**Status:** ✓ Approved | Owner
+**Date:** 2026-10-29
+**Amends:** R-12 (E2E / property verification only)
+
+**What R-12 established (kept):**
+- Artifact-level security evidence: CA-02/PRV decoded-bytes assertions **stay e2e** — they intercept the outgoing request, decode the image, and assert masked pixels are absent from the encoded bytes. This is strictly stronger evidence than any unit test.
+- No coverage thresholds as a vanity metric — the project never adopted coverage tooling, and R-19 does not introduce it.
+- `check:size` remains a hard build gate (RNF-01/CA-03).
+
+**What R-19 replaces (the "never unit tests" absolute):**
+- The statement "DONT MAKE A BUNCH OF TESTS. Only make e2e as necessary, not unit tests" is replaced by a deliberate six-type taxonomy where each test type has a defined scope, runner, and command.
+
+**Six-type taxonomy:**
+
+| # | Type | Lives in | Runner | What it may assert | Command |
+|---|------|----------|--------|--------------------|---------|
+| 1 | **Unit** | `tests/unit/` | Vitest | Pure logic in isolation: redaction regexes, size/pixel clamps, i18n resolver, schema mappers, path-only URL strip | `npm run test:unit` |
+| 2 | **Integration / Functional** | `tests/integration/` | Vitest (+ Fastify inject / test DB) | API routes end-to-end without a browser: ingest validation, rate limit, idempotency, sanitisation, auth 401 | `npm run test:integration` |
+| 3 | **E2E** | `e2e/` | Playwright, 3 engines | **≤20 core user journeys** — a real browser is genuinely required (CA-01, CA-02, CA-04) | `npm run verify` |
+| 4 | **VRT (visual regression)** | `tests/vrt/` (Playwright screenshots) | Playwright `toHaveScreenshot` | Appearance of flagship UI surfaces — hostile-CSS widget, composer, editor, panel | `npm run test:vrt` |
+| 5 | **Contract** | `tests/contract/` | Vitest + `schema/report.schema.json` | Payloads validate against the single official schema; no drift between Zod and the emitted JSON Schema | `npm run test:contract` |
+| 6 | **Environment / Packaging** | `tests/packaging/` (wraps scripts) | Node | Build artifacts, size tiers, compose file shape — the gates that already exist, run as tests | `npm run test:packaging` |
+
+**Placement rule ("tests con cabeza"):** A test belongs in the cheapest layer that can still fail for the right reason. Only promote to e2e when the behaviour *requires* a real browser (shadow DOM, canvas pixels, capture API, hostile CSS) or is a cross-cutting core journey. `check:size`/`check:compose` remain hard gates regardless of how they're invoked.
+
+**Structural cap:** The e2e suite is capped at ≤20 journeys (J-01..J-20) via `test.describe` blocks matching the journey table. J-15..J-20 are reserved for Phases 4–7. A 21st journey must displace an existing one or be re-homed.
+
+**Vitest dependency:** `vitest@5.0.5` is the single pinned devDependency this wave adds. Zero runtime deps (PRF-04 untouched).
+
+**Conversion ledger:** Every one of the 152 original e2e tests (148 source + 4 generated) must have exactly one disposition: `kept-in-journey` | `converted(target-file)` | `justified-redundant`. The ledger lives at `.planning/phases/03-report-composer-annotation-editor-lazy/03-08-CONVERSION-LEDGER.md`.
 
 ---
 
