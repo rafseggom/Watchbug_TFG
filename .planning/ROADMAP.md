@@ -110,7 +110,7 @@ Plans:
   4. An end user can mask a region with an opaque fill that is destroyed at the pixel level and is unrecoverable from the encoded image — undecipherable even by later annotation strokes — while undo removes annotation strokes only (masks are deliberately irreversible).
   5. An end user reviews and edits the capture before sending and uses the whole widget form and editor in English or Spanish (auto-matched to browser language, manual override), while the lazy editor chunk stays ≤ 25 KB gzipped and the total runtime payload ≤ 80 KB.
 
-**Plans:** 7/7 plans executed
+**Plans:** 8 plans (7 executed, 1 planned — Wave 6)
 **UI hint**: yes
 
 Plans:
@@ -130,6 +130,9 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4)*
 - [x] 03-07-PLAN.md — Suite migration (~30 rows through one helper) + budget closure on real chunks + five static gates, full verify on three engines (PRF-02, PRF-03)
+
+**Wave 6** *(blocked on Wave 5 — verification-policy refactor, no new product REQ)*
+- [ ] 03-08-PLAN.md — Test-suite refactor to a six-type taxonomy: e2e cut to ≤20 core user journeys (J-01…J-20), the rest re-homed to unit/integration/contract/VRT/packaging (Vitest), R-12 amended by R-19 — executed in ≤10-file batches with confirmation between them
 
 **Rationale / Risks:** **⚠ C-2 — the `Annotator` port contract is fixed here and is non-negotiable:** exactly **one flattened working bitmap**; no undo stack over pre-mask state (each undo entry *is* an unmasked copy), no layer-stack export, no offscreen base layer; masks are baked **destructively at stroke completion (T2)** and are **not undoable** (explicit confirm modal — any future mask-undo is a §3-adjacent privacy decision requiring a Consultation Request Pack); annotations are vector ink flattened onto the already-masked bitmap; and there is a **single `toBlob` sink** (`encodeFinal()` — grep gate: `toBlob|toDataURL|convertToBlob` appears exactly once in the SDK). **T3 export order is an invariant:** flatten ink → **re-bake all masks as the LAST pixel operation** → re-run auto rules (T1) → fresh `toBlob`. An annotation stroke must physically be incapable of leaking masked pixels. The CA-02 e2e lands here: intercept the outgoing request, decode the image, assert the masked region's original pixel values are absent **including at region boundaries**. H-1: mask/stroke geometry in bitmap space, tested at DPR 1/1.25/2/3 and non-integer zoom. **H-4/H-5 (mandatory, per A-05):** the capture chain is `DisplayMediaCapture` → `ManualFileCapture` (both ship in v1; DOM-serialization stays v2 per A-08); the file-attach path is designed here, not bolted on, and capture-less degradation with a user-visible failure state is required (iOS has no `getDisplayMedia`; Safari's 16,777,216-px canvas cap silently blanks captures). R-13/A-01 user masking: flat opaque fill is the default; block pixelation is opt-in only at block ≥ `max(8 px, 2× cap-height)`, grid-snapped outward, α=255, with a fresh lossy re-encode after destruction. i18n dictionaries live in the lazy chunk (never in core) — *as interpreted by 03-03 (research OQ-1): core carries launcher/status/composer/review/mask-confirm copy plus the locale resolver in both locales, and the lazy chunk carries `editor.*` only, because the composer (and its degraded/text-only states) must localise before — and without — the chunk download (A-2).* A-12/M-2: with core + editor the v1 worst case is ≤ 70 KB — `check:size` proves PRF-02/PRF-03 against the real emitted chunks. Research flags: spike mask-undo UX and HiDPI coordinate behaviour here.
 
@@ -229,7 +232,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 |-------|----------------|--------|-----------|
 | 1. Contracts & Ingest Slice | 4/4 | Complete    | 2026-10-13 |
 | 2. SDK Tracer Bullet: Widget, Capture & Auto-Redaction | 5/5 | Complete    | 2026-10-25 |
-| 3. Report Composer & Annotation Editor (lazy) | 7/7 | In Progress | - |
+| 3. Report Composer & Annotation Editor (lazy) | 7/8 | In Progress | - |
 | 4. Report Payload & Enrichment | 0/TBD | Not started | - |
 | 5. Secure Admin Access & Projects | 0/TBD | Not started | - |
 | 6. Triage & Data Lifecycle | 0/TBD | Not started | - |
