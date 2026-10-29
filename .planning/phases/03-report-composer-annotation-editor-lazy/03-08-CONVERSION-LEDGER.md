@@ -105,6 +105,18 @@
 | 65 | `sdk.spec.ts` — "WDG-05: an empty host page still renders the launcher at 24 px insets and starts the flow" | `kept-in-journey` | J-14 (moved to `e2e/hostile.spec.ts`) | b1e2b35 |
 | 66 | `sdk.spec.ts` — "WDG-05: a z-index tie stays resolved by DOM order and the host is re-appended after a documentElement replacement" | `kept-in-journey` | J-14 (moved to `e2e/hostile.spec.ts`) | b1e2b35 |
 
+### Task 2 — Batch 2c: `deploy.spec.ts` (7) → packaging; spec deleted
+
+| # | Original Spec / Test Title | Disposition | Target File / Justification | Commit |
+|---|----------------------------|-------------|----------------------------|--------|
+| 67 | `deploy.spec.ts` — "panel root returns the SPA shell (DEP-01)" | `converted` | `tests/packaging/deploy-contract.test.ts` — live HTTP 200 + `text/html` + `#root` + external `/assets/*.js` script in the served body, plus the built `apps/panel/dist/index.html` artifact (no inline script / no inline style — the cause of a CSP refusal, replacing the browser console watch). The *rendered* React frame half is covered by the kept J-02/J-07 panel journeys. | — |
+| 68 | `deploy.spec.ts` — "panel document ships the full CSP plus the header pair (S-4)" | `converted` | `tests/packaging/deploy-contract.test.ts` — five directive-level assertions + the two header values on the live document response, and the same pair on the proxied `/api/health` response (the nginx `add_header` inheritance guard). | — |
+| 69 | `deploy.spec.ts` — "/api/health returns 200 through the nginx proxy (DEP-01, A-10)" | `converted` | `tests/packaging/deploy-contract.test.ts` — status 200 + exact `{status:'ok'}` body. | — |
+| 70 | `deploy.spec.ts` — "every env var read by apps/api/src/config.ts is documented in .env.example (DEP-02)" | `converted` | `tests/packaging/deploy-contract.test.ts` — unchanged static scan (>5 reads found; zero undocumented). | — |
+| 71 | `deploy.spec.ts` — "boot with WATCHBUG_PROJECT_KEY unset exits non-zero naming the variable (DEP-02)" | `converted` | `tests/packaging/deploy-contract.test.ts` — unchanged spawn of `apps/api/dist/index.mjs`. | — |
+| 72 | `deploy.spec.ts` — "boot with the documented placeholder key exits non-zero (DEP-02)" | `converted` | `tests/packaging/deploy-contract.test.ts` — unchanged spawn, asserts `placeholder` in stderr. | — |
+| 73 | `deploy.spec.ts` — "boot with a malformed key exits non-zero naming the expected format (DEP-02)" | `converted` | `tests/packaging/deploy-contract.test.ts` — unchanged spawn, asserts `32` + `base62` in stderr. | — |
+
 ---
 
 ## Summary Counts (running)
@@ -112,11 +124,11 @@
 | Disposition | Count |
 |-------------|-------|
 | kept-in-journey | 14 (2 ingest + 1 hostile XSS-render row + 11 J-14 moved from `sdk.spec.ts`) |
-| converted | 49 (20 ingest + 3 read-surface + 26 hostile) |
+| converted | 56 (20 ingest + 3 read-surface + 26 hostile + 7 deploy) |
 | justified-redundant | 1 (ingest i18n default) |
-| **Unclassified** | **84** (77 `sdk.spec.ts` + 7 `deploy.spec.ts`) |
+| **Unclassified** | **77** (`sdk.spec.ts` only — Task 3's widget batches) |
 
-`49 + 14 + 1 + 84 = 148` — the baseline source declaration count. The four
+`56 + 14 + 1 + 77 = 148` — the baseline source declaration count. The four
 generated tests (the `for`-loop variants in `sdk.spec.ts`) are counted inside
 their row, so the ledger reconciles to 148 while Task 5's audit reports 152.
 
@@ -152,3 +164,7 @@ their row, so the ledger reconciles to 148 while Task 5's audit reports 152.
 - `read-surface.spec.ts` deleted entirely — all 3 tests re-homed to `tests/integration/read-surface-rate-limit.test.ts`.
 - Batch 2b: `hostile.spec.ts` (27 tests) → 1 kept (`ING-07 pass 2` render-inert) + 26 converted; J-14 (11 tests) physically moved from `sdk.spec.ts` to the new `e2e/hostile.spec.ts`, which is now 12 tests. Integration/contract/packaging gained 21 new tests (48 integration, 6 contract, 1 packaging).
 - Batch 2b re-homes map to five files: `hostile-size-caps` (5), `hostile-auth-rate-limit` (10), `hostile-sanitisation` (6), `hostile-payload-control` (6), `no-dangerouslySetInnerHTML` (1).
+- Batch 2c: `deploy.spec.ts` (7 tests) re-homed **entirely** to `tests/packaging/deploy-contract.test.ts` and the spec deleted — no row was a core user journey. Research's J-21 (first-run `docker-compose` + onboarding curl) is deliberately type 6 per the plan, so the journey cap stays at exactly 20 with J-15..J-20 reserved for Phases 4–7. `e2e/` is now three specs — `sdk` 80 instances (77 declarations + 3 generated `for`-loop variants), `hostile` 12, `ingest` 2 = 94 per engine, 282 over 3 engines, confirmed by `npx playwright test --list`.
+- Batch 2c coverage audit: every original assertion survives. The two browser-only halves have named successors rather than drops — the rendered "Watchbug" heading/app frame is exercised by the kept J-02/J-07 panel journeys, and the "no CSP refusal" console watch is replaced by its artifact-level *cause* (the shipped `apps/panel/dist/index.html` carries no inline `<script>`/`<style>`, which is what `default-src 'self'` would refuse). Every live row targets the same `http://127.0.0.1:8080` same-origin surface the deleted spec used.
+- Batch 2c environment note: the three live rows need the compose stack, exactly as the integration suite needs the published API. `test:packaging` now runs `check:size` → `check:compose` → `vitest run tests/packaging` so the type-6 suite is actually executed by the command that names it (previously only the two gate scripts ran, leaving the packaging tests uninvoked by their own script). Verified: `test:packaging` 8/8 green, `npx vitest run tests/integration tests/contract tests/packaging` 62/62 (55 previous + 7 new), `npm run verify` 282/282, `gate` 5/5, `check:size` PASS.
+- Batch 2c docs: `.github/workflows/ci.yml`'s host-build comment referenced `deploy.spec.ts` as the spawner of `apps/api/dist/index.mjs`; it now names `tests/packaging/deploy-contract.test.ts`.

@@ -175,9 +175,9 @@ jobs:
       - name: Install
         run: npm ci
 
-      # deploy.spec.ts spawns apps/api/dist/index.mjs directly to assert the
-      # DEP-02 fail-fast contracts, so the API must be built on the HOST too,
-      # not only inside the container image.
+      # The DEP-02 fail-fast rows live in tests/packaging/deploy-contract.test.ts
+      # and spawn apps/api/dist/index.mjs directly, so the API must be built on
+      # the HOST too, not only inside the container image.
       - name: Build all workspaces
         run: npm run build
 

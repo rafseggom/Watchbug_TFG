@@ -21,7 +21,7 @@
     "test:integration": "vitest run tests/integration",
     "test:contract": "vitest run tests/contract",
     "test:vrt": "playwright test tests/vrt",
-    "test:packaging": "node scripts/check-size.mjs && node scripts/check-compose.mjs",
+    "test:packaging": "node scripts/check-size.mjs && node scripts/check-compose.mjs && vitest run tests/packaging",
     "test:all": "npm run test:unit && npm run test:integration && npm run test:contract && npm run test:vrt && npm run test:packaging",
     "test": "npm run test:unit && npm run test:integration",
     "lint": "npm run typecheck --workspaces --if-present",
