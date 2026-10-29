@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 03
 current_phase_name: Report Composer & Annotation Editor (lazy)
 status: verifying
-stopped_at: Completed 03-07-PLAN.md
-last_updated: "2026-10-28T22:18:05.184Z"
-last_activity: 2026-10-28
-last_activity_desc: Phase 03 execution started
-state_head: 432b24b24f115d19f0a9c9c4620ff8db708ba960
+stopped_at: Completed 03-08-PLAN.md
+last_updated: "2026-10-29T17:16:23.286Z"
+last_activity: 2026-10-29
+last_activity_desc: Plan 03-08 completed — six-type test taxonomy, R-19 policy convergence
+state_head: a7abdfb5d901912bb12619cf686a13e9d0deb463
 progress:
   total_phases: 7
   completed_phases: 2
-  total_plans: 16
-  completed_plans: 16
+  total_plans: 17
+  completed_plans: 17
   percent: 29
 ---
 
@@ -28,16 +28,16 @@ See: .planning/PROJECT.md (updated 2026-10-13)
 ## Current Position
 
 Phase: 03 (Report Composer & Annotation Editor (lazy)) — EXECUTING
-Plan: 7 of 7
+Plan: 8 of 8
 Status: Phase complete — ready for verification
-Last activity: 2026-10-28 — Phase 03 execution started
+Last activity: 2026-10-29 — plan 03-08 (six-type taxonomy refactor) completed
 
 Progress: [███░░░░░░░] 29%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 9
+- Total plans completed: 17
 - Average duration: —
 - Total execution time: 0 hours
 
@@ -47,6 +47,7 @@ Progress: [███░░░░░░░] 29%
 |-------|-------|-------|----------|
 | 01 | 4 | - | - |
 | 02 | 5 | - | - |
+| 03 | 8 | - | - |
 
 **Recent Trend:**
 - Last 5 plans: none yet
@@ -73,6 +74,7 @@ Progress: [███░░░░░░░] 29%
 | Phase 03 P05 | 82 min | 3 tasks | 15 files |
 | Phase 03 P03-06 | 56 min | 3 tasks | 7 files |
 | Phase 03 P07 | 48 min | 3 tasks | 5 files |
+| Phase 03 P08 | 3h 52m | 5 tasks | 72 files |
 
 ## Accumulated Context
 
@@ -82,7 +84,7 @@ Decisions are logged in PROJECT.md Key Decisions table (R-01…R-17) and `docume
 Recent decisions affecting current work:
 
 - [Roadmap] PROJECT_MODE = mvp: every phase emits `**Mode:** mvp` and delivers an end-to-end demonstrable capability. Research build order compressed to 7 phases: contracts+skeleton merged into the ingest tracer; auth/projects split from triage/retention; edge-hardening merged into the release closeout.
-- [Roadmap] Hard sequencing locked: `WidgetHost` isolation strategy and redaction ordering **T1** are fixed in Phase 2 (first build of the widget); **T2/T3** + the C-2 `Annotator` contract (one flattened bitmap, non-undoable masks, single `toBlob` sink) in Phase 3. R-12: verification is one Playwright suite (CA-01…CA-05) + `check:size` — no unit tests, ever.
+- [Roadmap] Hard sequencing locked: `WidgetHost` isolation strategy and redaction ordering **T1** are fixed in Phase 2 (first build of the widget); **T2/T3** + the C-2 `Annotator` contract (one flattened bitmap, non-undoable masks, single `toBlob` sink) in Phase 3. R-12: verification is one Playwright suite (CA-01…CA-05) + `check:size`. **Amended by R-19:** six-type taxonomy, e2e capped at ≤20 journeys — see AGENTS.md Testing & QA.
 - [Phase 1] Scope note: the hardened blob route ships here (C-3/C-4) but DEP-03's "served only through the authenticated API" completes in Phase 5 when auth exists. TTL columns land in the initial migration (M-1/A-02) to avoid schema retrofits.
 - [Phase 4] INT-03's `custom` = init-scoped context riding every report (v1); distinct from ANN-V2-03 per-report custom fields (v2).
 - [Phase 1 · OVERRIDE 2026-10-11 · decision-coverage gate] The `check.decision-coverage-plan` gate returned `passed: false, reason: could-not-parse` because CONTEXT.md's local decision IDs use the `P1-D-NN` grammar, which the parser does not support (it accepts `D-NN`, `D4-NN`, `D-NN — title`). Developer chose "Proceed — parser false positive": the gate's intent is already satisfied — the plan-checker's dimension-7 audit verified all 12 `P1-D-01…P1-D-12` decisions map to plan tasks with no deferred idea implemented and no scope reduction. No plan or CONTEXT.md change was made. **verify-phase must re-surface this:** if its decision-coverage counterpart reports the same `could-not-parse` on `P1-D-NN`, treat it as this same recorded false positive, not as a dropped decision.
@@ -154,6 +156,12 @@ Recent decisions affecting current work:
 - [Phase 03]: 03-07: completeComposer exits at the request-issued edge (data-wb-screen 'status'); callers keep terminal assertions; heavy rows carry walk timeouts (45s/30s), tiers untouched
 - [Phase 03]: 03-07: all 41 Phase-2 one-shot rows migrated through the one shared helper; zero deleted/skipped, 453x3 engines green, count guard unchanged; failure rows verified degraded (03-04 already re-pointed)
 - [Phase 03]: 03-07: PRF-02/PRF-03 closed on emitted artifacts (core 16.9/45, lazy max-twin 6.6/25, floor min-twin 6.3>=2, runtime 23.8/80); gate.mjs five rules incl. new sdk-no-html-sink; ANN-04 census counts open dialogs only
+- [Phase 03]: R-19 amends R-12 rather than deleting it: artifact-level security evidence (CA-02 on encoded bytes) and the no-coverage-vanity rule survive; only the "never unit tests" absolute is replaced by six types
+- [Phase 03]: E2E is capped structurally as a failing test (tests/packaging/journey-cap.test.ts), 14 journeys in use, 20 the hard maximum, J-15..J-20 reserved for Phases 4-7
+- [Phase 03]: VRT keeps its own Playwright config so a pixel diff can never red a functional verify run; baselines are the text-free launcher control so one baseline serves every platform
+- [Phase 03]: The contract test walks the committed JSON artifact with a 60-line draft-2020-12 subset interpreter instead of adding ajv, and fails loudly on any keyword it cannot interpret
+- [Phase 03]: Doc consistency is a test, not a remembered grep (tests/packaging/doc-policy-consistency.test.ts); historical artifacts keep their text and gain a supersession banner
+- [Phase 03]: Ledger reconciliation: 153 row ids carry 148 distinct dispositions because Task-1 tracer rows 1-5 are re-listed by Batch 2a/2b
 
 ### Pending Todos
 
@@ -198,6 +206,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-28T22:17:45.621Z
-Stopped at: Completed 03-07-PLAN.md
+Last session: 2026-10-29T17:15:23.540Z
+Stopped at: Completed 03-08-PLAN.md
 Resume file: None
