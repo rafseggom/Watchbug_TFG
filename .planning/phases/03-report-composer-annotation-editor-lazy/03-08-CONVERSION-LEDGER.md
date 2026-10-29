@@ -261,6 +261,71 @@ sdk.spec.ts and re-home the meta/i18n/transport logic`).
 
 ---
 
+### Task 3 — Batch 3b: journey grouping for capture fidelity + redaction (36 rows) and one new unit lane
+
+This batch is **structural plus one conversion**. No row changed disposition:
+a row that observes pixels, a capture surface or the wire cannot move to a
+cheaper layer, and Batch 3a already pinned the pure halves of the meta/status/
+composer/i18n rows. What changes is the *shape* — six `test.describe` journey
+blocks now hold 36 of the 80 classified rows — plus the one genuinely pure
+family that had no cheaper pin yet: **redaction pattern matching**.
+
+| Journey block created | Rows moved in | Count |
+|---|---|---|
+| `J-02 — Golden path: capture, compose, review, send, panel` | 78, 81, 119, 120, 121, 122, 123 | 7 |
+| `J-03 — Capture integrity: a real frame, no widget, fail-closed geometry` | 82, 89, 91, 106 | 4 |
+| `J-04 — Automatic redaction (tier 1), proven on decoded bytes` | 97, 98, 99, 100, 101, 102, 103, 104, 105, 112, 113 | 11 |
+| `J-08 — HiDPI capture fidelity: the DPR matrix` | 83, 84, 85, 86, 108, 109, 110, 111 | 8 |
+| `J-09 — WebP→PNG silent fallback (R-11)` | 87 | 1 |
+| `J-11 — Payload privacy and self-hosting (SEC-03)` | 107, 114, 115, 117, 118 | 5 |
+
+**New cheaper-layer pin (not a row conversion): `tests/unit/redaction-patterns.test.ts`, 8 tests.**
+
+| Row | Row disposition | Pure half now pinned at |
+|---|---|---|
+| 97 `PRV-02` JWT shape | `kept-in-journey` | `redaction-patterns.test.ts` — the exact JWT fixture matches the `jwt` family, and as a substring of surrounding prose (P2-D-08 granularity). |
+| 98 `PRV-02` JWT lookalike | `kept-in-journey` | Same file — the `eyJ`-less dotted triple matches **no** family, with a non-vacuity guard that it really is a three-segment triple. |
+| 100 `PRV-02` bearer shape | `kept-in-journey` | Same file — the auth-scheme shape matches inside the row's `Authorization:` prose. |
+| 101 `PRV-02` `key=/token=/secret=/password=` | `kept-in-journey` | Same file — both assignments in the row's fixture match, including `api_key:` (no leading word boundary: recall beats precision, P2-D-09). |
+| 102 `PRV-02` Luhn-valid + lookalike | `kept-in-journey` | Same file — `4111111111111111` and `4242424242424242` pass `luhnValid`, `4242424242424241` fails, and the family therefore masks only the first. |
+| 103 `PRV-02` two glued cards | `kept-in-journey` | Same file — the glued run does **not** pass as one Luhn body and the family still accepts it through group/adjacent-join validation (review CR-02). |
+| 99, 104, 105, 112, 113 | `kept-in-journey` | Nothing to pin: the claim is a DOM rect (password control, `data-watchbug-sensitive` element), root traversal, over-masking a node's rect, or an injected scan failure. |
+| 87, 106, 107, 114, 115, 117, 118 | `kept-in-journey` | Nothing to pin: encoder fallback sniffing, capture geometry, `crypto` removal, planted host sentinels, `referer`/wire bytes, request census, cross-origin script load. |
+
+**Rows reviewed and deliberately NOT converted in this batch:**
+
+- `CAP-05` (×4) and `H-1` (×4) — every claim is a decoded-image dimension or a
+  bitmap-space mask rect. The DPR clamp arithmetic exists only as *observable
+  output* (`427×240` for a 3× frame clamped to 2×); asserting the formula
+  separately would test a copy of the code, not the code.
+- `M-3` — the claim is which MIME/`filename`/magic the delivered part carries.
+  The sniff decision is one branch inside the encode sink, and the artifact is
+  the only honest witness.
+- `CAP-01`/`CAP-04`/`OQ-1`/`S-7 guard`/`P2-D-12` — capture-surface behaviour
+  (`getDisplayMedia` tier, hidden host, refused surface, transformed frame).
+- `P3-D-02`/`PRV-07`/`INT-02` — already pinned at the cheaper layer in Batch 3a
+  (`composer-text-clamp`, `sdk-meta`); the rows keep `input.value`, the review
+  DOM and the one-send guarantee.
+- `WR-03`/`PRV-05`/`PRV-06`/`self-hosted`/`S-8` — security rows over planted
+  host sentinels and live request bytes (R-19: stays e2e).
+
+**Grouping mechanics.** Each moved row keeps its body verbatim (only the
+indentation changed, to sit inside the journey block). The six DPR rows are
+parameterised by nested `test.describe('CAP-05 — deviceScaleFactor: N')` /
+`test.describe('H-1 — deviceScaleFactor: N')` blocks because `test.use()`
+must be scoped to a describe — they are parameterisation for **one** journey,
+not journeys of their own.
+
+**Verification for this batch:** `npx playwright test e2e/sdk.spec.ts
+--project=chromium` **79/79 passed** in 59.9 s (no skips); `npx vitest run`
+**114/114 passed** across 19 files (35 unit + 65 integration + contract +
+packaging, plus the 8 new); `npx playwright test --list` **279 tests in 3
+files** — identical to the pre-batch count, so no row was lost. Two orphaned
+section banners left behind by the moves were collapsed into helper-section
+banners.
+
+---
+
 ## Summary Counts (running)
 
 | Disposition | Count |
