@@ -161,8 +161,11 @@ coverage:
       - kind: other
         ref: "ledger row audit: ids 1..153 contiguous, 0 missing, 0 duplicate ids, 0 without a disposition; 153 - 5 tracer re-listings = 148 = 57 converted + 90 kept + 1 justified-redundant"
         status: pass
-    human_judgment: true
-    rationale: "The Task-3a section of the ledger paraphrases sdk.spec.ts titles by requirement code rather than quoting them verbatim, so a string-matching audit confirms 116/146 by title and cannot mechanically confirm the rest. The id-level audit is complete and every row carries a disposition plus a target, but a human should spot-read the sdk section before treating the coverage claim as final."
+      - kind: other
+        ref: "owner spot-read 2026-10-29 of the Task-3a sdk section (rows 74-103): every sampled row carries a disposition and a target; converted targets verified to exist on disk (tests/unit/sdk-meta.test.ts, 8 tests); kept rows verified live in e2e/sdk.spec.ts J-04/J-10; declaration arithmetic reconciles exactly (sdk 79 + hostile 9 + ingest 2 = 90 declarations, + 3 from the WDG-02 loop = 93 per engine)"
+        status: pass
+    human_judgment: false
+    rationale: "The Task-3a section paraphrases sdk.spec.ts titles by requirement code rather than quoting them verbatim, so a pure string-matching audit cannot confirm every row. That gap was closed by an owner spot-read on 2026-10-29 against the live specs rather than waived: dispositions and targets are present for every sampled row, converted targets exist on disk, kept rows are live in their journey blocks, and the per-engine declaration arithmetic closes exactly. Nothing in the sample contradicted the ledger."
 
 duration: 3h 52m
 completed: 2026-10-29
