@@ -404,13 +404,16 @@ function el<K extends keyof HTMLElementTagNameMap>(
  * server's Zod `.max()` applies (Phase 1 decision 01-04). `maxlength` counts
  * units, so it stays a hint (or absent) and this clamp is the authority
  * (research Pitfall 13).
+ *
+ * Exported (03-08 Batch 3a) so `tests/unit/composer-text-clamp.test.ts` can
+ * pin the code-point arithmetic against the real function instead of a copy.
  */
-function codePoints(value: string): number {
+export function codePoints(value: string): number {
   return [...value].length;
 }
 
 /** Clamp to `max` code points without ever splitting a surrogate pair. */
-function clampCodePoints(value: string, max: number): string {
+export function clampCodePoints(value: string, max: number): string {
   const units = [...value];
   return units.length > max ? units.slice(0, max).join('') : value;
 }

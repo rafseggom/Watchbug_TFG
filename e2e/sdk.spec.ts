@@ -2418,52 +2418,13 @@ test('PRV-06: meta.url is path-only — the query string and fragment never ente
   expect(parsed.url).toBe('/__e2e/hostile-host.html');
 });
 
-test('P2-D-01: the auto-title is document.title truncated to the first 200 code points and type is bug', async ({
-  page,
-  browserName,
-}) => {
-  await installCaptureStub(page, browserName);
-  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
-  await waitForWidget(page);
-
-  // 300 characters = 300 code points but 500 UTF-16 units: the cap must count
-  // code points, matching the Zod `.max(MAX_TITLE_CHARS)` semantics the server
-  // validates against (100 ASCII + 200 non-BMP emoji).
-  const longTitle = `${'A'.repeat(100)}${'\u{1F600}'.repeat(200)}`;
-  expect([...longTitle].length).toBe(300);
-  await page.evaluate((title) => {
-    document.title = title;
-  }, longTitle);
-
-  const calls = await interceptIncidentPosts(page, async () => ({
-    status: 201,
-    body: JSON.stringify({ id: INTERCEPTED_ID }),
-  }));
-
-  const expectedTitle = [...longTitle].slice(0, MAX_TITLE_CHARS).join('');
-  await clickLauncher(page);
-  // P2-D-01 -> P3-D-02: the composer prefills exactly the clamped auto-title
-  // and the segment defaults to `bug` — asserted on the form surface before
-  // the walk, and on the wire after it.
-  await completeComposer(page, { expectPrefilledTitle: expectedTitle, expectDefaultType: 'bug' });
-  await waitForHeadline(page, 'Report sent ✓', 15_000);
-  expect(calls, 'the gesture must send exactly one report').toHaveLength(1);
-
-  const meta = interceptedMeta(calls[0]);
-  expect(meta.type).toBe('bug');
-
-  expect([...expectedTitle].length, 'expected title spans 200 code points').toBe(200);
-  expect(typeof meta.title).toBe('string');
-  expect(
-    [...String(meta.title)].length,
-    'the sent title must be exactly MAX_TITLE_CHARS code points',
-  ).toBe(MAX_TITLE_CHARS);
-  expect(meta.title, 'the sent title must be the first 200 code points of document.title').toBe(
-    expectedTitle,
-  );
-  // The truncated title satisfies the published contract's cap.
-  expect(() => reportSchema.parse(meta)).not.toThrow();
-});
+/**
+ * P2-D-01 (auto-title clamp) lives in `tests/unit/sdk-meta.test.ts` — the
+ * production clamp is `buildMeta`, a pure helper. The two claim halves it also
+ * carried stay observable here: "the segment defaults to bug and reaches the
+ * wire" is `INT-02` (`"type":"bug"` in the sent meta) and "the composer
+ * prefills the clamped title" is `P3-D-02` below. 03-08 Batch 3a.
+ */
 
 /* ------------------------------------------------------------------ */
 /* Self-hosted promise — the widget opens no third-party destination    */
