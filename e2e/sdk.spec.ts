@@ -285,33 +285,6 @@ test('INT-01: the one-gesture launcher renders 48x48 inside the open-mode shadow
   expect(rendered.liveMode).toBe('polite');
 });
 
-test('WDG-06: .wrap lang matches the resolved locale — English copy and lang="en" under the default locale', async ({ page }) => {
-  // Replaces the Phase 2 F-08 row (03-03 Task 3): the hard-coded `en` literal
-  // is gone — the attribute now comes from the resolved locale, which must
-  // agree with the dictionary actually rendered. `all: initial` clears the
-  // inherited `lang`, so assistive tech would otherwise read the copy in the
-  // host page's language.
-  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
-
-  const languages = await page.evaluate(() => {
-    const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
-    const wrap = root?.querySelector('.wrap') as HTMLElement | null;
-    const launcher = root?.querySelector('button.launcher') as HTMLElement | null;
-    return {
-      content: wrap?.getAttribute('lang') ?? null,
-      // What assistive tech actually resolves for the launcher: the nearest
-      // ancestor in the shadow tree that declares a language.
-      launcher: launcher?.closest('[lang]')?.getAttribute('lang') ?? null,
-      // The declared locale must agree with the dictionary the launcher read.
-      launcherLabel: launcher?.getAttribute('aria-label') ?? '',
-    };
-  });
-
-  expect(languages.content).toBe('en');
-  expect(languages.launcher).toBe('en');
-  expect(languages.launcherLabel).toBe('Report a bug');
-});
-
 test('WDG-04: the IIFE lane adds exactly one global, the ESM lane adds none, and native prototypes are untouched', async ({ page, context }) => {
   // --- IIFE lane: one `Watchbug` property, nothing else -------------------
   await openHostFixture(page, { bundle: 'watchbug.js', mode: 'iife' });
@@ -437,294 +410,9 @@ async function expectNoRequest(page: Page, calls: PostCall[]): Promise<void> {
   expect(calls, 'no POST /api/incidents attempt may be made').toHaveLength(0);
 }
 
-test('CAP-03: a blank capture never posts before the user chooses', async ({ page, browserName }) => {
-  // Re-pointed from the P2-D-12 blank row by 03-04 Task 3 (the plan's chosen
-  // migration, not a duplicate): a uniform frame now opens the DEGRADED
-  // composer instead of the Phase-2 panel — the blank diagnosis survives as
-  // the notice hint (F6) and nothing posts until an action is chosen.
-  // Default tier per engine: chromium/firefox probe a solid frame straight
-  // out of the real <video> path, webkit out of the seam.
-  await installCaptureStub(page, browserName, { uniform: true });
-  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
-  await waitForWidget(page);
-
-  const calls = await interceptIncidentPosts(page, async () => ({
-    status: 201,
-    body: JSON.stringify({ id: INTERCEPTED_ID }),
-  }));
-
-  await clickLauncher(page);
-  await expectZoneState(page, 'degraded');
-
-  const failed = await probeWidget(page);
-  expect(failed.composerState).toBe('degraded');
-  expect(failed.composerNoticeHeading).toBe('Capture unavailable');
-  expect(failed.composerNoticeHint, 'the blank diagnosis keeps its distinct hint (F6)').toBe(
-    BLANK_HINT,
-  );
-  // Two real exits, never a dead panel (P3-D-13).
-  expect(failed.composerAttachVisible).toBe(true);
-  expect(failed.composerContinueVisible).toBe(true);
-
-  // The Review action is inert in the degraded state — choosing an action is
-  // the only way forward, and an inert click still posts nothing (T-03-01).
-  await clickComposerReview(page);
-  await page.waitForTimeout(300);
-  const inert = await probeWidget(page);
-  expect(inert.screen, 'Review from the degraded state does not navigate').toBe('composer');
-  expect(inert.composerState).toBe('degraded');
-
-  // Exit 1 works from this state: the notice's Attach image reaches the same
-  // preview flow as a replace from the image state (Task 1's lane).
-  if (browserName === 'chromium') {
-    const chooserPromise = page.waitForEvent('filechooser');
-    await clickVisibleAttach(page);
-    const chooser = await chooserPromise;
-    await chooser.setFiles({ name: 'valid-64x64.png', mimeType: 'image/png', buffer: png64 });
-  } else {
-    await attachImage(page, { name: 'valid-64x64.png', mimeType: 'image/png', buffer: png64 });
-  }
-  await expectZoneState(page, 'image');
-  const recovered = await probeWidget(page);
-  expect(recovered.composerPreviewWidth, 'attach from degraded yields the Task-1 preview').toBe(64);
-  expect(recovered.composerPreviewHeight).toBe(64);
-
-  // Still nothing posted — the user never pressed Send.
-  await expectNoRequest(page, calls);
-});
-
-test('P2-D-12: a frame beyond the supported canvas cap aborts to the blank bucket of the degraded composer', async ({ page, browserName }) => {
-  // Seam tier on every engine: the 16,920,000 px frame is allocated
-  // canvas-free, so the pipeline's area probe — not an engine canvas limit —
-  // is what rejects it. Re-pointed by 03-04: `oversize` shares the blank
-  // hint bucket in the degraded composer (F6), never the Phase-2 panel.
-  await installCaptureStub(page, browserName, { tier: 'seam', failure: 'beyond-cap' });
-  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
-  await waitForWidget(page);
-
-  const calls = await interceptIncidentPosts(page, async () => ({
-    status: 201,
-    body: JSON.stringify({ id: INTERCEPTED_ID }),
-  }));
-
-  await clickLauncher(page);
-  await expectZoneState(page, 'degraded');
-
-  const failed = await probeWidget(page);
-  expect(failed.composerNoticeHeading).toBe('Capture unavailable');
-  expect(failed.composerNoticeHint).toBe(BLANK_HINT);
-  expect(failed.composerAttachVisible).toBe(true);
-  expect(failed.composerContinueVisible).toBe(true);
-  await expectNoRequest(page, calls);
-});
-
-test('CAP-01: a rejected capture prompt opens the degraded composer with its hint and both actions', async ({ page, browserName }) => {
-  await installCaptureStub(page, browserName, { failure: 'prompt-rejected' });
-  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
-  await waitForWidget(page);
-
-  const calls = await interceptIncidentPosts(page, async () => ({
-    status: 201,
-    body: JSON.stringify({ id: INTERCEPTED_ID }),
-  }));
-
-  // Re-pointed by 03-04: the loud state for a denied prompt is now the
-  // degraded composer (P3-D-13) — never the dead failure panel, never a
-  // silent file dialog. The locked diagnostic copy still surfaces (M-6).
-  await clickLauncher(page);
-  await expectZoneState(page, 'degraded');
-
-  expect(await page.locator('html').getAttribute('data-wb-stub-invoked')).toBe('prompt-rejected');
-
-  const failed = await probeWidget(page);
-  expect(failed.composerNoticeHeading, 'the notice heading (strings.ts)').toBe(
-    'Capture unavailable',
-  );
-  expect(failed.composerNoticeHint, 'the denied diagnosis keeps its hint (F6)').toBe(CAPTURE_HINT);
-  expect(failed.composerAttachVisible, 'exit 1: Attach image').toBe(true);
-  expect(failed.composerContinueVisible, 'exit 2: Continue with text only').toBe(true);
-  await expectNoRequest(page, calls);
-});
-
 /* ------------------------------------------------------------------------- */
 /* Status-machine rows — 02-02 Task 2 (P2-D-03, UI-SPEC loading/error/a11y)   */
 /* ------------------------------------------------------------------------- */
-
-test('P2-D-03: a transient 500 retries with the same Idempotency-Key and the same encoded bytes', async ({ page, browserName }) => {
-  await installCaptureStub(page, browserName);
-  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
-  await waitForWidget(page);
-  // Record every distinct headline: `Capturing…` and `Sending…` can be shorter
-  // than a poll interval, and the locked copy progression is an assertion.
-  await collectHeadlines(page);
-
-  const calls = await interceptIncidentPosts(page, async (_call, index) =>
-    index === 0
-      ? {
-          status: 500,
-          body: JSON.stringify({ statusCode: 500, error: 'Internal Server Error', message: 'boom' }),
-        }
-      : { status: 201, body: JSON.stringify({ id: INTERCEPTED_ID }) },
-  );
-
-  await clickLauncher(page);
-
-  // The retry window is the observable in-flight state for both the retry copy
-  // and the launcher's disabled rendering (UI-SPEC loading lift, WDG-01).
-  // With the composer the request is only issued by the walk, and the locked
-  // headline sequence below still runs Capturing… -> Sending… -> Retrying…
-  // because Capturing… rides the capture stage the walk opens the composer on.
-  await completeComposer(page);
-  await waitForHeadline(page, 'Retrying (1 of 3)…', 10_000);
-  const duringRetry = await probeWidget(page);
-  expect(duringRetry.panelHidden).toBe('false');
-  expect(duringRetry.launcherDisabled).toBe(true);
-  expect(duringRetry.actionsVisible).toBe(false);
-
-  await waitForHeadline(page, 'Report sent ✓', 15_000);
-  expect(calls).toHaveLength(2);
-
-  const firstKey = calls[0].headers['idempotency-key'];
-  expect(firstKey).toMatch(/^[0-9a-f-]{36}$/);
-  expect(calls[1].headers['idempotency-key']).toBe(firstKey);
-
-  // Same logical submission: the encoded image and the meta part are byte-equal
-  // across attempts (only the multipart boundary is regenerated).
-  //
-  // IN-03: `postDataBuffer()` omits blob-backed FormData payload BYTES on
-  // Playwright's WebKit (deviation 2) — there the part headers are present but
-  // the bodies may be empty, so "the same bytes are sent twice" is only
-  // observable on chromium/firefox. Guard the non-vacuity there explicitly and
-  // say so here, instead of letting an `toEqual` over two empty bodies look
-  // cross-engine. The shared `idempotency-key` header and the `meta` part below
-  // carry the claim on all three engines.
-  const image0 = multipartPart(calls[0].buffer, 'image');
-  const image1 = multipartPart(calls[1].buffer, 'image');
-  expect(image0).not.toBeNull();
-  expect(image1).not.toBeNull();
-  if (browserName !== 'webkit') {
-    expect(image0?.length ?? 0, 'the encoded image must actually be in the payload').toBeGreaterThan(0);
-  }
-  expect(image1, 'the resent part must be byte-identical').toEqual(image0);
-  expect(multipartPart(calls[1].buffer, 'meta')).toEqual(multipartPart(calls[0].buffer, 'meta'));
-
-  const headlines = await readHeadlines(page);
-  const sequence = ['Capturing…', 'Sending…', 'Retrying (1 of 3)…', 'Report sent ✓'];
-  const positions = sequence.map((headline) => headlines.indexOf(headline));
-  expect(positions.every((at) => at >= 0)).toBe(true);
-  expect([...positions].sort((a, b) => a - b)).toEqual(positions);
-});
-
-test('P2-D-03: a contract 400 fails immediately, renders the server message and never retries', async ({ page, browserName }) => {
-  await installCaptureStub(page, browserName);
-  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
-  await waitForWidget(page);
-
-  const reason = 'Project key not recognised';
-  const calls = await interceptIncidentPosts(page, async () => ({
-    status: 400,
-    body: JSON.stringify({ statusCode: 400, error: 'Bad Request', message: reason }),
-  }));
-
-  await clickLauncher(page);
-  await completeComposer(page);
-  await waitForHeadline(page, 'The server rejected the report.', 15_000);
-
-  const failed = await probeWidget(page);
-  expect(failed.reason).toBe(reason);
-  expect(failed.headlineRole).toBe('alert');
-  expect(failed.textRole).toBe('status');
-  expect(failed.textLive).toBe('polite');
-  expect(failed.actionsVisible).toBe(true);
-  expect(failed.retryVisible).toBe(true);
-  expect(failed.dismissVisible).toBe(true);
-  expect(failed.launcherDisabled).toBe(true);
-
-  // No automatic retry for a contract 4xx: one attempt, and still one after a
-  // window longer than the first scheduled retry (1 s ±25 %).
-  await page.waitForTimeout(1_500);
-  expect(calls).toHaveLength(1);
-});
-
-test('UI-SPEC backstop: a long server reason renders truncated to 240 chars with an ellipsis inside the 320 px panel', async ({ page, browserName }) => {
-  await installCaptureStub(page, browserName);
-  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
-  await waitForWidget(page);
-
-  const longReason =
-    'The report was rejected because the project key does not match any active project on this server. ' +
-    'Check the key configured in your deployment, then try again once it has been corrected. ' +
-    'Nothing has been stored and no attachment was written to disk.';
-
-  await interceptIncidentPosts(page, async () => ({
-    status: 403,
-    body: JSON.stringify({ statusCode: 403, error: 'Forbidden', message: longReason }),
-  }));
-
-  await clickLauncher(page);
-  await completeComposer(page);
-  await waitForHeadline(page, 'The server rejected the report.', 15_000);
-
-  const failed = await probeWidget(page);
-  expect(longReason.length).toBeGreaterThan(240);
-  expect(failed.reasonLength).toBeLessThanOrEqual(240);
-  expect(failed.reason.endsWith('…')).toBe(true);
-  // Wrapped at a word boundary: no word is cut in half at the truncation.
-  expect(failed.reason.startsWith('The report was rejected')).toBe(true);
-  expect(failed.reason).not.toContain('…'.repeat(2));
-  expect(failed.panelWidth).toBeLessThanOrEqual(320);
-});
-
-test('UI-SPEC A-5/A-7: sent auto-dismisses after 5 s and Escape dismisses a terminal failure', async ({ page, browserName }) => {
-  await installCaptureStub(page, browserName);
-  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
-  await waitForWidget(page);
-
-  await interceptIncidentPosts(page, async () => ({
-    status: 201,
-    body: JSON.stringify({ id: INTERCEPTED_ID }),
-  }));
-
-  await clickLauncher(page);
-  await completeComposer(page);
-  await waitForHeadline(page, 'Report sent ✓', 15_000);
-  const sentAt = Date.now();
-
-  await page.waitForFunction(
-    () => {
-      const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
-      return root?.querySelector('.panel')?.getAttribute('data-hidden') === 'true';
-    },
-    null,
-    { timeout: 9_000 },
-  );
-  // A-5: the success panel waits the full 5 s before returning to idle.
-  expect(Date.now() - sentAt).toBeGreaterThanOrEqual(4_000);
-  const idle = await probeWidget(page);
-  expect(idle.launcherDisabled).toBe(false);
-
-  // A-7: Escape dismisses a terminal failure panel and re-arms the launcher.
-  await page.unroute(INCIDENT_POST_RE);
-  await interceptIncidentPosts(page, async () => ({
-    status: 401,
-    body: JSON.stringify({ statusCode: 401, error: 'Unauthorized', message: 'Missing project key' }),
-  }));
-
-  await clickLauncher(page);
-  await completeComposer(page);
-  await waitForHeadline(page, 'The server rejected the report.', 15_000);
-  await page.keyboard.press('Escape');
-  await page.waitForFunction(
-    () => {
-      const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
-      return root?.querySelector('.panel')?.getAttribute('data-hidden') === 'true';
-    },
-    null,
-    { timeout: 5_000 },
-  );
-  const dismissed = await probeWidget(page);
-  expect(dismissed.launcherDisabled).toBe(false);
-});
 
 /* ------------------------------------------------------------------------- */
 /* Auto-redaction artifact rows — 02-04 (PRV-01/02/03, H-1, P2-D-08, fail-closed) */
@@ -1303,108 +991,6 @@ function interceptedMeta(call: PostCall): Record<string, unknown> {
 /* Composition rows — 03-03 (PRV-07, P3-D-02/03/04, WDG-06)                    */
 /* ------------------------------------------------------------------------- */
 
-test.describe('WDG-06 es', () => {
-  test.use({ locale: 'es-ES' });
-
-  test('WDG-06 es: the whole core surface renders Spanish copy with lang="es"', async ({
-    page,
-    browserName,
-  }) => {
-    await installCaptureStub(page, browserName);
-    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
-    await waitForWidget(page);
-    // The transient `Enviando…` headline is short-lived: record every render.
-    await collectHeadlines(page);
-
-    const base = await page.evaluate(() => {
-      const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
-      const launcher = root?.querySelector('button.launcher') as HTMLElement | null;
-      return {
-        lang: root?.querySelector('.wrap')?.getAttribute('lang') ?? null,
-        launcherLabel: launcher?.getAttribute('aria-label') ?? '',
-      };
-    });
-    expect(base.lang, 'navigator.language es-ES resolves the Spanish dictionary').toBe('es');
-    expect(base.launcherLabel).toBe('Reportar un error');
-
-    const calls = await interceptIncidentPosts(page, async () => ({
-      status: 201,
-      body: JSON.stringify({ id: INTERCEPTED_ID }),
-    }));
-
-    await clickLauncher(page);
-    await waitForComposer(page);
-    const composing = await probeWidget(page);
-    expect(composing.composerHeading).toBe('Reportar un error');
-    expect(composing.wrapLang).toBe('es');
-
-    await clickComposerReview(page);
-    await waitForReview(page);
-    const reviewed = await page.evaluate(() => {
-      const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
-      return {
-        heading: root?.querySelector('.review-heading')?.textContent ?? '',
-        send: root?.querySelector('button.review-send')?.textContent ?? '',
-        edit: root?.querySelector('button.review-edit')?.textContent ?? '',
-        typeValue: root?.querySelector('[data-wb-summary="type"] .summary-value')?.textContent ?? '',
-      };
-    });
-    expect(reviewed.heading, 'the review heading renders in Spanish').toBe('Listo para enviar');
-    expect(reviewed.send).toBe('Enviar informe');
-    expect(reviewed.edit).toBe('Editar informe');
-    expect(reviewed.typeValue).toBe('Error');
-
-    await clickReviewSend(page);
-    await waitForHeadline(page, 'Informe enviado ✓', 15_000);
-    const headlines = await readHeadlines(page);
-    expect(headlines, 'the in-flight Sending headline renders in Spanish').toContain('Enviando…');
-    expect(headlines).toContain('Capturando…');
-    expect(calls).toHaveLength(1);
-    const after = await probeWidget(page);
-    expect(after.wrapLang).toBe('es');
-  });
-});
-
-test('WDG-06 override: the composer EN/ES pair switches copy and lang in both directions without host storage', async ({
-  page,
-  browserName,
-}) => {
-  await installCaptureStub(page, browserName);
-  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
-  await waitForWidget(page);
-
-  await clickLauncher(page);
-  await waitForComposer(page);
-  const en = await probeWidget(page);
-  expect(en.composerHeading).toBe('Report a bug');
-  expect(en.wrapLang).toBe('en');
-
-  // ES switch: every visible string and the declared language move together.
-  await setLocaleToggle(page, 'es');
-  const es = await probeWidget(page);
-  expect(es.composerHeading).toBe('Reportar un error');
-  expect(es.wrapLang).toBe('es');
-  expect(es.composerTitle, 'the draft state survives the locale re-render').toBe(en.composerTitle);
-
-  // The override is session-scoped in memory (SEC-03 / T-03-16): the static
-  // `sdk-no-host-storage` gate is the structural proof; the zero reads here
-  // are the behavioural one on the running bundle.
-  const storage = await page.evaluate(() => ({
-    local: Object.keys(localStorage).length,
-    session: Object.keys(sessionStorage).length,
-  }));
-  expect(storage, 'the locale override never touches host storage').toEqual({
-    local: 0,
-    session: 0,
-  });
-
-  // EN switch back within the same session.
-  await setLocaleToggle(page, 'en');
-  const back = await probeWidget(page);
-  expect(back.composerHeading, 'the pair switches in both directions').toBe('Report a bug');
-  expect(back.wrapLang).toBe('en');
-});
-
 /* ------------------------------------------------------------------ */
 /* CAP-02 — attach a picture from the device (03-04, file lane)         */
 /* CAP-03 — the degraded composer with two real ways forward (03-04)    */
@@ -1449,374 +1035,6 @@ function wireContainer(bytes: Buffer): 'png' | 'webp' | 'jpeg' | 'unknown' {
   return 'unknown';
 }
 
-test('CAP-02 attach: a picked PNG reaches the preview, the review and the wire', async ({
-  page,
-  browserName,
-}) => {
-  await installCaptureStub(page, browserName);
-  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
-  await waitForWidget(page);
-  await page.evaluate(() => {
-    document.title = 'CAP-02 attached picture report';
-  });
-
-  const calls = await interceptIncidentPosts(page, async () => ({
-    status: 201,
-    body: JSON.stringify({ id: INTERCEPTED_ID }),
-  }));
-
-  // The gesture captures as usual, so the composer opens holding the STUB
-  // frame — the attachment must REPLACE it, and the preview dimensions tell
-  // the two apart (640-wide frame vs 64-wide picture).
-  await clickLauncher(page);
-  await waitForComposer(page);
-  await expectZoneState(page, 'image');
-  const captured = await probeWidget(page);
-  expect(captured.composerPreviewWidth, 'the composer first shows the captured frame').toBe(
-    640,
-  );
-
-  // The real affordance walk on chromium: the visible `Attach image` button
-  // opens the hidden picker, and the file chooser receives the fixture bytes.
-  // Other engines set the input directly (same change-handler path).
-  if (browserName === 'chromium') {
-    const chooserPromise = page.waitForEvent('filechooser');
-    await clickVisibleAttach(page);
-    const chooser = await chooserPromise;
-    await chooser.setFiles({ name: 'valid-64x64.png', mimeType: 'image/png', buffer: png64 });
-  } else {
-    await attachImage(page, { name: 'valid-64x64.png', mimeType: 'image/png', buffer: png64 });
-  }
-  await expectZoneState(page, 'image');
-
-  // The preview canvas is redrawn from the attachment's pixels (CAP-02).
-  const attached = await probeWidget(page);
-  expect(attached.composerPreviewWidth, 'the preview is the attached picture').toBe(64);
-  expect(attached.composerPreviewHeight).toBe(64);
-  expect(attached.composerAttachError, 'a valid attachment shows no refusal').toBe('');
-
-  // Review encodes the attachment through the single sink; Send posts once.
-  await clickComposerReview(page);
-  await waitForReview(page);
-  const reviewed = await probeWidget(page);
-  expect(reviewed.reviewImageWidth, 'the review shows a real encoded artifact').toBeGreaterThan(0);
-  expect(reviewed.reviewImageHeight).toBeGreaterThan(0);
-
-  await clickReviewSend(page);
-  await waitForHeadline(page, 'Report sent ✓', 15_000);
-  expect(calls, 'the attach walk posts exactly one report').toHaveLength(1);
-
-  // P3-D-15 / A-05: the attachment joins the same flow, so its outgoing bytes
-  // are the SINK's output — WebP or PNG, never the picked container. The
-  // fetch-boundary read is engine-truthful (WebKit drops blob parts from
-  // postDataBuffer, deviation 2), and the decode proves the picture survived
-  // review: 64×64 and non-blank (the fixture's two-tone square).
-  const image = await readOutgoingImage(page);
-  expect(
-    wireContainer(image),
-    'the single encode sink re-encodes every attachment',
-  ).toMatch(/^webp|png$/);
-  const analysis = await analyzeImagePixels(page, image);
-  expect(analysis.width, 'the attached picture decodes at its own dimensions').toBe(64);
-  expect(analysis.height).toBe(64);
-  expect(analysis.sampledDistinct, 'the attachment is never blanked on the way').toBeGreaterThan(1);
-});
-
-test('CAP-02 attach: WebP and JPEG are accepted', async ({ page, browserName }) => {
-  await installCaptureStub(page, browserName);
-  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
-  await waitForWidget(page);
-  await page.evaluate(() => {
-    document.title = 'CAP-02 two containers report';
-  });
-
-  const calls = await interceptIncidentPosts(page, async () => ({
-    status: 201,
-    body: JSON.stringify({ id: INTERCEPTED_ID }),
-  }));
-
-  await clickLauncher(page);
-  await waitForComposer(page);
-  await expectZoneState(page, 'image');
-
-  // WebP — the committed fixture.
-  await attachImage(page, { name: 'valid-64x64.webp', mimeType: 'image/webp', buffer: webp64 });
-  const afterWebp = await probeWidget(page);
-  expect(afterWebp.composerPreviewWidth, 'the WebP attachment reaches the preview').toBe(64);
-  expect(afterWebp.composerPreviewHeight).toBe(64);
-  expect(afterWebp.composerAttachError).toBe('');
-
-  // JPEG — built IN-PAGE (03-02's fixture is same-wave at plan authoring; and
-  // JPEG is the one container every engine's canvas encoder produces, unlike
-  // WebP). Where an engine cannot encode JPEG from a canvas its silent PNG
-  // fallback rides in as PNG bytes — a different container, same acceptance
-  // duty; chromium's assertion below proves the JPEG arm really was fed.
-  const jpegPayload = await page.evaluate(async () => {
-    const canvas = document.createElement('canvas');
-    canvas.width = 64;
-    canvas.height = 64;
-    const context = canvas.getContext('2d');
-    if (context === null) throw new Error('no 2D canvas for the JPEG payload');
-    const gradient = context.createLinearGradient(0, 0, 64, 64);
-    gradient.addColorStop(0, '#16233a');
-    gradient.addColorStop(1, '#c9a227');
-    context.fillStyle = gradient;
-    context.fillRect(0, 0, 64, 64);
-    context.fillStyle = '#1e7a46';
-    context.fillRect(4, 4, 24, 24);
-    const blob = await new Promise<Blob | null>((resolve) => {
-      canvas.toBlob(resolve, 'image/jpeg', 0.9);
-    });
-    if (blob === null) throw new Error('the engine produced no JPEG payload');
-    const bytes = new Uint8Array(await blob.arrayBuffer());
-    let binary = '';
-    for (let at = 0; at < bytes.length; at += 0x8000) {
-      binary += String.fromCharCode(...bytes.subarray(at, at + 0x8000));
-    }
-    return { base64: btoa(binary), type: blob.type };
-  });
-  if (browserName === 'chromium') {
-    expect(jpegPayload.type, 'chromium really encoded a JPEG to attach').toBe('image/jpeg');
-  }
-  const jpegBytes = Buffer.from(jpegPayload.base64, 'base64');
-  await attachImage(page, { name: 'device-photo.jpg', mimeType: 'image/jpeg', buffer: jpegBytes });
-  const afterJpeg = await probeWidget(page);
-  expect(afterJpeg.composerPreviewWidth, 'the JPEG attachment replaces the WebP preview').toBe(64);
-  expect(afterJpeg.composerAttachError, 'an accepted format clears the refusal').toBe('');
-
-  // Review + send — the outgoing part is the sink's output, never JPEG.
-  await clickComposerReview(page);
-  await waitForReview(page);
-  await clickReviewSend(page);
-  await waitForHeadline(page, 'Report sent ✓', 15_000);
-  expect(calls, 'the two-attach walk posts exactly one report').toHaveLength(1);
-
-  const image = await readOutgoingImage(page);
-  expect(
-    wireContainer(image),
-    'a picked JPEG leaves as WebP or PNG — the single encode sink is the only producer',
-  ).toMatch(/^webp|png$/);
-  const analysis = await analyzeImagePixels(page, image);
-  expect(analysis.width, 'the second attachment is the one that sent').toBe(64);
-  expect(analysis.height).toBe(64);
-  expect(analysis.sampledDistinct).toBeGreaterThan(1);
-});
-
-test('CAP-02 reject: a non-image is refused with the inline error and no request', async ({
-  page,
-  browserName,
-}) => {
-  await installCaptureStub(page, browserName);
-  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
-  await waitForWidget(page);
-
-  const calls = await interceptIncidentPosts(page, async () => ({
-    status: 201,
-    body: JSON.stringify({ id: INTERCEPTED_ID }),
-  }));
-
-  await clickLauncher(page);
-  await waitForComposer(page);
-  await expectZoneState(page, 'image');
-  const before = await probeWidget(page);
-
-  // The picker's `accept` is decoration: a declared MIME type or extension is
-  // untrusted, so every one of these is refused on its magic bytes (V12).
-  const refusals: Array<{ name: string; mimeType: string; buffer: Buffer }> = [
-    {
-      name: 'payload.html',
-      mimeType: 'text/html',
-      buffer: Buffer.from('<!doctype html><html><body>polite hello</body></html>', 'utf8'),
-    },
-    { name: 'hostile.svg', mimeType: 'image/svg+xml', buffer: hostileSvg },
-    { name: 'polyglot.gif', mimeType: 'image/gif', buffer: polyglotGif },
-  ];
-  for (const payload of refusals) {
-    await attachImage(page, payload);
-    const refused = await probeWidget(page);
-    expect(refused.composerAttachError, `${payload.name}: visible refusal copy`).toBe(
-      ATTACH_ERROR_COPY,
-    );
-    expect(refused.composerAttachErrorHint, `${payload.name}: solution hint`).toBe(
-      ATTACH_HINT_COPY,
-    );
-    // The draft survives the refusal untouched: still the captured frame.
-    expect(refused.composerState, `${payload.name}: previous state preserved`).toBe('image');
-    expect(refused.composerPreviewWidth).toBe(before.composerPreviewWidth);
-    expect(refused.composerPreviewHeight).toBe(before.composerPreviewHeight);
-    // The attach action is re-enabled for another try.
-    expect(refused.composerAttachVisible, `${payload.name}: attach re-enabled`).toBe(true);
-  }
-  await expectNoRequest(page, calls);
-});
-
-test('CAP-02 reject: an oversized-pixel file is refused', async ({ page, browserName }) => {
-  await installCaptureStub(page, browserName);
-  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
-  await waitForWidget(page);
-
-  const calls = await interceptIncidentPosts(page, async () => ({
-    status: 201,
-    body: JSON.stringify({ id: INTERCEPTED_ID }),
-  }));
-
-  await clickLauncher(page);
-  await waitForComposer(page);
-  await expectZoneState(page, 'image');
-  const before = await probeWidget(page);
-
-  // The committed 8000×8192-declared JPEG (65.5 MP, over MAX_IMAGE_PIXELS):
-  // whichever gate answers — the decoded-bitmap size check, or an engine that
-  // refuses the inconsistent scan outright — the file is refused BEFORE a
-  // working canvas is allocated, which is the contract (T-03-18).
-  await attachImage(page, {
-    name: 'oversize.jpg',
-    mimeType: 'image/jpeg',
-    buffer: oversizeJpeg,
-  });
-  const refused = await probeWidget(page);
-  expect(refused.composerAttachError, 'over-cap dimensions are the same visible refusal').toBe(
-    ATTACH_ERROR_COPY,
-  );
-  expect(refused.composerAttachErrorHint).toBe(ATTACH_HINT_COPY);
-  expect(refused.composerState, 'the previous frame is preserved').toBe('image');
-  expect(refused.composerPreviewWidth).toBe(before.composerPreviewWidth);
-  expect(refused.composerPreviewHeight).toBe(before.composerPreviewHeight);
-  await expectNoRequest(page, calls);
-});
-
-test('CAP-03: a denied capture opens the degraded composer with both actions and files text-only', async ({
-  page,
-  browserName,
-}) => {
-  await installCaptureStub(page, browserName, { failure: 'prompt-rejected' });
-  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
-  await waitForWidget(page);
-  await page.evaluate(() => {
-    document.title = 'CAP-03 text-only report';
-  });
-
-  // Real compose stack (the plan's chosen proof): inspect the outgoing
-  // request, then let the ENGINE send it untouched — the 201 comes from
-  // Fastify's imageless branch, not from a mock (03-01's lane).
-  const posts: Buffer[] = [];
-  await page.route(INCIDENT_POST_RE, async (route) => {
-    if (route.request().method() !== 'POST') {
-      await route.continue();
-      return;
-    }
-    posts.push(route.request().postDataBuffer() ?? Buffer.alloc(0));
-    await route.continue();
-  });
-
-  await clickLauncher(page);
-  await expectZoneState(page, 'degraded');
-  const degraded = await probeWidget(page);
-  expect(degraded.composerNoticeHeading).toBe('Capture unavailable');
-  expect(degraded.composerNoticeHint).toBe(CAPTURE_HINT);
-  expect(degraded.composerAttachVisible).toBe(true);
-  expect(degraded.composerContinueVisible).toBe(true);
-
-  // Nothing posts while the diagnosis sits on screen (T-03-01): give a
-  // would-be request time to land before counting.
-  await page.waitForTimeout(600);
-  expect(posts, 'zero POST /api/incidents before the user chooses').toHaveLength(0);
-
-  await clickContinueTextOnly(page);
-  await expectZoneState(page, 'text-only');
-  const textOnly = await probeWidget(page);
-  expect(textOnly.composerZoneVisible, 'the image zone is hidden').toBe(false);
-  expect(textOnly.composerAttachVisible, 'the footer keeps Attach image').toBe(true);
-
-  // The prefilled title (document.title) is a real draft title — review now.
-  await clickComposerReview(page);
-  await waitForReview(page);
-  const reviewed = await probeWidget(page);
-  expect(reviewed.reviewOpen).toBe(true);
-  expect(reviewed.reviewNoImage, 'review shows the No image line (UI-SPEC A-3)').toBe('No image');
-  expect(reviewed.reviewTitle).toBe('CAP-03 text-only report');
-  expect(reviewed.reviewImageWidth, 'a text-only review displays no canvas').toBe(0);
-
-  const responsePromise = page.waitForResponse(
-    (response) =>
-      response.url().endsWith('/api/incidents') && response.request().method() === 'POST',
-  );
-  await clickReviewSend(page);
-  await waitForHeadline(page, 'Report sent ✓', 15_000);
-  const response = await responsePromise;
-  expect(response.status(), 'the meta-only body files a REAL 201').toBe(201);
-
-  expect(posts, 'exactly one request').toHaveLength(1);
-  const body = posts[0].toString('utf8');
-  expect(body).toContain('name="meta"');
-  expect(body, 'a text-only body carries NO image part').not.toContain('name="image"');
-  const metaPart = multipartPart(posts[0], 'meta');
-  expect(metaPart).not.toBeNull();
-  const meta = JSON.parse(metaPart!.toString('utf8')) as Record<string, unknown>;
-  expect(meta.type).toBe('bug');
-  expect(meta.title).toBe('CAP-03 text-only report');
-});
-
-test('CAP-03 no-API: a browser without getDisplayMedia can still file text-only feedback', async ({
-  page,
-  browserName,
-}) => {
-  // iOS Safari shape: the navigator carries no mediaDevices at all — the
-  // capture classification distinguishes `no-api` from a prompt denial, but
-  // the composer exit is the same two real choices (P3-D-13, CAP-03).
-  await installCaptureStub(page, browserName, { failure: 'no-display-media' });
-  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
-  await waitForWidget(page);
-  await page.evaluate(() => {
-    document.title = 'CAP-03 no-API feedback';
-  });
-
-  const posts: Buffer[] = [];
-  await page.route(INCIDENT_POST_RE, async (route) => {
-    if (route.request().method() !== 'POST') {
-      await route.continue();
-      return;
-    }
-    posts.push(route.request().postDataBuffer() ?? Buffer.alloc(0));
-    await route.continue();
-  });
-
-  await clickLauncher(page);
-  await expectZoneState(page, 'degraded');
-
-  // Non-vacuity: the provocation ran — the browser really has no capture API
-  // in this context, it is not a stubbed denial.
-  expect(await page.locator('html').getAttribute('data-wb-stub-invoked')).toBe(
-    'no-display-media',
-  );
-  const degraded = await probeWidget(page);
-  expect(degraded.composerNoticeHint, 'the no-api diagnosis keeps the capture-failed hint').toBe(
-    CAPTURE_HINT,
-  );
-  await page.waitForTimeout(600);
-  expect(posts, 'nothing posts from the degraded state').toHaveLength(0);
-
-  await clickContinueTextOnly(page);
-  await expectZoneState(page, 'text-only');
-  await clickComposerReview(page);
-  await waitForReview(page);
-  const reviewed = await probeWidget(page);
-  expect(reviewed.reviewNoImage).toBe('No image');
-
-  const responsePromise = page.waitForResponse(
-    (response) =>
-      response.url().endsWith('/api/incidents') && response.request().method() === 'POST',
-  );
-  await clickReviewSend(page);
-  await waitForHeadline(page, 'Report sent ✓', 15_000);
-  const response = await responsePromise;
-  expect(response.status(), 'text-only feedback files a REAL 201 without any capture API').toBe(
-    201,
-  );
-  expect(posts).toHaveLength(1);
-  expect(posts[0].toString('utf8'), 'meta-only multipart body').not.toContain('name="image"');
-});
-
 /* ------------------------------------------------------------------------- */
 /* Annotation editor rows — 03-05 (ANN-01, PRF-02 lazy, T-03-21 recovery)     */
 /* ------------------------------------------------------------------------- */
@@ -1826,213 +1044,6 @@ test('CAP-03 no-API: a browser without getDisplayMedia can still file text-only 
  * source+flags, so an inline duplicate would leak the mock into the next row.
  */
 const ANNOTATOR_CHUNK_ROUTE = /\/__e2e\/bundles\/watchbug-annotator\.mjs(\?retry=\d+)?$/;
-
-test('ANN-01: freehand ink follows the drag path', async ({ page, browserName }) => {
-  await installCaptureStub(page, browserName);
-  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
-  await waitForWidget(page);
-
-  const calls = await interceptIncidentPosts(page, async () => ({
-    status: 201,
-    body: JSON.stringify({ id: INTERCEPTED_ID }),
-  }));
-
-  await clickLauncher(page);
-  await waitForComposer(page);
-
-  // The whole path at once: Annotate -> chunk fetch -> editor in the SAME
-  // shadow root -> one freehand drag -> Done -> the ink in the decoded
-  // outgoing image.
-  await openEditor(page);
-  const opened = await probeWidget(page);
-  expect(opened.screen).toBe('editor');
-  expect(opened.editorOpen).toBe(true);
-  expect(opened.activeTool, 'the default tool on open is freehand (P3-D-06)').toBe('freehand');
-  expect(
-    opened.editorCanvasWidth,
-    'the editor canvas carries the draft bitmap itself',
-  ).toBe(opened.composerPreviewWidth);
-  expect(opened.editorCanvasHeight).toBe(opened.composerPreviewHeight);
-  const styleCount = await page.evaluate(
-    () =>
-      document.querySelector('watchbug-host')?.shadowRoot?.querySelectorAll('style').length ?? 0,
-  );
-  expect(
-    styleCount,
-    'EDITOR_CSS lands on the core style element — one stylesheet, never adoptedStyleSheets (T-03-22)',
-  ).toBe(1);
-
-  // One diagonal drag across the frame, in BITMAP coordinates.
-  const from: BitmapPoint = [100, 260];
-  const to: BitmapPoint = [540, 60];
-  await dragOnBitmap(page, from, to);
-  await done(page);
-
-  const back = await probeWidget(page);
-  expect(back.screen, 'Done returns to the composer').toBe('composer');
-  expect(back.editorOpen, 'the editor unmounts on Done').toBe(false);
-  const previewInk = await page.evaluate(() => {
-    const canvas = document
-      .querySelector('watchbug-host')
-      ?.shadowRoot?.querySelector('canvas.composer-preview') as HTMLCanvasElement | null;
-    if (canvas === null) return -1;
-    const context = canvas.getContext('2d');
-    if (context === null) return -2;
-    const data = context.getImageData(0, 0, canvas.width, canvas.height).data;
-    let count = 0;
-    for (let at = 0; at < data.length; at += 4) {
-      const dr = data[at] - 0x2f;
-      const dg = data[at + 1] - 0x6f;
-      const db = data[at + 2] - 0xeb;
-      if (dr * dr + dg * dg + db * db <= 14400) count += 1;
-    }
-    return count;
-  });
-  expect(
-    previewInk,
-    'the preview redraws from the buffer the editor returned — the flattened ink is IN the draft (C-2)',
-  ).toBeGreaterThan(0);
-
-  await reviewAndSend(page);
-  await waitForHeadline(page, 'Report sent ✓', 15_000);
-  expect(calls, 'one annotated report leaves the browser exactly once').toHaveLength(1);
-
-  const image = await readOutgoingImage(page);
-  const ink = await analyzeInk(page, image, {
-    bands: [{ from, to, halfWidth: 4 }],
-    // A sampled region far from the path over the navy side of the gradient:
-    // no palette block inside, and d² > 14400 from every frame colour there,
-    // so ANY ink-family pixel in it could only come from a bleed.
-    boxes: [{ left: 40, top: 40, right: 120, bottom: 120 }],
-  });
-  expect(
-    ink.bands[0],
-    'accent ink (squared distance to #2f6feb) exists along the drag path',
-  ).toBeGreaterThanOrEqual(50);
-  expect(ink.boxes[0], 'a sampled region far from the path carries no ink').toBe(0);
-});
-
-test('PRF-02 lazy: the annotator chunk is fetched only on Annotate, exactly once, and adds no global', async ({
-  page,
-  browserName,
-}) => {
-  await installCaptureStub(page, browserName);
-  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
-  await waitForWidget(page);
-
-  const chunkRequests: string[] = [];
-  page.on('request', (request) => {
-    const url = request.url();
-    if (url.includes('/__e2e/bundles/watchbug-annotator')) chunkRequests.push(url);
-  });
-
-  await clickLauncher(page);
-  await waitForComposer(page);
-  expect(
-    chunkRequests,
-    'zero requests for the annotator chunk while the composer is open (PRF-02, UI-SPEC A-2)',
-  ).toHaveLength(0);
-
-  const before = await snapshotGlobals(page);
-  await openEditor(page);
-  expect(chunkRequests, 'exactly one fetch after Annotate image').toHaveLength(1);
-  expect(
-    chunkRequests[0],
-    'the shipped lazy artifact is the .mjs twin (OQ-5)',
-  ).toMatch(/watchbug-annotator\.mjs$/);
-  const after = await snapshotGlobals(page);
-  expect(addedNames(after.w, before.w), 'the chunk load adds no global (INV-02)').toEqual([]);
-  expect(after.p, 'and patches no native prototype').toEqual(before.p);
-
-  // Re-entrancy: close and reopen — the memoised module is reused, so the
-  // request count stays exactly one.
-  await done(page);
-  await openEditor(page);
-  expect(chunkRequests, 'reopening reuses the memoised module (no second fetch)').toHaveLength(1);
-  await done(page);
-});
-
-test('PRF-02 lazy: the fetch shows the loading state, and a failed load re-enables the button with the inline error — a retry then opens the editor', async ({
-  page,
-  browserName,
-}) => {
-  await installCaptureStub(page, browserName);
-  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
-  await waitForWidget(page);
-
-  // Fail the FIRST fetch (with a delay that makes the loading state
-  // observably visible); serve the retry from dist so the recovery walk is
-  // real, not a re-404 (T-03-21: never a dead button).
-  let firstAttempt = true;
-  await page.route(ANNOTATOR_CHUNK_ROUTE, async (route) => {
-    if (firstAttempt) {
-      firstAttempt = false;
-      await new Promise((resolve) => setTimeout(resolve, 400));
-      await route.abort('failed');
-      return;
-    }
-    await route.fulfill({
-      status: 200,
-      contentType: 'text/javascript; charset=utf-8',
-      body: readFileSync(resolve(repoRoot, 'packages/sdk/dist/watchbug-annotator.mjs')),
-    });
-  });
-
-  await clickLauncher(page);
-  await waitForComposer(page);
-
-  await page.evaluate(() => {
-    const button = document
-      .querySelector('watchbug-host')
-      ?.shadowRoot?.querySelector('button.composer-annotate') as HTMLButtonElement;
-    button.click();
-  });
-  const loading = await probeWidget(page);
-  expect(
-    loading.editorLoading,
-    '12 px spinner + editor.loading on the disabled button while the chunk fetches',
-  ).toBe(true);
-  expect(loading.annotateDisabled, 'the button is disabled mid-fetch').toBe(true);
-
-  await page.waitForFunction(
-    () => {
-      const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
-      return (
-        root?.querySelector('span.field-error[data-wb-error="editor"][data-shown="true"]') !==
-        null
-      );
-    },
-    null,
-    { timeout: 10_000 },
-  );
-  const failed = await probeWidget(page);
-  expect(failed.editorError, 'the locked load-error copy renders inline (OQ-4)').toBe(
-    "Couldn't load the editor.",
-  );
-  expect(failed.editorLoading, 'the loading state ends on failure').toBe(false);
-  expect(failed.annotateDisabled, 'never a dead button — the action re-enables (T-03-21)').toBe(
-    false,
-  );
-  expect(failed.editorOpen, 'no editor mounted from a failed fetch').toBe(false);
-  const hintText = await page.evaluate(
-    () =>
-      document
-        .querySelector('watchbug-host')
-        ?.shadowRoot?.querySelector(
-          'span.field-error[data-wb-error="editor-hint"][data-shown="true"]',
-        )
-        ?.textContent ?? '',
-  );
-  expect(hintText, 'with the solution hint beside it').toBe(
-    'Nothing was changed. Check your connection, then try again.',
-  );
-
-  // The retry: the memoised rejection was cleared, and the editor opens.
-  await openEditor(page);
-  const opened = await probeWidget(page);
-  expect(opened.editorOpen, 'a retry after a failed load succeeds (retryable memo)').toBe(true);
-  expect(opened.editorError).toBe('');
-});
 
 /* ------------------------------------------------------------------------- */
 /* ANN-02..04 rows — 03-05 Task 2 (arrow, rectangle, text on one geometry)    */
@@ -2074,139 +1085,6 @@ async function drawAndSend(
   return readOutgoingImage(page);
 }
 
-test('ANN-02: an arrow paints a shaft and a wider head', async ({ page, browserName }) => {
-  const tail: BitmapPoint = [40, 340];
-  const head: BitmapPoint = [420, 60];
-  const image = await drawAndSend(page, browserName, async () => {
-    await selectTool(page, 'arrow');
-    await dragOnBitmap(page, tail, head);
-  });
-  const ink = await analyzeInk(page, image, {
-    bands: [{ from: tail, to: head, halfWidth: 4 }],
-    boxes: [
-      { left: 30, top: 330, right: 52, bottom: 352 }, // tail cap
-      { left: 402, top: 52, right: 424, bottom: 74 }, // head body
-    ],
-    crosses: [
-      { from: tail, to: head, at: 0.5, reach: 12 }, // mid-shaft width
-      { from: tail, to: head, at: 0.977, reach: 12 }, // near the head base
-    ],
-  });
-  expect(ink.bands[0], 'ink runs along the shaft').toBeGreaterThanOrEqual(60);
-  expect(ink.boxes[0], 'ink at the tail').toBeGreaterThanOrEqual(3);
-  expect(ink.boxes[1], 'ink at the head').toBeGreaterThanOrEqual(20);
-  expect(
-    ink.crosses[1],
-    'the head is WIDER than the shaft (perpendicular ink counts)',
-  ).toBeGreaterThanOrEqual(ink.crosses[0] + 5);
-});
-
-test('ANN-03: a rectangle outlines its four edges and leaves the interior alone', async ({
-  page,
-  browserName,
-}) => {
-  // rectangle: a 3-logical-px navy background keeps the thin blue stroke
-  // comfortably inside the ink tolerance under WebP 4:2:0 (the gold half of
-  // the stub gradient would subsample a 1.7px blue line toward grey).
-  const a: BitmapPoint = [60, 40];
-  const b: BitmapPoint = [240, 160];
-  const image = await drawAndSend(page, browserName, async () => {
-    await selectTool(page, 'rectangle');
-    await dragOnBitmap(page, a, b);
-  });
-  const edge = (from: BitmapPoint, to: BitmapPoint) => ({ from, to, halfWidth: 4 });
-  const ink = await analyzeInk(page, image, {
-    bands: [
-      edge([70, 40], [230, 40]),
-      edge([240, 50], [240, 150]),
-      edge([70, 160], [230, 160]),
-      edge([60, 50], [60, 150]),
-    ],
-    // Sampled interior: the pure-gradient gap between palette blocks (col 1/2
-    // gap x 102..130, row 1/2 gap y 95..120) — no block pixels near the ink
-    // tolerance's noise floor, and >40 px from every edge stroke.
-    boxes: [{ left: 102, top: 95, right: 130, bottom: 120 }],
-  });
-  for (const [which, name] of ['top', 'right', 'bottom', 'left'].entries()) {
-    expect(ink.bands[which], `ink along the ${name} edge`).toBeGreaterThanOrEqual(60);
-  }
-  expect(ink.boxes[0], 'the sampled interior region carries no ink (outline only, no fill)').toBe(
-    0,
-  );
-});
-
-test('ANN-04: a text label is click-typed-confirmed without a modal', async ({
-  page,
-  browserName,
-}) => {
-  const image = await drawAndSend(page, browserName, async () => {
-    await typeLabel(page, [110, 90], 'primera', 'enter');
-    await typeLabel(page, [110, 130], 'segunda', 'outside');
-    // Escape CANCELS: a third label typed then dismissed commits nothing —
-    // and it does NOT close the editor (the input owns Escape while open).
-    await typeLabel(page, [60, 250], 'borrador', 'escape');
-    const stillOpen = await probeWidget(page);
-    expect(stillOpen.editorOpen, 'Escape in the label input does not close the editor').toBe(true);
-    // No modal was OPENED by the label flow (P3-D-08): the only surface the
-    // walk touched is the inline input. The census counts OPEN modals only —
-    // 03-06's once-per-session mask confirm is permanently mounted with
-    // data-shown="false" (the same visibility hook the ANN-05 rows assert
-    // on), so a mounted-but-hidden dialog belonging to another tool is not
-    // a modal the text tool opened.
-    const modals = await page.evaluate(
-      () =>
-        document
-          .querySelector('watchbug-host')
-          ?.shadowRoot?.querySelectorAll(
-            '[role="dialog"][data-shown="true"], [role="alertdialog"][data-shown="true"]',
-          ).length ?? 0,
-    );
-    expect(modals, 'the text tool opens no modal').toBe(0);
-  });
-  const ink = await analyzeInk(page, image, {
-    boxes: [
-      { left: 104, top: 74, right: 230, bottom: 96 },
-      { left: 104, top: 114, right: 230, bottom: 136 },
-      { left: 54, top: 234, right: 140, bottom: 256 },
-    ],
-  });
-  expect(ink.boxes[0], 'the Enter-committed label rendered at its anchor').toBeGreaterThanOrEqual(8);
-  expect(
-    ink.boxes[1],
-    'the click-outside-committed label rendered at its anchor',
-  ).toBeGreaterThanOrEqual(8);
-  expect(ink.boxes[2], 'the Escape-cancelled label drew nothing at its anchor').toBe(0);
-});
-
-test('ANN-04 empty: confirming an empty label draws nothing', async ({ page, browserName }) => {
-  const image = await drawAndSend(page, browserName, async () => {
-    await typeLabel(page, [300, 80], '', 'enter');
-  });
-  const ink = await analyzeInk(page, image, {
-    boxes: [{ left: 294, top: 64, right: 360, bottom: 88 }],
-  });
-  expect(ink.boxes[0], 'an empty commit paints nothing').toBe(0);
-  const global = await analyzeImagePixels(page, image);
-  expect(global.accentCount, 'zero accent pixels anywhere: the decoded image is unchanged').toBe(0);
-});
-
-test('ANN-04 encoding: a non-ASCII label is drawn verbatim', async ({ page, browserName }) => {
-  const image = await drawAndSend(page, browserName, async () => {
-    await typeLabel(page, [110, 90], 'Añadir ✓', 'enter');
-  });
-  const ink = await analyzeInk(page, image, {
-    boxes: [
-      { left: 104, top: 74, right: 200, bottom: 96 },
-      { left: 132, top: 74, right: 200, bottom: 96 },
-    ],
-  });
-  expect(ink.boxes[0], 'the label rendered from its anchor').toBeGreaterThanOrEqual(8);
-  expect(
-    ink.boxes[1],
-    'ink reaches the label END (the trailing check glyph) — no truncation, no escaping',
-  ).toBeGreaterThanOrEqual(3);
-});
-
 /* ------------------------------------------------------------------------- */
 /* ANN-06 + WDG-06 editor rows — 03-05 Task 3                                 */
 /* ------------------------------------------------------------------------- */
@@ -2223,82 +1101,6 @@ const UNDO_BANDS = [
   { from: STROKE_A_FROM, to: STROKE_A_TO, halfWidth: 4 },
   { from: STROKE_B_FROM, to: STROKE_B_TO, halfWidth: 4 },
 ];
-
-test('ANN-06: undo removes one stroke and never a mask', async ({ page, browserName }) => {
-  const image = await drawAndSend(page, browserName, async () => {
-    await dragOnBitmap(page, STROKE_A_FROM, STROKE_A_TO);
-    await dragOnBitmap(page, STROKE_B_FROM, STROKE_B_TO);
-    await undo(page);
-  });
-  const ink = await analyzeInk(page, image, { bands: UNDO_BANDS });
-  expect(ink.bands[0], 'the first stroke survives one undo').toBeGreaterThanOrEqual(60);
-  expect(
-    ink.bands[1],
-    'the undone stroke is gone entirely (strokes only; masks never exist on this stack — P3-D-12)',
-  ).toBe(0);
-});
-
-test('ANN-06: Ctrl/Cmd+Z matches the undo button', async ({ page, browserName }) => {
-  const image = await drawAndSend(page, browserName, async () => {
-    await dragOnBitmap(page, STROKE_A_FROM, STROKE_A_TO);
-    await dragOnBitmap(page, STROKE_B_FROM, STROKE_B_TO);
-    await undoKey(page, 'Control');
-  });
-  const ink = await analyzeInk(page, image, { bands: UNDO_BANDS });
-  expect(ink.bands[0], 'the keyboard path keeps the first stroke').toBeGreaterThanOrEqual(60);
-  expect(ink.bands[1], 'the keyboard path removed exactly one stroke').toBe(0);
-});
-
-test.describe('WDG-06 editor', () => {
-  test.use({ locale: 'es-ES' });
-
-  test('WDG-06 editor: the editor chrome localises', async ({ page, browserName }) => {
-    await installCaptureStub(page, browserName);
-    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
-    await waitForWidget(page);
-
-    await clickLauncher(page);
-    await waitForComposer(page);
-    const composing = await probeWidget(page);
-    expect(composing.wrapLang, 'core resolves es before the chunk exists').toBe('es');
-    expect(composing.composerHeading).toBe('Reportar un error');
-
-    await openEditor(page);
-    const probe = await probeWidget(page);
-    expect(probe.screen).toBe('editor');
-    expect(probe.editorTitle, 'the editor dictionary resolves the locale core passed in').toBe(
-      'Anotar',
-    );
-    const chrome = await page.evaluate(() => {
-      const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
-      const labels: Record<string, string> = {};
-      for (const button of [...(root?.querySelectorAll('button.tool') ?? [])]) {
-        const tool = button.getAttribute('data-wb-tool') ?? '';
-        labels[tool] = button.getAttribute('aria-label') ?? '';
-      }
-      const done = (root?.querySelector('button.editor-done') as HTMLButtonElement | null)
-        ?.textContent;
-      const canvasLabel = root
-        ?.querySelector('canvas.editor-canvas')
-        ?.getAttribute('aria-label');
-      const undoTitle = root
-        ?.querySelector('button.tool[data-wb-tool="undo"]')
-        ?.getAttribute('title');
-      return { labels, done: done ?? '', canvasLabel: canvasLabel ?? '', undoTitle: undoTitle ?? '' };
-    });
-    expect(chrome.labels, 'every tool label renders in Spanish (WDG-06 editor)').toEqual({
-      freehand: 'Dibujar',
-      arrow: 'Flecha',
-      rectangle: 'Rectángulo',
-      text: 'Texto',
-      mask: 'Enmascarar',
-      undo: 'Deshacer',
-    });
-    expect(chrome.done).toBe('Listo');
-    expect(chrome.canvasLabel).toBe('Captura con anotaciones');
-    expect(chrome.undoTitle, 'the title attribute re-renders with the aria-label').toBe('Deshacer');
-  });
-});
 
 /* ------------------------------------------------------------------------- */
 /* PRV-04 — the user mask, proven at artifact level (03-06 Task 1, CA-02)     */
@@ -2437,37 +1239,6 @@ async function maskAndSend(
   return { image, masked, bitmap, viewport, frame };
 }
 
-test('PRV-04 CA-02: a user mask destroys the region and its boundary ring — zero original pixels inside the mask rect and on its 1-px ring, flat opaque fill inside, control region untouched', async ({
-  page,
-  browserName,
-}) => {
-  let committed: MaskDragRect | null = null;
-  const { image, viewport, bitmap, frame } = await maskAndSend(page, browserName, async (asked) => {
-    committed = await maskDrag(page, asked);
-  });
-  const mask = committed as unknown as MaskDragRect;
-  // The committed rect covers the asked rect (the marker's own bitmap rect)
-  // and the outward pad stays inside one CSS pixel of quantization — at DPR 1
-  // where CSS pixels are finer than this frame's bitmap pixels the two are
-  // byte-identical.
-  expect(mask.left, 'the committed rect covers the asked left edge').toBeLessThanOrEqual(
-    bitmap.left,
-  );
-  expect(mask.top).toBeLessThanOrEqual(bitmap.top);
-  expect(mask.right).toBeGreaterThanOrEqual(bitmap.right);
-  expect(mask.bottom).toBeGreaterThanOrEqual(bitmap.bottom);
-  const report = await analyzeRedaction(page, image, {
-    viewport,
-    masked: cssOfBitmap(mask, viewport, frame),
-    control: REDACTION_CONTROL_RECT,
-  });
-  // The default tracer frame reaches the wire unscaled — the mask rows
-  // exercise the same 640x360 geometry the PRV-02 artifact rows assert on.
-  expect(report.width).toBe(640);
-  expect(report.height).toBe(360);
-  expectMaskedAndTargeted(report);
-});
-
 /* ------------------------------------------------------------------------- */
 /* ANN-05 + pixelate — 03-06 Task 2 (session confirmation, opt-in pixelate)   */
 /* ------------------------------------------------------------------------- */
@@ -2476,292 +1247,9 @@ test('PRV-04 CA-02: a user mask destroys the region and its boundary ring — ze
  * marker, the control region and the moving dot on the 640x360 default frame. */
 const MASK_B_RECT = { left: 320, top: 240, right: 440, bottom: 280 };
 
-test('ANN-05: the first mask asks, later masks do not', async ({ page, browserName }) => {
-  let firstRect: MaskDragRect | null = null;
-  let secondRect: MaskDragRect | null = null;
-  const { image, viewport, frame } = await maskAndSend(page, browserName, async (asked) => {
-    // First drag: the alertdialog comes up over the editor.
-    firstRect = await dragMaskOnBitmap(
-      page,
-      [asked.left, asked.top],
-      [asked.right - 1, asked.bottom - 1],
-    );
-    const asking = await expectMaskConfirmation(page, true);
-    expect(asking.role, 'role="alertdialog"').toBe('alertdialog');
-    expect(asking.ariaModal, 'aria-modal="true"').toBe('true');
-    expect(asking.focusOnAction, 'focus moves to the Mask action on open').toBe(true);
-
-    // The locked copy renders in full and wraps inside the 360 px dialog
-    // (UI-SPEC long-text: word-boundary wraps, no truncation).
-    const dialogCopy = await page.evaluate(() => {
-      const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
-      const dialog = root?.querySelector('div.mask-dialog') as HTMLElement | null;
-      const title = (dialog?.querySelector('.mask-dialog-title') ?? null) as HTMLElement | null;
-      const body = (dialog?.querySelector('.mask-dialog-body') ?? null) as HTMLElement | null;
-      if (dialog === null || title === null || body === null) {
-        throw new Error('ANN-05: dialog parts missing');
-      }
-      const lineHeight = Number.parseFloat(window.getComputedStyle(body).lineHeight);
-      return {
-        title: title.textContent ?? '',
-        body: body.textContent ?? '',
-        dialogWidth: dialog.getBoundingClientRect().width,
-        // "wraps" = the body renders on more than one line at 360 px.
-        wrapped: body.getBoundingClientRect().height > lineHeight * 1.5,
-        overflowing: body.scrollWidth > body.clientWidth,
-      };
-    });
-    expect(dialogCopy.title, 'the core-resolved mask.confirm.title renders').toBe(
-      'Masking is permanent',
-    );
-    expect(
-      dialogCopy.body.endsWith('by you or anyone else.'),
-      'the full mask.confirm.body copy renders (no truncation)',
-    ).toBe(true);
-    expect(dialogCopy.dialogWidth, 'the dialog stays inside its 360 px budget').toBeLessThanOrEqual(
-      360,
-    );
-    expect(dialogCopy.wrapped, 'the body copy wraps at word boundaries').toBe(true);
-    expect(dialogCopy.overflowing, 'and never overflows the dialog box').toBe(false);
-
-    await clickMaskDialogButton(page, 'action');
-    const closed = await expectMaskConfirmation(page, false);
-    expect(closed.focusOnMaskTool, 'focus returns to the mask tool button on close').toBe(true);
-
-    // Second drag: no dialog, baked on release.
-    secondRect = await dragMaskOnBitmap(
-      page,
-      [MASK_B_RECT.left, MASK_B_RECT.top],
-      [MASK_B_RECT.right - 1, MASK_B_RECT.bottom - 1],
-    );
-    const afterSecond = await expectMaskConfirmation(page, false);
-    expect(afterSecond.visible, 'the second mask of the session never re-asks').toBe(false);
-  });
-
-  // Both masks landed in the encoded artifact: the marker destroyed (the
-  // confirmed first mask) AND the second rect filled (the silent later one).
-  const first = await analyzeRedaction(page, image, {
-    viewport,
-    masked: cssOfBitmap(firstRect as unknown as MaskDragRect, viewport, frame),
-    control: REDACTION_CONTROL_RECT,
-  });
-  expectMaskedAndTargeted(first);
-  const second = await analyzeRedaction(page, image, {
-    viewport,
-    masked: cssOfBitmap(secondRect as unknown as MaskDragRect, viewport, frame),
-    control: REDACTION_CONTROL_RECT,
-  });
-  expectMaskedAndTargeted(second);
-});
-
-test('ANN-05 Not now: refusing the first mask bakes nothing, Escape does not close the editor', async ({
-  page,
-  browserName,
-}) => {
-  const { image, masked, viewport } = await maskAndSend(page, browserName, async (bitmap) => {
-    await dragMaskOnBitmap(page, [bitmap.left, bitmap.top], [bitmap.right - 1, bitmap.bottom - 1]);
-    const asking = await expectMaskConfirmation(page, true);
-    expect(asking.focusOnAction, 'Escape arrives while the Mask action owns focus').toBe(true);
-    // `Escape` means `Not now` — and ONLY the dialog acts on it (Pitfall 11 /
-    // T-03-26): the editor must not also dismiss.
-    await page.keyboard.press('Escape');
-    await expectMaskConfirmation(page, false);
-    const screen = await page.evaluate(
-      () =>
-        document.querySelector('watchbug-host')?.shadowRoot?.querySelector('.wrap')?.getAttribute(
-          'data-wb-screen',
-        ) ?? '',
-    );
-    expect(screen, 'the editor is still open after the dialog ate Escape').toBe('editor');
-    const stillAsking = await page.evaluate(() => {
-      const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
-      return root?.querySelector('div.mask-dialog[data-shown="true"]') !== null;
-    });
-    expect(stillAsking, 'and the dialog is gone').toBe(false);
-  });
-
-  // The refused region survives untouched in the decoded bytes: the pending
-  // mask was cancelled, nothing was baked.
-  const report = await analyzeRedaction(page, image, {
-    viewport,
-    masked,
-    control: REDACTION_CONTROL_RECT,
-  });
-  expectStillVisible(report);
-});
-
-test('ANN-05 mask-mode: the toggle shows only for the mask tool and defaults to fill', async ({
-  page,
-  browserName,
-}) => {
-  await installCaptureStub(page, browserName);
-  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
-  await waitForWidget(page);
-  await clickLauncher(page);
-  await waitForComposer(page);
-  await openEditor(page);
-
-  const hidden = await maskModeState(page);
-  expect(hidden.visible, 'no toggle while freehand is active').toBe(false);
-  expect(hidden.pressed, 'fill is the default, selected before the mask tool ever opens').toBe(
-    'fill',
-  );
-
-  await selectTool(page, 'mask');
-  const shown = await maskModeState(page);
-  expect(shown.visible, 'the pair appears while the mask tool is active').toBe(true);
-  expect(shown.pressed).toBe('fill');
-
-  await setMaskMode(page, 'pixelate');
-  const pixelated = await maskModeState(page);
-  expect(pixelated.pressed, 'the selection lands on pixelate').toBe('pixelate');
-
-  await selectTool(page, 'freehand');
-  const away = await maskModeState(page);
-  expect(away.visible, 'and hides again with the tool').toBe(false);
-
-  await selectTool(page, 'mask');
-  const back = await maskModeState(page);
-  expect(back.pressed, 'the mode survives between masks of the session').toBe('pixelate');
-});
-
-test('PRV-04 pixelate: block-averaged, grid-snapped and opaque', async ({ page, browserName }) => {
-  let blockPx = 0;
-  const expected = { left: 0, top: 0, right: 0, bottom: 0 };
-  // H-1's own scale for the tracer frame: the value core derives
-  // (`transformFor(frame, window).scaleX`) and threads onto the draft, which
-  // the editor multiplies the measured cap height by (HG-02). Read in-page so
-  // it is the same `innerWidth` the SDK reads, not an assumption about it.
-  const bitmapPerCssPx = await page.evaluate(
-    (frameWidth) => frameWidth / Math.max(1, window.innerWidth),
-    MASK_FRAME.width,
-  );
-  const { image } = await maskAndSend(
-    page,
-    browserName,
-    async (asked) => {
-      // Opt in behind the toggle (P3-D-10), then drive the same drag.
-      blockPx = await measureBlockSize(page, bitmapPerCssPx);
-      await setMaskMode(page, 'pixelate');
-      const committed = await maskDrag(page, asked);
-      const snapped = snapOutwardExpected(committed, blockPx);
-      expected.left = snapped.left;
-      expected.top = snapped.top;
-      expected.right = snapped.right;
-      expected.bottom = snapped.bottom;
-    },
-    { forcePng: true },
-  );
-
-  // The independently-snapped grid: outward-snapped anchors on grid lines.
-  // The uniformity check below then has teeth: a mask that did NOT snap (or
-  // snapped to a different grid) leaves raw gradient inside a full block of
-  // this one, and "every block internally uniform" fails on the edge blocks.
-  expect(expected.left % blockPx, 'the top-left anchors sit on the block grid').toBe(0);
-  expect(expected.top % blockPx, 'the top-right anchors sit on the block grid').toBe(0);
-  expect(expected.right % blockPx, 'the right edge sits on the block grid').toBe(0);
-  expect(expected.bottom % blockPx, 'the bottom edge sits on the block grid').toBe(0);
-  expect(expected.right, 'the snapped region is non-degenerate').toBeGreaterThan(expected.left);
-
-  const report = await analyzePixelation(page, image, expected, blockPx);
-  expect(report.pixels, 'the region holds real pixels').toBeGreaterThan(100);
-  expect(report.blockCount, 'the region tiles into full blocks').toBeGreaterThanOrEqual(4);
-  expect(report.notOpaque, 'every pixel of the region is alpha 255').toBe(0);
-  expect(report.nonUniformBlocks, 'every block is internally uniform (one mean)').toBe(0);
-  expect(
-    report.distinctColours,
-    'at most one colour per block — the block average, not fine detail',
-  ).toBeLessThanOrEqual(report.blockCount);
-  expect(
-    report.distinctColours,
-    'more than one colour: pixelate AVERAGED, it did not flat-fill',
-  ).toBeGreaterThan(1);
-  expect(
-    report.blackish / report.pixels,
-    'a block over the gradient keeps the gradient colour — no flat black',
-  ).toBeLessThan(0.5);
-});
-
 /* ------------------------------------------------------------------------- */
 /* PRV-04 stroke / ANN-06 masks / PRV-04 DPR — 03-06 Task 3                   */
 /* ------------------------------------------------------------------------- */
-
-test('PRV-04 stroke: a freehand drawn across the mask cannot resurrect it', async ({
-  page,
-  browserName,
-}) => {
-  let maskRect: MaskDragRect | null = null;
-  let strokeMid = 0;
-  const { image, viewport, frame } = await maskAndSend(page, browserName, async (asked) => {
-    maskRect = await maskDrag(page, asked);
-    // Now draw a freehand stroke straight ACROSS the masked region (T3 order
-    // says the patch replays AFTER the ink — inside the region and on its
-    // ring, the destruction must still hold in the exported bytes).
-    await selectTool(page, 'freehand');
-    const mid = Math.round((maskRect.top + maskRect.bottom) / 2);
-    strokeMid = mid;
-    await dragOnBitmap(page, [maskRect.left - 40, mid], [maskRect.right + 40, mid]);
-  });
-  const mask = maskRect as unknown as MaskDragRect;
-
-  // Non-vacuity: the stroke really crossed the mask and its ink survives in
-  // the bytes OUTSIDE the masked region (the tails either side).
-  const ink = await analyzeInk(page, image, {
-    bands: [
-      { from: [mask.left - 36, strokeMid], to: [mask.left - 10, strokeMid], halfWidth: 4 },
-      { from: [mask.right + 10, strokeMid], to: [mask.right + 36, strokeMid], halfWidth: 4 },
-    ],
-  });
-  expect(ink.bands[0], 'the stroke tail left of the mask is visible').toBeGreaterThanOrEqual(8);
-  expect(ink.bands[1], 'the stroke tail right of the mask is visible').toBeGreaterThanOrEqual(8);
-
-  // Inside the region and on its ring, the mask won: zero original pixels,
-  // the flat fill still at >= 0.98 of the interior — the ink physically could
-  // not sit above the patch (rebakeMasks after every stroke, patch replay
-  // last in encodeFinal).
-  const report = await analyzeRedaction(page, image, {
-    viewport,
-    masked: cssOfBitmap(mask, viewport, frame),
-    control: REDACTION_CONTROL_RECT,
-  });
-  expectMaskedAndTargeted(report);
-});
-
-test('ANN-06 masks: undo removes strokes and never a mask', async ({ page, browserName }) => {
-  let maskRect: MaskDragRect | null = null;
-  const { image, viewport, frame } = await maskAndSend(page, browserName, async (asked) => {
-    maskRect = await maskDrag(page, asked);
-    await selectTool(page, 'freehand');
-    // Two strokes, undone away…
-    await dragOnBitmap(page, STROKE_A_FROM, STROKE_A_TO);
-    await dragOnBitmap(page, STROKE_B_FROM, STROKE_B_TO);
-    await undo(page);
-    await undo(page);
-    // …then one survivor, so the "strokes are gone" assertion cannot pass
-    // vacuously (undo worked and the ink path works; the survivor proves it).
-    await dragOnBitmap(page, [60, 220], [240, 220]);
-  });
-  const mask = maskRect as unknown as MaskDragRect;
-  const ink = await analyzeInk(page, image, {
-    bands: [
-      ...UNDO_BANDS,
-      { from: [60, 220], to: [240, 220], halfWidth: 4 },
-    ],
-  });
-  expect(ink.bands[0], 'the first undone stroke is gone entirely').toBe(0);
-  expect(ink.bands[1], 'the second undone stroke is gone entirely').toBe(0);
-  expect(ink.bands[2], 'the survivor stroke is on the wire').toBeGreaterThanOrEqual(60);
-
-  // The masked region survived both undos: the undo stack never held a mask
-  // (append-only `masks`, strokes-only `pop`) and the redraw source holds no
-  // original pixels to resurrect (bakeMask wrote the destroyed bytes into it).
-  const report = await analyzeRedaction(page, image, {
-    viewport,
-    masked: cssOfBitmap(mask, viewport, frame),
-    control: REDACTION_CONTROL_RECT,
-  });
-  expectMaskedAndTargeted(report);
-});
 
 /**
  * One DPR matrix row: mask the marker at `deviceScaleFactor` dpr on a
@@ -2810,50 +1298,6 @@ async function runDprMaskRow(
   expect(report.width).toBe(expectedWidth);
   expectMaskedAndTargeted(report, minInteriorBlack);
 }
-
-test.describe('PRV-04 DPR (deviceScaleFactor: 1)', () => {
-  test.use({ deviceScaleFactor: 1 });
-
-  test('PRV-04 DPR: devicePixelRatio 1 masks land where they were dragged — rect and 1-px ring clean', async ({
-    page,
-    browserName,
-  }) => {
-    await runDprMaskRow(page, browserName, 1, { width: 1280, height: 720 }, 1280);
-  });
-});
-
-test.describe('PRV-04 DPR (deviceScaleFactor: 1.25)', () => {
-  test.use({ deviceScaleFactor: 1.25 });
-
-  test('PRV-04 DPR: devicePixelRatio 1.25 (non-integer scale) masks land where they were dragged', async ({
-    page,
-    browserName,
-  }) => {
-    await runDprMaskRow(page, browserName, 1.25, { width: 1600, height: 900 }, 1600);
-  });
-});
-
-test.describe('PRV-04 DPR (deviceScaleFactor: 2)', () => {
-  test.use({ deviceScaleFactor: 2 });
-
-  test('PRV-04 DPR: devicePixelRatio 2 masks land where they were dragged', async ({
-    page,
-    browserName,
-  }) => {
-    await runDprMaskRow(page, browserName, 2, { width: 2560, height: 1440 }, 2560);
-  });
-});
-
-test.describe('PRV-04 DPR (deviceScaleFactor: 3)', () => {
-  test.use({ deviceScaleFactor: 3 });
-
-  test('PRV-04 DPR: devicePixelRatio 3 masks before the DPR-2 encode clamp — rect and ring stay clean', async ({
-    page,
-    browserName,
-  }) => {
-    await runDprMaskRow(page, browserName, 3, { width: 3840, height: 2160 }, 2560, 0.9);
-  });
-});
 
 /**
  * The one journey that walks the whole stack: a launcher gesture produces a real
@@ -4393,5 +2837,1631 @@ test.describe('J-11 — Payload privacy and self-hosting (SEC-03)', () => {
       destinations,
       'the report must never be posted to the loading script origin',
     ).not.toContain('http://localhost:8080/api/incidents');
+  });
+});
+
+/**
+ * The user's own mask is where SEC-02 is decided: a mask must destroy its region
+ * **now**, in the working bitmap and in the redraw source, so undo or a later stroke
+ * cannot resurrect the pixels. Every row here decodes the delivered image and proves
+ * the region and its 1-px boundary ring carry none of the original colours — including
+ * the DPR matrix, where the mask is burned in before the encode clamp resamples it.
+ *
+ * The masking **arithmetic** (block floor, grid snap, block mean, flat fill) is pure and
+ * is pinned in `tests/unit/mask-geometry.test.ts`; the destruction proof stays here
+ * (R-19, CA-02).
+ */
+test.describe('J-05 — Manual mask (tier 2/3): the destructive bake', () => {
+  test('PRV-04 CA-02: a user mask destroys the region and its boundary ring — zero original pixels inside the mask rect and on its 1-px ring, flat opaque fill inside, control region untouched', async ({
+    page,
+    browserName,
+  }) => {
+    let committed: MaskDragRect | null = null;
+    const { image, viewport, bitmap, frame } = await maskAndSend(page, browserName, async (asked) => {
+      committed = await maskDrag(page, asked);
+    });
+    const mask = committed as unknown as MaskDragRect;
+    // The committed rect covers the asked rect (the marker's own bitmap rect)
+    // and the outward pad stays inside one CSS pixel of quantization — at DPR 1
+    // where CSS pixels are finer than this frame's bitmap pixels the two are
+    // byte-identical.
+    expect(mask.left, 'the committed rect covers the asked left edge').toBeLessThanOrEqual(
+      bitmap.left,
+    );
+    expect(mask.top).toBeLessThanOrEqual(bitmap.top);
+    expect(mask.right).toBeGreaterThanOrEqual(bitmap.right);
+    expect(mask.bottom).toBeGreaterThanOrEqual(bitmap.bottom);
+    const report = await analyzeRedaction(page, image, {
+      viewport,
+      masked: cssOfBitmap(mask, viewport, frame),
+      control: REDACTION_CONTROL_RECT,
+    });
+    // The default tracer frame reaches the wire unscaled — the mask rows
+    // exercise the same 640x360 geometry the PRV-02 artifact rows assert on.
+    expect(report.width).toBe(640);
+    expect(report.height).toBe(360);
+    expectMaskedAndTargeted(report);
+  });
+
+  test('ANN-05: the first mask asks, later masks do not', async ({ page, browserName }) => {
+    let firstRect: MaskDragRect | null = null;
+    let secondRect: MaskDragRect | null = null;
+    const { image, viewport, frame } = await maskAndSend(page, browserName, async (asked) => {
+      // First drag: the alertdialog comes up over the editor.
+      firstRect = await dragMaskOnBitmap(
+        page,
+        [asked.left, asked.top],
+        [asked.right - 1, asked.bottom - 1],
+      );
+      const asking = await expectMaskConfirmation(page, true);
+      expect(asking.role, 'role="alertdialog"').toBe('alertdialog');
+      expect(asking.ariaModal, 'aria-modal="true"').toBe('true');
+      expect(asking.focusOnAction, 'focus moves to the Mask action on open').toBe(true);
+
+      // The locked copy renders in full and wraps inside the 360 px dialog
+      // (UI-SPEC long-text: word-boundary wraps, no truncation).
+      const dialogCopy = await page.evaluate(() => {
+        const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
+        const dialog = root?.querySelector('div.mask-dialog') as HTMLElement | null;
+        const title = (dialog?.querySelector('.mask-dialog-title') ?? null) as HTMLElement | null;
+        const body = (dialog?.querySelector('.mask-dialog-body') ?? null) as HTMLElement | null;
+        if (dialog === null || title === null || body === null) {
+          throw new Error('ANN-05: dialog parts missing');
+        }
+        const lineHeight = Number.parseFloat(window.getComputedStyle(body).lineHeight);
+        return {
+          title: title.textContent ?? '',
+          body: body.textContent ?? '',
+          dialogWidth: dialog.getBoundingClientRect().width,
+          // "wraps" = the body renders on more than one line at 360 px.
+          wrapped: body.getBoundingClientRect().height > lineHeight * 1.5,
+          overflowing: body.scrollWidth > body.clientWidth,
+        };
+      });
+      expect(dialogCopy.title, 'the core-resolved mask.confirm.title renders').toBe(
+        'Masking is permanent',
+      );
+      expect(
+        dialogCopy.body.endsWith('by you or anyone else.'),
+        'the full mask.confirm.body copy renders (no truncation)',
+      ).toBe(true);
+      expect(dialogCopy.dialogWidth, 'the dialog stays inside its 360 px budget').toBeLessThanOrEqual(
+        360,
+      );
+      expect(dialogCopy.wrapped, 'the body copy wraps at word boundaries').toBe(true);
+      expect(dialogCopy.overflowing, 'and never overflows the dialog box').toBe(false);
+
+      await clickMaskDialogButton(page, 'action');
+      const closed = await expectMaskConfirmation(page, false);
+      expect(closed.focusOnMaskTool, 'focus returns to the mask tool button on close').toBe(true);
+
+      // Second drag: no dialog, baked on release.
+      secondRect = await dragMaskOnBitmap(
+        page,
+        [MASK_B_RECT.left, MASK_B_RECT.top],
+        [MASK_B_RECT.right - 1, MASK_B_RECT.bottom - 1],
+      );
+      const afterSecond = await expectMaskConfirmation(page, false);
+      expect(afterSecond.visible, 'the second mask of the session never re-asks').toBe(false);
+    });
+
+    // Both masks landed in the encoded artifact: the marker destroyed (the
+    // confirmed first mask) AND the second rect filled (the silent later one).
+    const first = await analyzeRedaction(page, image, {
+      viewport,
+      masked: cssOfBitmap(firstRect as unknown as MaskDragRect, viewport, frame),
+      control: REDACTION_CONTROL_RECT,
+    });
+    expectMaskedAndTargeted(first);
+    const second = await analyzeRedaction(page, image, {
+      viewport,
+      masked: cssOfBitmap(secondRect as unknown as MaskDragRect, viewport, frame),
+      control: REDACTION_CONTROL_RECT,
+    });
+    expectMaskedAndTargeted(second);
+  });
+
+  test('ANN-05 Not now: refusing the first mask bakes nothing, Escape does not close the editor', async ({
+    page,
+    browserName,
+  }) => {
+    const { image, masked, viewport } = await maskAndSend(page, browserName, async (bitmap) => {
+      await dragMaskOnBitmap(page, [bitmap.left, bitmap.top], [bitmap.right - 1, bitmap.bottom - 1]);
+      const asking = await expectMaskConfirmation(page, true);
+      expect(asking.focusOnAction, 'Escape arrives while the Mask action owns focus').toBe(true);
+      // `Escape` means `Not now` — and ONLY the dialog acts on it (Pitfall 11 /
+      // T-03-26): the editor must not also dismiss.
+      await page.keyboard.press('Escape');
+      await expectMaskConfirmation(page, false);
+      const screen = await page.evaluate(
+        () =>
+          document.querySelector('watchbug-host')?.shadowRoot?.querySelector('.wrap')?.getAttribute(
+            'data-wb-screen',
+          ) ?? '',
+      );
+      expect(screen, 'the editor is still open after the dialog ate Escape').toBe('editor');
+      const stillAsking = await page.evaluate(() => {
+        const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
+        return root?.querySelector('div.mask-dialog[data-shown="true"]') !== null;
+      });
+      expect(stillAsking, 'and the dialog is gone').toBe(false);
+    });
+
+    // The refused region survives untouched in the decoded bytes: the pending
+    // mask was cancelled, nothing was baked.
+    const report = await analyzeRedaction(page, image, {
+      viewport,
+      masked,
+      control: REDACTION_CONTROL_RECT,
+    });
+    expectStillVisible(report);
+  });
+
+  test('ANN-05 mask-mode: the toggle shows only for the mask tool and defaults to fill', async ({
+    page,
+    browserName,
+  }) => {
+    await installCaptureStub(page, browserName);
+    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+    await waitForWidget(page);
+    await clickLauncher(page);
+    await waitForComposer(page);
+    await openEditor(page);
+
+    const hidden = await maskModeState(page);
+    expect(hidden.visible, 'no toggle while freehand is active').toBe(false);
+    expect(hidden.pressed, 'fill is the default, selected before the mask tool ever opens').toBe(
+      'fill',
+    );
+
+    await selectTool(page, 'mask');
+    const shown = await maskModeState(page);
+    expect(shown.visible, 'the pair appears while the mask tool is active').toBe(true);
+    expect(shown.pressed).toBe('fill');
+
+    await setMaskMode(page, 'pixelate');
+    const pixelated = await maskModeState(page);
+    expect(pixelated.pressed, 'the selection lands on pixelate').toBe('pixelate');
+
+    await selectTool(page, 'freehand');
+    const away = await maskModeState(page);
+    expect(away.visible, 'and hides again with the tool').toBe(false);
+
+    await selectTool(page, 'mask');
+    const back = await maskModeState(page);
+    expect(back.pressed, 'the mode survives between masks of the session').toBe('pixelate');
+  });
+
+  test('PRV-04 pixelate: block-averaged, grid-snapped and opaque', async ({ page, browserName }) => {
+    let blockPx = 0;
+    const expected = { left: 0, top: 0, right: 0, bottom: 0 };
+    // H-1's own scale for the tracer frame: the value core derives
+    // (`transformFor(frame, window).scaleX`) and threads onto the draft, which
+    // the editor multiplies the measured cap height by (HG-02). Read in-page so
+    // it is the same `innerWidth` the SDK reads, not an assumption about it.
+    const bitmapPerCssPx = await page.evaluate(
+      (frameWidth) => frameWidth / Math.max(1, window.innerWidth),
+      MASK_FRAME.width,
+    );
+    const { image } = await maskAndSend(
+      page,
+      browserName,
+      async (asked) => {
+        // Opt in behind the toggle (P3-D-10), then drive the same drag.
+        blockPx = await measureBlockSize(page, bitmapPerCssPx);
+        await setMaskMode(page, 'pixelate');
+        const committed = await maskDrag(page, asked);
+        const snapped = snapOutwardExpected(committed, blockPx);
+        expected.left = snapped.left;
+        expected.top = snapped.top;
+        expected.right = snapped.right;
+        expected.bottom = snapped.bottom;
+      },
+      { forcePng: true },
+    );
+
+    // The independently-snapped grid: outward-snapped anchors on grid lines.
+    // The uniformity check below then has teeth: a mask that did NOT snap (or
+    // snapped to a different grid) leaves raw gradient inside a full block of
+    // this one, and "every block internally uniform" fails on the edge blocks.
+    expect(expected.left % blockPx, 'the top-left anchors sit on the block grid').toBe(0);
+    expect(expected.top % blockPx, 'the top-right anchors sit on the block grid').toBe(0);
+    expect(expected.right % blockPx, 'the right edge sits on the block grid').toBe(0);
+    expect(expected.bottom % blockPx, 'the bottom edge sits on the block grid').toBe(0);
+    expect(expected.right, 'the snapped region is non-degenerate').toBeGreaterThan(expected.left);
+
+    const report = await analyzePixelation(page, image, expected, blockPx);
+    expect(report.pixels, 'the region holds real pixels').toBeGreaterThan(100);
+    expect(report.blockCount, 'the region tiles into full blocks').toBeGreaterThanOrEqual(4);
+    expect(report.notOpaque, 'every pixel of the region is alpha 255').toBe(0);
+    expect(report.nonUniformBlocks, 'every block is internally uniform (one mean)').toBe(0);
+    expect(
+      report.distinctColours,
+      'at most one colour per block — the block average, not fine detail',
+    ).toBeLessThanOrEqual(report.blockCount);
+    expect(
+      report.distinctColours,
+      'more than one colour: pixelate AVERAGED, it did not flat-fill',
+    ).toBeGreaterThan(1);
+    expect(
+      report.blackish / report.pixels,
+      'a block over the gradient keeps the gradient colour — no flat black',
+    ).toBeLessThan(0.5);
+  });
+
+  test('PRV-04 stroke: a freehand drawn across the mask cannot resurrect it', async ({
+    page,
+    browserName,
+  }) => {
+    let maskRect: MaskDragRect | null = null;
+    let strokeMid = 0;
+    const { image, viewport, frame } = await maskAndSend(page, browserName, async (asked) => {
+      maskRect = await maskDrag(page, asked);
+      // Now draw a freehand stroke straight ACROSS the masked region (T3 order
+      // says the patch replays AFTER the ink — inside the region and on its
+      // ring, the destruction must still hold in the exported bytes).
+      await selectTool(page, 'freehand');
+      const mid = Math.round((maskRect.top + maskRect.bottom) / 2);
+      strokeMid = mid;
+      await dragOnBitmap(page, [maskRect.left - 40, mid], [maskRect.right + 40, mid]);
+    });
+    const mask = maskRect as unknown as MaskDragRect;
+
+    // Non-vacuity: the stroke really crossed the mask and its ink survives in
+    // the bytes OUTSIDE the masked region (the tails either side).
+    const ink = await analyzeInk(page, image, {
+      bands: [
+        { from: [mask.left - 36, strokeMid], to: [mask.left - 10, strokeMid], halfWidth: 4 },
+        { from: [mask.right + 10, strokeMid], to: [mask.right + 36, strokeMid], halfWidth: 4 },
+      ],
+    });
+    expect(ink.bands[0], 'the stroke tail left of the mask is visible').toBeGreaterThanOrEqual(8);
+    expect(ink.bands[1], 'the stroke tail right of the mask is visible').toBeGreaterThanOrEqual(8);
+
+    // Inside the region and on its ring, the mask won: zero original pixels,
+    // the flat fill still at >= 0.98 of the interior — the ink physically could
+    // not sit above the patch (rebakeMasks after every stroke, patch replay
+    // last in encodeFinal).
+    const report = await analyzeRedaction(page, image, {
+      viewport,
+      masked: cssOfBitmap(mask, viewport, frame),
+      control: REDACTION_CONTROL_RECT,
+    });
+    expectMaskedAndTargeted(report);
+  });
+
+  test('ANN-06 masks: undo removes strokes and never a mask', async ({ page, browserName }) => {
+    let maskRect: MaskDragRect | null = null;
+    const { image, viewport, frame } = await maskAndSend(page, browserName, async (asked) => {
+      maskRect = await maskDrag(page, asked);
+      await selectTool(page, 'freehand');
+      // Two strokes, undone away…
+      await dragOnBitmap(page, STROKE_A_FROM, STROKE_A_TO);
+      await dragOnBitmap(page, STROKE_B_FROM, STROKE_B_TO);
+      await undo(page);
+      await undo(page);
+      // …then one survivor, so the "strokes are gone" assertion cannot pass
+      // vacuously (undo worked and the ink path works; the survivor proves it).
+      await dragOnBitmap(page, [60, 220], [240, 220]);
+    });
+    const mask = maskRect as unknown as MaskDragRect;
+    const ink = await analyzeInk(page, image, {
+      bands: [
+        ...UNDO_BANDS,
+        { from: [60, 220], to: [240, 220], halfWidth: 4 },
+      ],
+    });
+    expect(ink.bands[0], 'the first undone stroke is gone entirely').toBe(0);
+    expect(ink.bands[1], 'the second undone stroke is gone entirely').toBe(0);
+    expect(ink.bands[2], 'the survivor stroke is on the wire').toBeGreaterThanOrEqual(60);
+
+    // The masked region survived both undos: the undo stack never held a mask
+    // (append-only `masks`, strokes-only `pop`) and the redraw source holds no
+    // original pixels to resurrect (bakeMask wrote the destroyed bytes into it).
+    const report = await analyzeRedaction(page, image, {
+      viewport,
+      masked: cssOfBitmap(mask, viewport, frame),
+      control: REDACTION_CONTROL_RECT,
+    });
+    expectMaskedAndTargeted(report);
+  });
+
+  test.describe('PRV-04 — deviceScaleFactor: 1', () => {
+    test.use({ deviceScaleFactor: 1 });
+    
+    test('PRV-04 DPR: devicePixelRatio 1 masks land where they were dragged — rect and 1-px ring clean', async ({
+      page,
+      browserName,
+    }) => {
+      await runDprMaskRow(page, browserName, 1, { width: 1280, height: 720 }, 1280);
+    });
+  });
+
+  test.describe('PRV-04 — deviceScaleFactor: 1.25', () => {
+    test.use({ deviceScaleFactor: 1.25 });
+    
+    test('PRV-04 DPR: devicePixelRatio 1.25 (non-integer scale) masks land where they were dragged', async ({
+      page,
+      browserName,
+    }) => {
+      await runDprMaskRow(page, browserName, 1.25, { width: 1600, height: 900 }, 1600);
+    });
+  });
+
+  test.describe('PRV-04 — deviceScaleFactor: 2', () => {
+    test.use({ deviceScaleFactor: 2 });
+    
+    test('PRV-04 DPR: devicePixelRatio 2 masks land where they were dragged', async ({
+      page,
+      browserName,
+    }) => {
+      await runDprMaskRow(page, browserName, 2, { width: 2560, height: 1440 }, 2560);
+    });
+  });
+
+  test.describe('PRV-04 — deviceScaleFactor: 3 (DPR clamp)', () => {
+    test.use({ deviceScaleFactor: 3 });
+    
+    test('PRV-04 DPR: devicePixelRatio 3 masks before the DPR-2 encode clamp — rect and ring stay clean', async ({
+      page,
+      browserName,
+    }) => {
+      await runDprMaskRow(page, browserName, 3, { width: 3840, height: 2160 }, 2560, 0.9);
+    });
+  });
+});
+
+/**
+ * The annotator as a tool: freehand ink follows the drag, an arrow has a shaft and a
+ * wider head, a rectangle outlines without filling, a label is typed straight onto the
+ * canvas, and undo pops exactly one stroke and never a mask.
+ *
+ * Each row reads the OUTGOING image and looks for the ink bands it drew (a real canvas
+ * is the only thing that can answer), and the recovery row needs a route-aborted chunk
+ * plus the editor's own DOM states.
+ */
+test.describe('J-06 — Full annotation: ink, shapes, labels, undo, lazy recovery', () => {
+  test('ANN-01: freehand ink follows the drag path', async ({ page, browserName }) => {
+    await installCaptureStub(page, browserName);
+    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+    await waitForWidget(page);
+
+    const calls = await interceptIncidentPosts(page, async () => ({
+      status: 201,
+      body: JSON.stringify({ id: INTERCEPTED_ID }),
+    }));
+
+    await clickLauncher(page);
+    await waitForComposer(page);
+
+    // The whole path at once: Annotate -> chunk fetch -> editor in the SAME
+    // shadow root -> one freehand drag -> Done -> the ink in the decoded
+    // outgoing image.
+    await openEditor(page);
+    const opened = await probeWidget(page);
+    expect(opened.screen).toBe('editor');
+    expect(opened.editorOpen).toBe(true);
+    expect(opened.activeTool, 'the default tool on open is freehand (P3-D-06)').toBe('freehand');
+    expect(
+      opened.editorCanvasWidth,
+      'the editor canvas carries the draft bitmap itself',
+    ).toBe(opened.composerPreviewWidth);
+    expect(opened.editorCanvasHeight).toBe(opened.composerPreviewHeight);
+    const styleCount = await page.evaluate(
+      () =>
+        document.querySelector('watchbug-host')?.shadowRoot?.querySelectorAll('style').length ?? 0,
+    );
+    expect(
+      styleCount,
+      'EDITOR_CSS lands on the core style element — one stylesheet, never adoptedStyleSheets (T-03-22)',
+    ).toBe(1);
+
+    // One diagonal drag across the frame, in BITMAP coordinates.
+    const from: BitmapPoint = [100, 260];
+    const to: BitmapPoint = [540, 60];
+    await dragOnBitmap(page, from, to);
+    await done(page);
+
+    const back = await probeWidget(page);
+    expect(back.screen, 'Done returns to the composer').toBe('composer');
+    expect(back.editorOpen, 'the editor unmounts on Done').toBe(false);
+    const previewInk = await page.evaluate(() => {
+      const canvas = document
+        .querySelector('watchbug-host')
+        ?.shadowRoot?.querySelector('canvas.composer-preview') as HTMLCanvasElement | null;
+      if (canvas === null) return -1;
+      const context = canvas.getContext('2d');
+      if (context === null) return -2;
+      const data = context.getImageData(0, 0, canvas.width, canvas.height).data;
+      let count = 0;
+      for (let at = 0; at < data.length; at += 4) {
+        const dr = data[at] - 0x2f;
+        const dg = data[at + 1] - 0x6f;
+        const db = data[at + 2] - 0xeb;
+        if (dr * dr + dg * dg + db * db <= 14400) count += 1;
+      }
+      return count;
+    });
+    expect(
+      previewInk,
+      'the preview redraws from the buffer the editor returned — the flattened ink is IN the draft (C-2)',
+    ).toBeGreaterThan(0);
+
+    await reviewAndSend(page);
+    await waitForHeadline(page, 'Report sent ✓', 15_000);
+    expect(calls, 'one annotated report leaves the browser exactly once').toHaveLength(1);
+
+    const image = await readOutgoingImage(page);
+    const ink = await analyzeInk(page, image, {
+      bands: [{ from, to, halfWidth: 4 }],
+      // A sampled region far from the path over the navy side of the gradient:
+      // no palette block inside, and d² > 14400 from every frame colour there,
+      // so ANY ink-family pixel in it could only come from a bleed.
+      boxes: [{ left: 40, top: 40, right: 120, bottom: 120 }],
+    });
+    expect(
+      ink.bands[0],
+      'accent ink (squared distance to #2f6feb) exists along the drag path',
+    ).toBeGreaterThanOrEqual(50);
+    expect(ink.boxes[0], 'a sampled region far from the path carries no ink').toBe(0);
+  });
+
+  test('PRF-02 lazy: the fetch shows the loading state, and a failed load re-enables the button with the inline error — a retry then opens the editor', async ({
+    page,
+    browserName,
+  }) => {
+    await installCaptureStub(page, browserName);
+    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+    await waitForWidget(page);
+
+    // Fail the FIRST fetch (with a delay that makes the loading state
+    // observably visible); serve the retry from dist so the recovery walk is
+    // real, not a re-404 (T-03-21: never a dead button).
+    let firstAttempt = true;
+    await page.route(ANNOTATOR_CHUNK_ROUTE, async (route) => {
+      if (firstAttempt) {
+        firstAttempt = false;
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        await route.abort('failed');
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/javascript; charset=utf-8',
+        body: readFileSync(resolve(repoRoot, 'packages/sdk/dist/watchbug-annotator.mjs')),
+      });
+    });
+
+    await clickLauncher(page);
+    await waitForComposer(page);
+
+    await page.evaluate(() => {
+      const button = document
+        .querySelector('watchbug-host')
+        ?.shadowRoot?.querySelector('button.composer-annotate') as HTMLButtonElement;
+      button.click();
+    });
+    const loading = await probeWidget(page);
+    expect(
+      loading.editorLoading,
+      '12 px spinner + editor.loading on the disabled button while the chunk fetches',
+    ).toBe(true);
+    expect(loading.annotateDisabled, 'the button is disabled mid-fetch').toBe(true);
+
+    await page.waitForFunction(
+      () => {
+        const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
+        return (
+          root?.querySelector('span.field-error[data-wb-error="editor"][data-shown="true"]') !==
+          null
+        );
+      },
+      null,
+      { timeout: 10_000 },
+    );
+    const failed = await probeWidget(page);
+    expect(failed.editorError, 'the locked load-error copy renders inline (OQ-4)').toBe(
+      "Couldn't load the editor.",
+    );
+    expect(failed.editorLoading, 'the loading state ends on failure').toBe(false);
+    expect(failed.annotateDisabled, 'never a dead button — the action re-enables (T-03-21)').toBe(
+      false,
+    );
+    expect(failed.editorOpen, 'no editor mounted from a failed fetch').toBe(false);
+    const hintText = await page.evaluate(
+      () =>
+        document
+          .querySelector('watchbug-host')
+          ?.shadowRoot?.querySelector(
+            'span.field-error[data-wb-error="editor-hint"][data-shown="true"]',
+          )
+          ?.textContent ?? '',
+    );
+    expect(hintText, 'with the solution hint beside it').toBe(
+      'Nothing was changed. Check your connection, then try again.',
+    );
+
+    // The retry: the memoised rejection was cleared, and the editor opens.
+    await openEditor(page);
+    const opened = await probeWidget(page);
+    expect(opened.editorOpen, 'a retry after a failed load succeeds (retryable memo)').toBe(true);
+    expect(opened.editorError).toBe('');
+  });
+
+  test('ANN-02: an arrow paints a shaft and a wider head', async ({ page, browserName }) => {
+    const tail: BitmapPoint = [40, 340];
+    const head: BitmapPoint = [420, 60];
+    const image = await drawAndSend(page, browserName, async () => {
+      await selectTool(page, 'arrow');
+      await dragOnBitmap(page, tail, head);
+    });
+    const ink = await analyzeInk(page, image, {
+      bands: [{ from: tail, to: head, halfWidth: 4 }],
+      boxes: [
+        { left: 30, top: 330, right: 52, bottom: 352 }, // tail cap
+        { left: 402, top: 52, right: 424, bottom: 74 }, // head body
+      ],
+      crosses: [
+        { from: tail, to: head, at: 0.5, reach: 12 }, // mid-shaft width
+        { from: tail, to: head, at: 0.977, reach: 12 }, // near the head base
+      ],
+    });
+    expect(ink.bands[0], 'ink runs along the shaft').toBeGreaterThanOrEqual(60);
+    expect(ink.boxes[0], 'ink at the tail').toBeGreaterThanOrEqual(3);
+    expect(ink.boxes[1], 'ink at the head').toBeGreaterThanOrEqual(20);
+    expect(
+      ink.crosses[1],
+      'the head is WIDER than the shaft (perpendicular ink counts)',
+    ).toBeGreaterThanOrEqual(ink.crosses[0] + 5);
+  });
+
+  test('ANN-03: a rectangle outlines its four edges and leaves the interior alone', async ({
+    page,
+    browserName,
+  }) => {
+    // rectangle: a 3-logical-px navy background keeps the thin blue stroke
+    // comfortably inside the ink tolerance under WebP 4:2:0 (the gold half of
+    // the stub gradient would subsample a 1.7px blue line toward grey).
+    const a: BitmapPoint = [60, 40];
+    const b: BitmapPoint = [240, 160];
+    const image = await drawAndSend(page, browserName, async () => {
+      await selectTool(page, 'rectangle');
+      await dragOnBitmap(page, a, b);
+    });
+    const edge = (from: BitmapPoint, to: BitmapPoint) => ({ from, to, halfWidth: 4 });
+    const ink = await analyzeInk(page, image, {
+      bands: [
+        edge([70, 40], [230, 40]),
+        edge([240, 50], [240, 150]),
+        edge([70, 160], [230, 160]),
+        edge([60, 50], [60, 150]),
+      ],
+      // Sampled interior: the pure-gradient gap between palette blocks (col 1/2
+      // gap x 102..130, row 1/2 gap y 95..120) — no block pixels near the ink
+      // tolerance's noise floor, and >40 px from every edge stroke.
+      boxes: [{ left: 102, top: 95, right: 130, bottom: 120 }],
+    });
+    for (const [which, name] of ['top', 'right', 'bottom', 'left'].entries()) {
+      expect(ink.bands[which], `ink along the ${name} edge`).toBeGreaterThanOrEqual(60);
+    }
+    expect(ink.boxes[0], 'the sampled interior region carries no ink (outline only, no fill)').toBe(
+      0,
+    );
+  });
+
+  test('ANN-04: a text label is click-typed-confirmed without a modal', async ({
+    page,
+    browserName,
+  }) => {
+    const image = await drawAndSend(page, browserName, async () => {
+      await typeLabel(page, [110, 90], 'primera', 'enter');
+      await typeLabel(page, [110, 130], 'segunda', 'outside');
+      // Escape CANCELS: a third label typed then dismissed commits nothing —
+      // and it does NOT close the editor (the input owns Escape while open).
+      await typeLabel(page, [60, 250], 'borrador', 'escape');
+      const stillOpen = await probeWidget(page);
+      expect(stillOpen.editorOpen, 'Escape in the label input does not close the editor').toBe(true);
+      // No modal was OPENED by the label flow (P3-D-08): the only surface the
+      // walk touched is the inline input. The census counts OPEN modals only —
+      // 03-06's once-per-session mask confirm is permanently mounted with
+      // data-shown="false" (the same visibility hook the ANN-05 rows assert
+      // on), so a mounted-but-hidden dialog belonging to another tool is not
+      // a modal the text tool opened.
+      const modals = await page.evaluate(
+        () =>
+          document
+            .querySelector('watchbug-host')
+            ?.shadowRoot?.querySelectorAll(
+              '[role="dialog"][data-shown="true"], [role="alertdialog"][data-shown="true"]',
+            ).length ?? 0,
+      );
+      expect(modals, 'the text tool opens no modal').toBe(0);
+    });
+    const ink = await analyzeInk(page, image, {
+      boxes: [
+        { left: 104, top: 74, right: 230, bottom: 96 },
+        { left: 104, top: 114, right: 230, bottom: 136 },
+        { left: 54, top: 234, right: 140, bottom: 256 },
+      ],
+    });
+    expect(ink.boxes[0], 'the Enter-committed label rendered at its anchor').toBeGreaterThanOrEqual(8);
+    expect(
+      ink.boxes[1],
+      'the click-outside-committed label rendered at its anchor',
+    ).toBeGreaterThanOrEqual(8);
+    expect(ink.boxes[2], 'the Escape-cancelled label drew nothing at its anchor').toBe(0);
+  });
+
+  test('ANN-04 empty: confirming an empty label draws nothing', async ({ page, browserName }) => {
+    const image = await drawAndSend(page, browserName, async () => {
+      await typeLabel(page, [300, 80], '', 'enter');
+    });
+    const ink = await analyzeInk(page, image, {
+      boxes: [{ left: 294, top: 64, right: 360, bottom: 88 }],
+    });
+    expect(ink.boxes[0], 'an empty commit paints nothing').toBe(0);
+    const global = await analyzeImagePixels(page, image);
+    expect(global.accentCount, 'zero accent pixels anywhere: the decoded image is unchanged').toBe(0);
+  });
+
+  test('ANN-04 encoding: a non-ASCII label is drawn verbatim', async ({ page, browserName }) => {
+    const image = await drawAndSend(page, browserName, async () => {
+      await typeLabel(page, [110, 90], 'Añadir ✓', 'enter');
+    });
+    const ink = await analyzeInk(page, image, {
+      boxes: [
+        { left: 104, top: 74, right: 200, bottom: 96 },
+        { left: 132, top: 74, right: 200, bottom: 96 },
+      ],
+    });
+    expect(ink.boxes[0], 'the label rendered from its anchor').toBeGreaterThanOrEqual(8);
+    expect(
+      ink.boxes[1],
+      'ink reaches the label END (the trailing check glyph) — no truncation, no escaping',
+    ).toBeGreaterThanOrEqual(3);
+  });
+
+  test('ANN-06: undo removes one stroke and never a mask', async ({ page, browserName }) => {
+    const image = await drawAndSend(page, browserName, async () => {
+      await dragOnBitmap(page, STROKE_A_FROM, STROKE_A_TO);
+      await dragOnBitmap(page, STROKE_B_FROM, STROKE_B_TO);
+      await undo(page);
+    });
+    const ink = await analyzeInk(page, image, { bands: UNDO_BANDS });
+    expect(ink.bands[0], 'the first stroke survives one undo').toBeGreaterThanOrEqual(60);
+    expect(
+      ink.bands[1],
+      'the undone stroke is gone entirely (strokes only; masks never exist on this stack — P3-D-12)',
+    ).toBe(0);
+  });
+
+  test('ANN-06: Ctrl/Cmd+Z matches the undo button', async ({ page, browserName }) => {
+    const image = await drawAndSend(page, browserName, async () => {
+      await dragOnBitmap(page, STROKE_A_FROM, STROKE_A_TO);
+      await dragOnBitmap(page, STROKE_B_FROM, STROKE_B_TO);
+      await undoKey(page, 'Control');
+    });
+    const ink = await analyzeInk(page, image, { bands: UNDO_BANDS });
+    expect(ink.bands[0], 'the keyboard path keeps the first stroke').toBeGreaterThanOrEqual(60);
+    expect(ink.bands[1], 'the keyboard path removed exactly one stroke').toBe(0);
+  });
+});
+
+/**
+ * What the widget does when capture is not available or not wanted: a blank or
+ * over-cap frame, a denied permission prompt, a browser with no `getDisplayMedia`, and
+ * a user-picked file that must be sniffed (never trusted by MIME) and bounded before a
+ * canvas is allocated. Every row ends by asserting that **nothing was sent** in the
+ * failure direction and exactly one report in the success direction.
+ *
+ * Snapshotting and magic-byte sniffing are the browser's job here: the file input, the
+ * decode and the zero-request assertion are the journey.
+ */
+test.describe('J-07 — Degraded capture and attachment', () => {
+  test('CAP-03: a blank capture never posts before the user chooses', async ({ page, browserName }) => {
+    // Re-pointed from the P2-D-12 blank row by 03-04 Task 3 (the plan's chosen
+    // migration, not a duplicate): a uniform frame now opens the DEGRADED
+    // composer instead of the Phase-2 panel — the blank diagnosis survives as
+    // the notice hint (F6) and nothing posts until an action is chosen.
+    // Default tier per engine: chromium/firefox probe a solid frame straight
+    // out of the real <video> path, webkit out of the seam.
+    await installCaptureStub(page, browserName, { uniform: true });
+    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+    await waitForWidget(page);
+
+    const calls = await interceptIncidentPosts(page, async () => ({
+      status: 201,
+      body: JSON.stringify({ id: INTERCEPTED_ID }),
+    }));
+
+    await clickLauncher(page);
+    await expectZoneState(page, 'degraded');
+
+    const failed = await probeWidget(page);
+    expect(failed.composerState).toBe('degraded');
+    expect(failed.composerNoticeHeading).toBe('Capture unavailable');
+    expect(failed.composerNoticeHint, 'the blank diagnosis keeps its distinct hint (F6)').toBe(
+      BLANK_HINT,
+    );
+    // Two real exits, never a dead panel (P3-D-13).
+    expect(failed.composerAttachVisible).toBe(true);
+    expect(failed.composerContinueVisible).toBe(true);
+
+    // The Review action is inert in the degraded state — choosing an action is
+    // the only way forward, and an inert click still posts nothing (T-03-01).
+    await clickComposerReview(page);
+    await page.waitForTimeout(300);
+    const inert = await probeWidget(page);
+    expect(inert.screen, 'Review from the degraded state does not navigate').toBe('composer');
+    expect(inert.composerState).toBe('degraded');
+
+    // Exit 1 works from this state: the notice's Attach image reaches the same
+    // preview flow as a replace from the image state (Task 1's lane).
+    if (browserName === 'chromium') {
+      const chooserPromise = page.waitForEvent('filechooser');
+      await clickVisibleAttach(page);
+      const chooser = await chooserPromise;
+      await chooser.setFiles({ name: 'valid-64x64.png', mimeType: 'image/png', buffer: png64 });
+    } else {
+      await attachImage(page, { name: 'valid-64x64.png', mimeType: 'image/png', buffer: png64 });
+    }
+    await expectZoneState(page, 'image');
+    const recovered = await probeWidget(page);
+    expect(recovered.composerPreviewWidth, 'attach from degraded yields the Task-1 preview').toBe(64);
+    expect(recovered.composerPreviewHeight).toBe(64);
+
+    // Still nothing posted — the user never pressed Send.
+    await expectNoRequest(page, calls);
+  });
+
+  test('P2-D-12: a frame beyond the supported canvas cap aborts to the blank bucket of the degraded composer', async ({ page, browserName }) => {
+    // Seam tier on every engine: the 16,920,000 px frame is allocated
+    // canvas-free, so the pipeline's area probe — not an engine canvas limit —
+    // is what rejects it. Re-pointed by 03-04: `oversize` shares the blank
+    // hint bucket in the degraded composer (F6), never the Phase-2 panel.
+    await installCaptureStub(page, browserName, { tier: 'seam', failure: 'beyond-cap' });
+    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+    await waitForWidget(page);
+
+    const calls = await interceptIncidentPosts(page, async () => ({
+      status: 201,
+      body: JSON.stringify({ id: INTERCEPTED_ID }),
+    }));
+
+    await clickLauncher(page);
+    await expectZoneState(page, 'degraded');
+
+    const failed = await probeWidget(page);
+    expect(failed.composerNoticeHeading).toBe('Capture unavailable');
+    expect(failed.composerNoticeHint).toBe(BLANK_HINT);
+    expect(failed.composerAttachVisible).toBe(true);
+    expect(failed.composerContinueVisible).toBe(true);
+    await expectNoRequest(page, calls);
+  });
+
+  test('CAP-01: a rejected capture prompt opens the degraded composer with its hint and both actions', async ({ page, browserName }) => {
+    await installCaptureStub(page, browserName, { failure: 'prompt-rejected' });
+    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+    await waitForWidget(page);
+
+    const calls = await interceptIncidentPosts(page, async () => ({
+      status: 201,
+      body: JSON.stringify({ id: INTERCEPTED_ID }),
+    }));
+
+    // Re-pointed by 03-04: the loud state for a denied prompt is now the
+    // degraded composer (P3-D-13) — never the dead failure panel, never a
+    // silent file dialog. The locked diagnostic copy still surfaces (M-6).
+    await clickLauncher(page);
+    await expectZoneState(page, 'degraded');
+
+    expect(await page.locator('html').getAttribute('data-wb-stub-invoked')).toBe('prompt-rejected');
+
+    const failed = await probeWidget(page);
+    expect(failed.composerNoticeHeading, 'the notice heading (strings.ts)').toBe(
+      'Capture unavailable',
+    );
+    expect(failed.composerNoticeHint, 'the denied diagnosis keeps its hint (F6)').toBe(CAPTURE_HINT);
+    expect(failed.composerAttachVisible, 'exit 1: Attach image').toBe(true);
+    expect(failed.composerContinueVisible, 'exit 2: Continue with text only').toBe(true);
+    await expectNoRequest(page, calls);
+  });
+
+  test('CAP-02 attach: a picked PNG reaches the preview, the review and the wire', async ({
+    page,
+    browserName,
+  }) => {
+    await installCaptureStub(page, browserName);
+    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+    await waitForWidget(page);
+    await page.evaluate(() => {
+      document.title = 'CAP-02 attached picture report';
+    });
+
+    const calls = await interceptIncidentPosts(page, async () => ({
+      status: 201,
+      body: JSON.stringify({ id: INTERCEPTED_ID }),
+    }));
+
+    // The gesture captures as usual, so the composer opens holding the STUB
+    // frame — the attachment must REPLACE it, and the preview dimensions tell
+    // the two apart (640-wide frame vs 64-wide picture).
+    await clickLauncher(page);
+    await waitForComposer(page);
+    await expectZoneState(page, 'image');
+    const captured = await probeWidget(page);
+    expect(captured.composerPreviewWidth, 'the composer first shows the captured frame').toBe(
+      640,
+    );
+
+    // The real affordance walk on chromium: the visible `Attach image` button
+    // opens the hidden picker, and the file chooser receives the fixture bytes.
+    // Other engines set the input directly (same change-handler path).
+    if (browserName === 'chromium') {
+      const chooserPromise = page.waitForEvent('filechooser');
+      await clickVisibleAttach(page);
+      const chooser = await chooserPromise;
+      await chooser.setFiles({ name: 'valid-64x64.png', mimeType: 'image/png', buffer: png64 });
+    } else {
+      await attachImage(page, { name: 'valid-64x64.png', mimeType: 'image/png', buffer: png64 });
+    }
+    await expectZoneState(page, 'image');
+
+    // The preview canvas is redrawn from the attachment's pixels (CAP-02).
+    const attached = await probeWidget(page);
+    expect(attached.composerPreviewWidth, 'the preview is the attached picture').toBe(64);
+    expect(attached.composerPreviewHeight).toBe(64);
+    expect(attached.composerAttachError, 'a valid attachment shows no refusal').toBe('');
+
+    // Review encodes the attachment through the single sink; Send posts once.
+    await clickComposerReview(page);
+    await waitForReview(page);
+    const reviewed = await probeWidget(page);
+    expect(reviewed.reviewImageWidth, 'the review shows a real encoded artifact').toBeGreaterThan(0);
+    expect(reviewed.reviewImageHeight).toBeGreaterThan(0);
+
+    await clickReviewSend(page);
+    await waitForHeadline(page, 'Report sent ✓', 15_000);
+    expect(calls, 'the attach walk posts exactly one report').toHaveLength(1);
+
+    // P3-D-15 / A-05: the attachment joins the same flow, so its outgoing bytes
+    // are the SINK's output — WebP or PNG, never the picked container. The
+    // fetch-boundary read is engine-truthful (WebKit drops blob parts from
+    // postDataBuffer, deviation 2), and the decode proves the picture survived
+    // review: 64×64 and non-blank (the fixture's two-tone square).
+    const image = await readOutgoingImage(page);
+    expect(
+      wireContainer(image),
+      'the single encode sink re-encodes every attachment',
+    ).toMatch(/^webp|png$/);
+    const analysis = await analyzeImagePixels(page, image);
+    expect(analysis.width, 'the attached picture decodes at its own dimensions').toBe(64);
+    expect(analysis.height).toBe(64);
+    expect(analysis.sampledDistinct, 'the attachment is never blanked on the way').toBeGreaterThan(1);
+  });
+
+  test('CAP-02 attach: WebP and JPEG are accepted', async ({ page, browserName }) => {
+    await installCaptureStub(page, browserName);
+    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+    await waitForWidget(page);
+    await page.evaluate(() => {
+      document.title = 'CAP-02 two containers report';
+    });
+
+    const calls = await interceptIncidentPosts(page, async () => ({
+      status: 201,
+      body: JSON.stringify({ id: INTERCEPTED_ID }),
+    }));
+
+    await clickLauncher(page);
+    await waitForComposer(page);
+    await expectZoneState(page, 'image');
+
+    // WebP — the committed fixture.
+    await attachImage(page, { name: 'valid-64x64.webp', mimeType: 'image/webp', buffer: webp64 });
+    const afterWebp = await probeWidget(page);
+    expect(afterWebp.composerPreviewWidth, 'the WebP attachment reaches the preview').toBe(64);
+    expect(afterWebp.composerPreviewHeight).toBe(64);
+    expect(afterWebp.composerAttachError).toBe('');
+
+    // JPEG — built IN-PAGE (03-02's fixture is same-wave at plan authoring; and
+    // JPEG is the one container every engine's canvas encoder produces, unlike
+    // WebP). Where an engine cannot encode JPEG from a canvas its silent PNG
+    // fallback rides in as PNG bytes — a different container, same acceptance
+    // duty; chromium's assertion below proves the JPEG arm really was fed.
+    const jpegPayload = await page.evaluate(async () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 64;
+      canvas.height = 64;
+      const context = canvas.getContext('2d');
+      if (context === null) throw new Error('no 2D canvas for the JPEG payload');
+      const gradient = context.createLinearGradient(0, 0, 64, 64);
+      gradient.addColorStop(0, '#16233a');
+      gradient.addColorStop(1, '#c9a227');
+      context.fillStyle = gradient;
+      context.fillRect(0, 0, 64, 64);
+      context.fillStyle = '#1e7a46';
+      context.fillRect(4, 4, 24, 24);
+      const blob = await new Promise<Blob | null>((resolve) => {
+        canvas.toBlob(resolve, 'image/jpeg', 0.9);
+      });
+      if (blob === null) throw new Error('the engine produced no JPEG payload');
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      let binary = '';
+      for (let at = 0; at < bytes.length; at += 0x8000) {
+        binary += String.fromCharCode(...bytes.subarray(at, at + 0x8000));
+      }
+      return { base64: btoa(binary), type: blob.type };
+    });
+    if (browserName === 'chromium') {
+      expect(jpegPayload.type, 'chromium really encoded a JPEG to attach').toBe('image/jpeg');
+    }
+    const jpegBytes = Buffer.from(jpegPayload.base64, 'base64');
+    await attachImage(page, { name: 'device-photo.jpg', mimeType: 'image/jpeg', buffer: jpegBytes });
+    const afterJpeg = await probeWidget(page);
+    expect(afterJpeg.composerPreviewWidth, 'the JPEG attachment replaces the WebP preview').toBe(64);
+    expect(afterJpeg.composerAttachError, 'an accepted format clears the refusal').toBe('');
+
+    // Review + send — the outgoing part is the sink's output, never JPEG.
+    await clickComposerReview(page);
+    await waitForReview(page);
+    await clickReviewSend(page);
+    await waitForHeadline(page, 'Report sent ✓', 15_000);
+    expect(calls, 'the two-attach walk posts exactly one report').toHaveLength(1);
+
+    const image = await readOutgoingImage(page);
+    expect(
+      wireContainer(image),
+      'a picked JPEG leaves as WebP or PNG — the single encode sink is the only producer',
+    ).toMatch(/^webp|png$/);
+    const analysis = await analyzeImagePixels(page, image);
+    expect(analysis.width, 'the second attachment is the one that sent').toBe(64);
+    expect(analysis.height).toBe(64);
+    expect(analysis.sampledDistinct).toBeGreaterThan(1);
+  });
+
+  test('CAP-02 reject: a non-image is refused with the inline error and no request', async ({
+    page,
+    browserName,
+  }) => {
+    await installCaptureStub(page, browserName);
+    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+    await waitForWidget(page);
+
+    const calls = await interceptIncidentPosts(page, async () => ({
+      status: 201,
+      body: JSON.stringify({ id: INTERCEPTED_ID }),
+    }));
+
+    await clickLauncher(page);
+    await waitForComposer(page);
+    await expectZoneState(page, 'image');
+    const before = await probeWidget(page);
+
+    // The picker's `accept` is decoration: a declared MIME type or extension is
+    // untrusted, so every one of these is refused on its magic bytes (V12).
+    const refusals: Array<{ name: string; mimeType: string; buffer: Buffer }> = [
+      {
+        name: 'payload.html',
+        mimeType: 'text/html',
+        buffer: Buffer.from('<!doctype html><html><body>polite hello</body></html>', 'utf8'),
+      },
+      { name: 'hostile.svg', mimeType: 'image/svg+xml', buffer: hostileSvg },
+      { name: 'polyglot.gif', mimeType: 'image/gif', buffer: polyglotGif },
+    ];
+    for (const payload of refusals) {
+      await attachImage(page, payload);
+      const refused = await probeWidget(page);
+      expect(refused.composerAttachError, `${payload.name}: visible refusal copy`).toBe(
+        ATTACH_ERROR_COPY,
+      );
+      expect(refused.composerAttachErrorHint, `${payload.name}: solution hint`).toBe(
+        ATTACH_HINT_COPY,
+      );
+      // The draft survives the refusal untouched: still the captured frame.
+      expect(refused.composerState, `${payload.name}: previous state preserved`).toBe('image');
+      expect(refused.composerPreviewWidth).toBe(before.composerPreviewWidth);
+      expect(refused.composerPreviewHeight).toBe(before.composerPreviewHeight);
+      // The attach action is re-enabled for another try.
+      expect(refused.composerAttachVisible, `${payload.name}: attach re-enabled`).toBe(true);
+    }
+    await expectNoRequest(page, calls);
+  });
+
+  test('CAP-02 reject: an oversized-pixel file is refused', async ({ page, browserName }) => {
+    await installCaptureStub(page, browserName);
+    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+    await waitForWidget(page);
+
+    const calls = await interceptIncidentPosts(page, async () => ({
+      status: 201,
+      body: JSON.stringify({ id: INTERCEPTED_ID }),
+    }));
+
+    await clickLauncher(page);
+    await waitForComposer(page);
+    await expectZoneState(page, 'image');
+    const before = await probeWidget(page);
+
+    // The committed 8000×8192-declared JPEG (65.5 MP, over MAX_IMAGE_PIXELS):
+    // whichever gate answers — the decoded-bitmap size check, or an engine that
+    // refuses the inconsistent scan outright — the file is refused BEFORE a
+    // working canvas is allocated, which is the contract (T-03-18).
+    await attachImage(page, {
+      name: 'oversize.jpg',
+      mimeType: 'image/jpeg',
+      buffer: oversizeJpeg,
+    });
+    const refused = await probeWidget(page);
+    expect(refused.composerAttachError, 'over-cap dimensions are the same visible refusal').toBe(
+      ATTACH_ERROR_COPY,
+    );
+    expect(refused.composerAttachErrorHint).toBe(ATTACH_HINT_COPY);
+    expect(refused.composerState, 'the previous frame is preserved').toBe('image');
+    expect(refused.composerPreviewWidth).toBe(before.composerPreviewWidth);
+    expect(refused.composerPreviewHeight).toBe(before.composerPreviewHeight);
+    await expectNoRequest(page, calls);
+  });
+
+  test('CAP-03: a denied capture opens the degraded composer with both actions and files text-only', async ({
+    page,
+    browserName,
+  }) => {
+    await installCaptureStub(page, browserName, { failure: 'prompt-rejected' });
+    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+    await waitForWidget(page);
+    await page.evaluate(() => {
+      document.title = 'CAP-03 text-only report';
+    });
+
+    // Real compose stack (the plan's chosen proof): inspect the outgoing
+    // request, then let the ENGINE send it untouched — the 201 comes from
+    // Fastify's imageless branch, not from a mock (03-01's lane).
+    const posts: Buffer[] = [];
+    await page.route(INCIDENT_POST_RE, async (route) => {
+      if (route.request().method() !== 'POST') {
+        await route.continue();
+        return;
+      }
+      posts.push(route.request().postDataBuffer() ?? Buffer.alloc(0));
+      await route.continue();
+    });
+
+    await clickLauncher(page);
+    await expectZoneState(page, 'degraded');
+    const degraded = await probeWidget(page);
+    expect(degraded.composerNoticeHeading).toBe('Capture unavailable');
+    expect(degraded.composerNoticeHint).toBe(CAPTURE_HINT);
+    expect(degraded.composerAttachVisible).toBe(true);
+    expect(degraded.composerContinueVisible).toBe(true);
+
+    // Nothing posts while the diagnosis sits on screen (T-03-01): give a
+    // would-be request time to land before counting.
+    await page.waitForTimeout(600);
+    expect(posts, 'zero POST /api/incidents before the user chooses').toHaveLength(0);
+
+    await clickContinueTextOnly(page);
+    await expectZoneState(page, 'text-only');
+    const textOnly = await probeWidget(page);
+    expect(textOnly.composerZoneVisible, 'the image zone is hidden').toBe(false);
+    expect(textOnly.composerAttachVisible, 'the footer keeps Attach image').toBe(true);
+
+    // The prefilled title (document.title) is a real draft title — review now.
+    await clickComposerReview(page);
+    await waitForReview(page);
+    const reviewed = await probeWidget(page);
+    expect(reviewed.reviewOpen).toBe(true);
+    expect(reviewed.reviewNoImage, 'review shows the No image line (UI-SPEC A-3)').toBe('No image');
+    expect(reviewed.reviewTitle).toBe('CAP-03 text-only report');
+    expect(reviewed.reviewImageWidth, 'a text-only review displays no canvas').toBe(0);
+
+    const responsePromise = page.waitForResponse(
+      (response) =>
+        response.url().endsWith('/api/incidents') && response.request().method() === 'POST',
+    );
+    await clickReviewSend(page);
+    await waitForHeadline(page, 'Report sent ✓', 15_000);
+    const response = await responsePromise;
+    expect(response.status(), 'the meta-only body files a REAL 201').toBe(201);
+
+    expect(posts, 'exactly one request').toHaveLength(1);
+    const body = posts[0].toString('utf8');
+    expect(body).toContain('name="meta"');
+    expect(body, 'a text-only body carries NO image part').not.toContain('name="image"');
+    const metaPart = multipartPart(posts[0], 'meta');
+    expect(metaPart).not.toBeNull();
+    const meta = JSON.parse(metaPart!.toString('utf8')) as Record<string, unknown>;
+    expect(meta.type).toBe('bug');
+    expect(meta.title).toBe('CAP-03 text-only report');
+  });
+
+  test('CAP-03 no-API: a browser without getDisplayMedia can still file text-only feedback', async ({
+    page,
+    browserName,
+  }) => {
+    // iOS Safari shape: the navigator carries no mediaDevices at all — the
+    // capture classification distinguishes `no-api` from a prompt denial, but
+    // the composer exit is the same two real choices (P3-D-13, CAP-03).
+    await installCaptureStub(page, browserName, { failure: 'no-display-media' });
+    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+    await waitForWidget(page);
+    await page.evaluate(() => {
+      document.title = 'CAP-03 no-API feedback';
+    });
+
+    const posts: Buffer[] = [];
+    await page.route(INCIDENT_POST_RE, async (route) => {
+      if (route.request().method() !== 'POST') {
+        await route.continue();
+        return;
+      }
+      posts.push(route.request().postDataBuffer() ?? Buffer.alloc(0));
+      await route.continue();
+    });
+
+    await clickLauncher(page);
+    await expectZoneState(page, 'degraded');
+
+    // Non-vacuity: the provocation ran — the browser really has no capture API
+    // in this context, it is not a stubbed denial.
+    expect(await page.locator('html').getAttribute('data-wb-stub-invoked')).toBe(
+      'no-display-media',
+    );
+    const degraded = await probeWidget(page);
+    expect(degraded.composerNoticeHint, 'the no-api diagnosis keeps the capture-failed hint').toBe(
+      CAPTURE_HINT,
+    );
+    await page.waitForTimeout(600);
+    expect(posts, 'nothing posts from the degraded state').toHaveLength(0);
+
+    await clickContinueTextOnly(page);
+    await expectZoneState(page, 'text-only');
+    await clickComposerReview(page);
+    await waitForReview(page);
+    const reviewed = await probeWidget(page);
+    expect(reviewed.reviewNoImage).toBe('No image');
+
+    const responsePromise = page.waitForResponse(
+      (response) =>
+        response.url().endsWith('/api/incidents') && response.request().method() === 'POST',
+    );
+    await clickReviewSend(page);
+    await waitForHeadline(page, 'Report sent ✓', 15_000);
+    const response = await responsePromise;
+    expect(response.status(), 'text-only feedback files a REAL 201 without any capture API').toBe(
+      201,
+    );
+    expect(posts).toHaveLength(1);
+    expect(posts[0].toString('utf8'), 'meta-only multipart body').not.toContain('name="image"');
+  });
+});
+
+/**
+ * The only user-visible half of the transport: a transient 500 retries with the SAME
+ * `Idempotency-Key` and the SAME encoded bytes and says so (`Retrying (1 of 3)…`), a
+ * contract 4xx fails at once and renders the server's own message, a long reason is
+ * truncated inside the 320 px panel, and both terminal states are dismissible.
+ *
+ * The classification logic is pure and lives in `tests/integration/transport-retry.test.ts`
+ * (Batch 3a); what remains here is the shadow-DOM status sequence and wall-clock timing.
+ */
+test.describe('J-10 — Transport resilience: retry, terminal failure, dismissal', () => {
+  test('P2-D-03: a transient 500 retries with the same Idempotency-Key and the same encoded bytes', async ({ page, browserName }) => {
+    await installCaptureStub(page, browserName);
+    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+    await waitForWidget(page);
+    // Record every distinct headline: `Capturing…` and `Sending…` can be shorter
+    // than a poll interval, and the locked copy progression is an assertion.
+    await collectHeadlines(page);
+
+    const calls = await interceptIncidentPosts(page, async (_call, index) =>
+      index === 0
+        ? {
+            status: 500,
+            body: JSON.stringify({ statusCode: 500, error: 'Internal Server Error', message: 'boom' }),
+          }
+        : { status: 201, body: JSON.stringify({ id: INTERCEPTED_ID }) },
+    );
+
+    await clickLauncher(page);
+
+    // The retry window is the observable in-flight state for both the retry copy
+    // and the launcher's disabled rendering (UI-SPEC loading lift, WDG-01).
+    // With the composer the request is only issued by the walk, and the locked
+    // headline sequence below still runs Capturing… -> Sending… -> Retrying…
+    // because Capturing… rides the capture stage the walk opens the composer on.
+    await completeComposer(page);
+    await waitForHeadline(page, 'Retrying (1 of 3)…', 10_000);
+    const duringRetry = await probeWidget(page);
+    expect(duringRetry.panelHidden).toBe('false');
+    expect(duringRetry.launcherDisabled).toBe(true);
+    expect(duringRetry.actionsVisible).toBe(false);
+
+    await waitForHeadline(page, 'Report sent ✓', 15_000);
+    expect(calls).toHaveLength(2);
+
+    const firstKey = calls[0].headers['idempotency-key'];
+    expect(firstKey).toMatch(/^[0-9a-f-]{36}$/);
+    expect(calls[1].headers['idempotency-key']).toBe(firstKey);
+
+    // Same logical submission: the encoded image and the meta part are byte-equal
+    // across attempts (only the multipart boundary is regenerated).
+    //
+    // IN-03: `postDataBuffer()` omits blob-backed FormData payload BYTES on
+    // Playwright's WebKit (deviation 2) — there the part headers are present but
+    // the bodies may be empty, so "the same bytes are sent twice" is only
+    // observable on chromium/firefox. Guard the non-vacuity there explicitly and
+    // say so here, instead of letting an `toEqual` over two empty bodies look
+    // cross-engine. The shared `idempotency-key` header and the `meta` part below
+    // carry the claim on all three engines.
+    const image0 = multipartPart(calls[0].buffer, 'image');
+    const image1 = multipartPart(calls[1].buffer, 'image');
+    expect(image0).not.toBeNull();
+    expect(image1).not.toBeNull();
+    if (browserName !== 'webkit') {
+      expect(image0?.length ?? 0, 'the encoded image must actually be in the payload').toBeGreaterThan(0);
+    }
+    expect(image1, 'the resent part must be byte-identical').toEqual(image0);
+    expect(multipartPart(calls[1].buffer, 'meta')).toEqual(multipartPart(calls[0].buffer, 'meta'));
+
+    const headlines = await readHeadlines(page);
+    const sequence = ['Capturing…', 'Sending…', 'Retrying (1 of 3)…', 'Report sent ✓'];
+    const positions = sequence.map((headline) => headlines.indexOf(headline));
+    expect(positions.every((at) => at >= 0)).toBe(true);
+    expect([...positions].sort((a, b) => a - b)).toEqual(positions);
+  });
+
+  test('P2-D-03: a contract 400 fails immediately, renders the server message and never retries', async ({ page, browserName }) => {
+    await installCaptureStub(page, browserName);
+    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+    await waitForWidget(page);
+
+    const reason = 'Project key not recognised';
+    const calls = await interceptIncidentPosts(page, async () => ({
+      status: 400,
+      body: JSON.stringify({ statusCode: 400, error: 'Bad Request', message: reason }),
+    }));
+
+    await clickLauncher(page);
+    await completeComposer(page);
+    await waitForHeadline(page, 'The server rejected the report.', 15_000);
+
+    const failed = await probeWidget(page);
+    expect(failed.reason).toBe(reason);
+    expect(failed.headlineRole).toBe('alert');
+    expect(failed.textRole).toBe('status');
+    expect(failed.textLive).toBe('polite');
+    expect(failed.actionsVisible).toBe(true);
+    expect(failed.retryVisible).toBe(true);
+    expect(failed.dismissVisible).toBe(true);
+    expect(failed.launcherDisabled).toBe(true);
+
+    // No automatic retry for a contract 4xx: one attempt, and still one after a
+    // window longer than the first scheduled retry (1 s ±25 %).
+    await page.waitForTimeout(1_500);
+    expect(calls).toHaveLength(1);
+  });
+
+  test('UI-SPEC backstop: a long server reason renders truncated to 240 chars with an ellipsis inside the 320 px panel', async ({ page, browserName }) => {
+    await installCaptureStub(page, browserName);
+    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+    await waitForWidget(page);
+
+    const longReason =
+      'The report was rejected because the project key does not match any active project on this server. ' +
+      'Check the key configured in your deployment, then try again once it has been corrected. ' +
+      'Nothing has been stored and no attachment was written to disk.';
+
+    await interceptIncidentPosts(page, async () => ({
+      status: 403,
+      body: JSON.stringify({ statusCode: 403, error: 'Forbidden', message: longReason }),
+    }));
+
+    await clickLauncher(page);
+    await completeComposer(page);
+    await waitForHeadline(page, 'The server rejected the report.', 15_000);
+
+    const failed = await probeWidget(page);
+    expect(longReason.length).toBeGreaterThan(240);
+    expect(failed.reasonLength).toBeLessThanOrEqual(240);
+    expect(failed.reason.endsWith('…')).toBe(true);
+    // Wrapped at a word boundary: no word is cut in half at the truncation.
+    expect(failed.reason.startsWith('The report was rejected')).toBe(true);
+    expect(failed.reason).not.toContain('…'.repeat(2));
+    expect(failed.panelWidth).toBeLessThanOrEqual(320);
+  });
+
+  test('UI-SPEC A-5/A-7: sent auto-dismisses after 5 s and Escape dismisses a terminal failure', async ({ page, browserName }) => {
+    await installCaptureStub(page, browserName);
+    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+    await waitForWidget(page);
+
+    await interceptIncidentPosts(page, async () => ({
+      status: 201,
+      body: JSON.stringify({ id: INTERCEPTED_ID }),
+    }));
+
+    await clickLauncher(page);
+    await completeComposer(page);
+    await waitForHeadline(page, 'Report sent ✓', 15_000);
+    const sentAt = Date.now();
+
+    await page.waitForFunction(
+      () => {
+        const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
+        return root?.querySelector('.panel')?.getAttribute('data-hidden') === 'true';
+      },
+      null,
+      { timeout: 9_000 },
+    );
+    // A-5: the success panel waits the full 5 s before returning to idle.
+    expect(Date.now() - sentAt).toBeGreaterThanOrEqual(4_000);
+    const idle = await probeWidget(page);
+    expect(idle.launcherDisabled).toBe(false);
+
+    // A-7: Escape dismisses a terminal failure panel and re-arms the launcher.
+    await page.unroute(INCIDENT_POST_RE);
+    await interceptIncidentPosts(page, async () => ({
+      status: 401,
+      body: JSON.stringify({ statusCode: 401, error: 'Unauthorized', message: 'Missing project key' }),
+    }));
+
+    await clickLauncher(page);
+    await completeComposer(page);
+    await waitForHeadline(page, 'The server rejected the report.', 15_000);
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(
+      () => {
+        const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
+        return root?.querySelector('.panel')?.getAttribute('data-hidden') === 'true';
+      },
+      null,
+      { timeout: 5_000 },
+    );
+    const dismissed = await probeWidget(page);
+    expect(dismissed.launcherDisabled).toBe(false);
+  });
+});
+
+/**
+ * RNF-03 in the rendered artefact: `lang` and the copy agree under the default locale,
+ * the whole core surface renders Spanish under `es-ES`, the composer's EN/ES pair
+ * switches both directions without touching host storage, and the lazy editor chunk
+ * resolves the locale core passed into it.
+ *
+ * `detectLocale`/`t` and the dictionary parity are pure and pinned in
+ * `tests/unit/i18n-resolver.test.ts` (Batch 3a); a rendered string and an attribute are
+ * the only honest witnesses for the rest.
+ */
+test.describe('J-12 — i18n: English and Spanish across core and the lazy chunk', () => {
+  test('WDG-06: .wrap lang matches the resolved locale — English copy and lang="en" under the default locale', async ({ page }) => {
+    // Replaces the Phase 2 F-08 row (03-03 Task 3): the hard-coded `en` literal
+    // is gone — the attribute now comes from the resolved locale, which must
+    // agree with the dictionary actually rendered. `all: initial` clears the
+    // inherited `lang`, so assistive tech would otherwise read the copy in the
+    // host page's language.
+    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+
+    const languages = await page.evaluate(() => {
+      const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
+      const wrap = root?.querySelector('.wrap') as HTMLElement | null;
+      const launcher = root?.querySelector('button.launcher') as HTMLElement | null;
+      return {
+        content: wrap?.getAttribute('lang') ?? null,
+        // What assistive tech actually resolves for the launcher: the nearest
+        // ancestor in the shadow tree that declares a language.
+        launcher: launcher?.closest('[lang]')?.getAttribute('lang') ?? null,
+        // The declared locale must agree with the dictionary the launcher read.
+        launcherLabel: launcher?.getAttribute('aria-label') ?? '',
+      };
+    });
+
+    expect(languages.content).toBe('en');
+    expect(languages.launcher).toBe('en');
+    expect(languages.launcherLabel).toBe('Report a bug');
+  });
+
+  test.describe('locale: es-ES', () => {
+    test.use({ locale: 'es-ES' });
+    
+    test('WDG-06 es: the whole core surface renders Spanish copy with lang="es"', async ({
+      page,
+      browserName,
+    }) => {
+      await installCaptureStub(page, browserName);
+      await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+      await waitForWidget(page);
+      // The transient `Enviando…` headline is short-lived: record every render.
+      await collectHeadlines(page);
+
+      const base = await page.evaluate(() => {
+        const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
+        const launcher = root?.querySelector('button.launcher') as HTMLElement | null;
+        return {
+          lang: root?.querySelector('.wrap')?.getAttribute('lang') ?? null,
+          launcherLabel: launcher?.getAttribute('aria-label') ?? '',
+        };
+      });
+      expect(base.lang, 'navigator.language es-ES resolves the Spanish dictionary').toBe('es');
+      expect(base.launcherLabel).toBe('Reportar un error');
+
+      const calls = await interceptIncidentPosts(page, async () => ({
+        status: 201,
+        body: JSON.stringify({ id: INTERCEPTED_ID }),
+      }));
+
+      await clickLauncher(page);
+      await waitForComposer(page);
+      const composing = await probeWidget(page);
+      expect(composing.composerHeading).toBe('Reportar un error');
+      expect(composing.wrapLang).toBe('es');
+
+      await clickComposerReview(page);
+      await waitForReview(page);
+      const reviewed = await page.evaluate(() => {
+        const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
+        return {
+          heading: root?.querySelector('.review-heading')?.textContent ?? '',
+          send: root?.querySelector('button.review-send')?.textContent ?? '',
+          edit: root?.querySelector('button.review-edit')?.textContent ?? '',
+          typeValue: root?.querySelector('[data-wb-summary="type"] .summary-value')?.textContent ?? '',
+        };
+      });
+      expect(reviewed.heading, 'the review heading renders in Spanish').toBe('Listo para enviar');
+      expect(reviewed.send).toBe('Enviar informe');
+      expect(reviewed.edit).toBe('Editar informe');
+      expect(reviewed.typeValue).toBe('Error');
+
+      await clickReviewSend(page);
+      await waitForHeadline(page, 'Informe enviado ✓', 15_000);
+      const headlines = await readHeadlines(page);
+      expect(headlines, 'the in-flight Sending headline renders in Spanish').toContain('Enviando…');
+      expect(headlines).toContain('Capturando…');
+      expect(calls).toHaveLength(1);
+      const after = await probeWidget(page);
+      expect(after.wrapLang).toBe('es');
+    });
+  });
+
+  test('WDG-06 override: the composer EN/ES pair switches copy and lang in both directions without host storage', async ({
+    page,
+    browserName,
+  }) => {
+    await installCaptureStub(page, browserName);
+    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+    await waitForWidget(page);
+
+    await clickLauncher(page);
+    await waitForComposer(page);
+    const en = await probeWidget(page);
+    expect(en.composerHeading).toBe('Report a bug');
+    expect(en.wrapLang).toBe('en');
+
+    // ES switch: every visible string and the declared language move together.
+    await setLocaleToggle(page, 'es');
+    const es = await probeWidget(page);
+    expect(es.composerHeading).toBe('Reportar un error');
+    expect(es.wrapLang).toBe('es');
+    expect(es.composerTitle, 'the draft state survives the locale re-render').toBe(en.composerTitle);
+
+    // The override is session-scoped in memory (SEC-03 / T-03-16): the static
+    // `sdk-no-host-storage` gate is the structural proof; the zero reads here
+    // are the behavioural one on the running bundle.
+    const storage = await page.evaluate(() => ({
+      local: Object.keys(localStorage).length,
+      session: Object.keys(sessionStorage).length,
+    }));
+    expect(storage, 'the locale override never touches host storage').toEqual({
+      local: 0,
+      session: 0,
+    });
+
+    // EN switch back within the same session.
+    await setLocaleToggle(page, 'en');
+    const back = await probeWidget(page);
+    expect(back.composerHeading, 'the pair switches in both directions').toBe('Report a bug');
+    expect(back.wrapLang).toBe('en');
+  });
+
+  test.describe('locale: es-ES (lazy editor chunk)', () => {
+    test.use({ locale: 'es-ES' });
+    
+    test('WDG-06 editor: the editor chrome localises', async ({ page, browserName }) => {
+      await installCaptureStub(page, browserName);
+      await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+      await waitForWidget(page);
+
+      await clickLauncher(page);
+      await waitForComposer(page);
+      const composing = await probeWidget(page);
+      expect(composing.wrapLang, 'core resolves es before the chunk exists').toBe('es');
+      expect(composing.composerHeading).toBe('Reportar un error');
+
+      await openEditor(page);
+      const probe = await probeWidget(page);
+      expect(probe.screen).toBe('editor');
+      expect(probe.editorTitle, 'the editor dictionary resolves the locale core passed in').toBe(
+        'Anotar',
+      );
+      const chrome = await page.evaluate(() => {
+        const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
+        const labels: Record<string, string> = {};
+        for (const button of [...(root?.querySelectorAll('button.tool') ?? [])]) {
+          const tool = button.getAttribute('data-wb-tool') ?? '';
+          labels[tool] = button.getAttribute('aria-label') ?? '';
+        }
+        const done = (root?.querySelector('button.editor-done') as HTMLButtonElement | null)
+          ?.textContent;
+        const canvasLabel = root
+          ?.querySelector('canvas.editor-canvas')
+          ?.getAttribute('aria-label');
+        const undoTitle = root
+          ?.querySelector('button.tool[data-wb-tool="undo"]')
+          ?.getAttribute('title');
+        return { labels, done: done ?? '', canvasLabel: canvasLabel ?? '', undoTitle: undoTitle ?? '' };
+      });
+      expect(chrome.labels, 'every tool label renders in Spanish (WDG-06 editor)').toEqual({
+        freehand: 'Dibujar',
+        arrow: 'Flecha',
+        rectangle: 'Rectángulo',
+        text: 'Texto',
+        mask: 'Enmascarar',
+        undo: 'Deshacer',
+      });
+      expect(chrome.done).toBe('Listo');
+      expect(chrome.canvasLabel).toBe('Captura con anotaciones');
+      expect(chrome.undoTitle, 'the title attribute re-renders with the aria-label').toBe('Deshacer');
+    });
+  });
+});
+
+/**
+ * The runtime half of RNF-01/PRF-02: the annotator chunk is a separate artefact fetched
+ * only when Annotate is pressed, exactly once, and it adds no global to the host page.
+ * A chunk that loaded eagerly (or twice) would break the tiered budget while every
+ * functional row stayed green.
+ *
+ * The rest of J-13's budget rows are type 6 (`npm run test:packaging` → `check:size`);
+ * this is the one claim only the browser can make.
+ */
+test.describe('J-13 — Lazy-chunk boundary: one fetch, no global', () => {
+  test('PRF-02 lazy: the annotator chunk is fetched only on Annotate, exactly once, and adds no global', async ({
+    page,
+    browserName,
+  }) => {
+    await installCaptureStub(page, browserName);
+    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+    await waitForWidget(page);
+
+    const chunkRequests: string[] = [];
+    page.on('request', (request) => {
+      const url = request.url();
+      if (url.includes('/__e2e/bundles/watchbug-annotator')) chunkRequests.push(url);
+    });
+
+    await clickLauncher(page);
+    await waitForComposer(page);
+    expect(
+      chunkRequests,
+      'zero requests for the annotator chunk while the composer is open (PRF-02, UI-SPEC A-2)',
+    ).toHaveLength(0);
+
+    const before = await snapshotGlobals(page);
+    await openEditor(page);
+    expect(chunkRequests, 'exactly one fetch after Annotate image').toHaveLength(1);
+    expect(
+      chunkRequests[0],
+      'the shipped lazy artifact is the .mjs twin (OQ-5)',
+    ).toMatch(/watchbug-annotator\.mjs$/);
+    const after = await snapshotGlobals(page);
+    expect(addedNames(after.w, before.w), 'the chunk load adds no global (INV-02)').toEqual([]);
+    expect(after.p, 'and patches no native prototype').toEqual(before.p);
+
+    // Re-entrancy: close and reopen — the memoised module is reused, so the
+    // request count stays exactly one.
+    await done(page);
+    await openEditor(page);
+    expect(chunkRequests, 'reopening reuses the memoised module (no second fetch)').toHaveLength(1);
+    await done(page);
   });
 });

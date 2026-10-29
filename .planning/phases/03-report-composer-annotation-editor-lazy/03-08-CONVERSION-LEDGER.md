@@ -326,6 +326,56 @@ banners.
 
 ---
 
+### Task 3 — Batch 3c: journey grouping for the annotator/mask families (38 rows) and the mask-arithmetic unit lane
+
+Same shape as 3b: **six more journey blocks, 38 rows, zero disposition changes**,
+plus one new cheaper-layer pin for the mask *mechanism*.
+
+| Journey block created | Rows moved in | Count |
+|---|---|---|
+| `J-05 — Manual mask (tier 2/3): the destructive bake` | 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153 | 11 |
+| `J-06 — Full annotation: ink, shapes, labels, undo, lazy recovery` | 132, 134, 135, 136, 137, 138, 139, 140, 141 | 9 |
+| `J-07 — Degraded capture and attachment` | 88, 90, 92, 126, 127, 128, 129, 130, 131 | 9 |
+| `J-10 — Transport resilience: retry, terminal failure, dismissal` | 93, 94, 95, 96 | 4 |
+| `J-12 — i18n: English and Spanish across core and the lazy chunk` | 76, 124, 125, 142 | 4 |
+| `J-13 — Lazy-chunk boundary: one fetch, no global` | 133 | 1 |
+
+**New cheaper-layer pin (not a row conversion): `tests/unit/mask-geometry.test.ts`, 16 tests.**
+
+| Row | Row disposition | Pure half now pinned at |
+|---|---|---|
+| 143 `PRV-04 CA-02` flat opaque fill | `kept-in-journey` | `mask-geometry.test.ts` — `solidFillRegion` paints `MASK_RGB` at `MASK_ALPHA_OPAQUE` over the floored/ceiled rect, forces alpha even when the target's alpha is 0, leaves every outside pixel untouched, and throws on a non-finite rect. |
+| 147 `PRV-04 pixelate` | `kept-in-journey` | Same file — `blockSizeFor` (R-13 floor `max(8, 2× cap height)`, monotonic, ceil never truncates), `snapOutward` (floor left/top, ceil right/bottom, tiles from the bitmap origin, may only grow the area, refuses a non-tiling block), and `pixelateRegion` (rounded block mean, alpha forced opaque, a partial edge block averages its own pixels only — 255/4 = 64, not 255/64 — and never writes outside its rect). |
+| 144, 145, 146, 148, 149, 150–153 | `kept-in-journey` | Nothing to pin: the confirmation state machine is DOM, and the rest are the mask's own pixels in the delivered image at four device scales. |
+| 132, 135–141 | `kept-in-journey` | Nothing to pin: every claim is ink bands read out of the decoded image (and, for ANN-04, real typing into the canvas overlay). The undo stack is not a pure module — `undoStroke()` pops and then `redraw()`s the canvas, so "pops exactly one" is only observable as the middle ink band disappearing. |
+| 88, 90, 92, 126–131 | `kept-in-journey` | Nothing to pin: capture denial, missing API, file-input decode, magic-byte sniffing and the zero-request assertion. |
+| 93, 94, 95, 96 | `kept-in-journey` | Already pinned in Batch 3a (`tests/integration/transport-retry.test.ts` for classification, `tests/unit/status-truncate.test.ts` for the clamp); what remains is the shadow-DOM status sequence and wall-clock timing. |
+| 76, 124, 125, 142 | `kept-in-journey` | Already pinned in Batch 3a (`tests/unit/i18n-resolver.test.ts`); what remains is rendered copy, `lang` and the toggle. |
+| 133 | `kept-in-journey` | Nothing to pin: chunk request counts and the global-surface delta over a live page. The *budget* half is type 6 (`check:size`). |
+
+**One measurement worth recording (no code change).** `blockSizeFor(Number.NaN)`
+returns `NaN` — `Math.max(8, Math.ceil(NaN))` propagates. The floor is still
+guaranteed in production because the only caller passes `capHeightPx(ctx)`,
+which substitutes `LABEL_FONT_PX` for a non-finite or non-positive ascent.
+The unit row asserts the real contract (`NaN` propagates; the guard is at the
+call site) instead of claiming a floor the function does not implement — no
+threshold was relaxed and no production code was touched.
+
+**Grouping mechanics.** `test.use({ locale: 'es-ES' })` (WDG-06 es / editor) and
+`test.use({ deviceScaleFactor: N })` (PRV-04 DPR ×4) must be describe-scoped, so
+those six blocks became nested parameterisation describes inside J-12 / J-05 —
+not journeys of their own. Row order inside each journey follows the ledger's
+row numbering, not the original file order.
+
+**Verification for this batch:** `npx playwright test e2e/sdk.spec.ts
+--project=chromium` **79/79 passed** in 1.0 m (no skips); `npx vitest run`
+**138/138 passed** across 21 files (59 unit + 65 integration + 6 contract + 8
+packaging); `npx playwright test --list` **279 tests in 3 files** — unchanged,
+so no row was lost. Two expectation bugs in the *new* unit file were found and
+fixed against the real code paths before commit (not by weakening anything).
+
+---
+
 ## Summary Counts (running)
 
 | Disposition | Count |
