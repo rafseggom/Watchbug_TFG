@@ -191,7 +191,7 @@ undo stack pops exactly one entry.
 | 113 | `fail-closed` — a redaction scan error lands in the loud capture-failed state, zero POSTs | `kept-in-journey` | J-04. Error injection into the live scan + zero-request assertion. | |
 | 114 | `PRV-05` — the report carries no host cookie, storage or auth material | `kept-in-journey` | J-11. **SEC-03, stays e2e.** Sentinels planted in the real host context. | |
 | 115 | `PRV-06` — `meta.url` is path-only, query + fragment never enter the report | `kept-in-journey` | J-11. Intercepted request from a real page (the artifact-level proof). The helper is pinned in `tests/unit/sdk-meta.test.ts` (url half) and `tests/unit/url-path.test.ts` (API strip). | |
-| 116 | `P2-D-01` — the auto-title is `document.title` truncated to 200 code points, type is bug | **`converted`** | **`tests/unit/sdk-meta.test.ts`** — `buildMeta` is the production clamp (pure: reads `doc.title` + `loc.pathname`). All 8 tests carry the row's exact fixture (100 ASCII + 200 emoji) and thresholds. Both browser halves it also asserted are covered: `"type":"bug"` on the wire by `INT-02` (row 78) and the clamped prefill by `P3-D-02` (row 120). | |
+| 116 | `P2-D-01` — the auto-title is `document.title` truncated to 200 code points, type is bug | `converted` | **`tests/unit/sdk-meta.test.ts`** — `buildMeta` is the production clamp (pure: reads `doc.title` + `loc.pathname`). All 8 tests carry the row's exact fixture (100 ASCII + 200 emoji) and thresholds. Both browser halves it also asserted are covered: `"type":"bug"` on the wire by `INT-02` (row 78) and the clamped prefill by `P3-D-02` (row 120). | |
 | 117 | `self-hosted` — zero third-party requests, only the configured API base | `kept-in-journey` | J-11. Every `page.on('request')` on a real navigation. | |
 | 118 | `S-8` — a cross-origin loading script refuses to init without an explicit `endpoint` | `kept-in-journey` | J-11. Cross-origin script tag in a real page. | |
 | 119 | `PRV-07` — review shows the flattened artifact and Send posts exactly once | `kept-in-journey` | J-02. The one-send guarantee on a live request. | |
@@ -397,8 +397,8 @@ documentation the earlier moves left behind.
    `Self-hosted promise`, `S-8`, `CAP-02/CAP-03`, …) are gone. Each surviving
    banner now names the **helper cluster** it introduces and the journey that
    consumes it, and the file opens with a `Shared harness` note stating the
-   one-describe-per-journey contract. The old `R-12: e2e only, no unit tests`
-   paragraph was removed with them — R-19 supersedes it and the sentence was
+   one-describe-per-journey contract. The old `R-12: e2e only, no unit tests` (superseded by R-19)
+   paragraph was removed with them — R-19 supersedes it (this plan) and the sentence was
    the last stale copy in this file.
 4. `tests/packaging/journey-cap.test.ts` (**new, 5 tests, type 6**) — the cap
    is now a failing test rather than an aspiration: the 13 + 1 block
@@ -449,6 +449,25 @@ content depends on the line ending.
 The `sdk.spec.ts` row is now 80 declarations, not 77: Batch 2b moved 8
 declarations (not 11 — 11 is the *instance* count the `WDG-02` loop inflates
 them to), so `88 − 8 = 80`. Instance counts are reported separately below.
+
+**Row-id reconciliation (audited 2026-10-29).** The disposition tables carry
+**153** numbered rows, not 148, because Batch 1c (the tracer) converted five
+tests that Batch 2a/2b then listed again in full. All five are verifiable
+re-listings, not extra coverage:
+
+| Task 1 row | Re-listed as | Test |
+|---|---|---|
+| #1 | #56 | `R-08/S-5: meta.url is stored path-only …` (row 1 attributes it to `ingest.spec.ts`; the baseline places it in `hostile.spec.ts` — row 56 is the correct attribution) |
+| #2 | #14 | `ING-03: same Idempotency-Key replays the same id …` |
+| #3 | #15 | `ING-03: concurrent pair with one key yields one row` |
+| #4 | #16 | `ING-03 (Q6): missing Idempotency-Key → 400 …` |
+| #5 | #18 | `CAP-03 text-only: a meta-only submission stores a row with no screenshot` |
+
+So `153 − 5 = 148` distinct dispositions, which is exactly
+`57 converted + 90 kept-in-journey + 1 justified-redundant`. The audit below
+asserts the stronger, machine-checkable property: ids are contiguous `1..153`
+with no gaps, no duplicate ids, and every row carries exactly one disposition
+plus a non-empty target/justification.
 
 **Instances per engine (post-Batch 3a, `npx playwright test --list`):**
 

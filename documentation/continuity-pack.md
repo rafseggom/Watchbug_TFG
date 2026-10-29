@@ -141,7 +141,7 @@ Failed or rejected paths. **Do not re-explore.** Full rationale in `resolution-r
 
 ## 5. Standing constraints for any future session
 
-1. **R-12 is owner-stated policy, not a preference.** E2E and property assertions only. No unit-test suite, no coverage targets. Do not reintroduce them.
+1. **R-19 governs verification; it amends R-12.** Six test types, each placed where it belongs (`AGENTS.md` → *Testing & QA*): unit, integration, contract, VRT, packaging, and e2e. E2E is a hard-capped ≤20 core user journeys (J-01..J-20, enforced by `tests/packaging/journey-cap.test.ts`). What survives from R-12: security evidence stays at the **artifact level** (CA-02 decodes the encoded bytes), and coverage % is still not a gate. Do not reopen the old "no tests at all" reading; do not reintroduce coverage thresholds.
 2. **R-17 is owner-stated policy.** No calendar-driven descoping. Cut scope by coherence only.
 3. **R-13 is a security invariant derived from SEC-02.** Masking = solid fill or block pixelation ≥8 px. Never gaussian blur, never CSS overlay.
 4. **Consultation triggers still bind** (`mentorship-pack.md` §5.2, `mission-brief.md` §3). Anything touching the SDK public interface, the `/api/incidents` schema, the isolation strategy, DB schema, or new non-permissive dependencies requires a Consultation Request Pack before code changes.

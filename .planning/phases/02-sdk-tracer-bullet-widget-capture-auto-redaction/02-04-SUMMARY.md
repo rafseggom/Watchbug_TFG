@@ -35,7 +35,7 @@ tech-stack:
     - "CA-02-style artifact proof without a reference image: both capture stubs paint `#ff00ff` over `[data-capture-marker]`'s viewport rect (same outward rounding as the redactor), so 'zero marker-coloured pixels inside the expected rect' IS the original-pixels-absent proof — and lookalike/negative-control rows prove the marker survives (and this analysis finds it) when nothing masks"
     - "fixture secrets styled `line-height: 1` so the element rect (what the stub paints) sits inside the text-node rect (what the redactor masks) — probe-verified on all three engines; `line-height: 1.5` inverts the relationship and legitimate marker pixels would survive"
     - "expected-mask rect computed from the DECODED output's own scale (`bitmap.width / viewport.width`), so ladder resamples (dpr-3 clamp) stay correctly registered"
-    - "RED-first e2e under R-12: the failing row itself is the RED (`test(02-04): …` + `gsd_run check tdd-red-evidence` → `RED_EVIDENCE_OK`), no unit-test runner exists or may exist"
+    - "RED-first e2e under R-12: the failing row itself is the RED (`test(02-04): …` + `gsd_run check tdd-red-evidence` → `RED_EVIDENCE_OK`), no unit-test runner existed then (amended by R-19)"
 
 key-files:
   created:
@@ -149,6 +149,13 @@ metrics:
   completed: 2026-10-24
   status: complete
 ---
+
+> **Superseded by R-19 (2026-10-29):** this document predates the six-type test taxonomy.
+> Every "no unit tests / never unit tests / DONT MAKE A BUNCH OF TESTS / no other test
+> artefact" statement in it is a **historical record of R-12 as it stood then** — not current
+> policy. Current policy lives in `AGENTS.md` → *Testing & QA* and `.planning/REQUIREMENTS.md`
+> (R-19 amends R-12; artifact-level security evidence and the no-coverage-vanity rule survive).
+
 
 # Phase 2 Plan 4: Auto-Redaction Catalog & Artifact-Level Privacy Proof Summary
 

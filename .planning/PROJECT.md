@@ -72,7 +72,7 @@ Every prioritisation trade-off resolves against this sentence. Capture fidelity 
 - **Panel auth** (SEC-06, R-05): Argon2id (bcrypt acceptable fallback), JWT with a defined TTL in `HttpOnly` / `SameSite=Lax` / `Secure` cookies. Single admin provisioned from `.env`.
 - **Deployment** (INV-03): one `docker-compose.yml`, exactly three services — `api`, static `panel`, persistent `db`. Provider-agnostic. Attachments on a filesystem volume, served **only** through the authenticated API (R-04).
 - **Personal data** (R-09, R-10): `user: {id, name?, email?}` is host-supplied and sent by default with `privacy: { userIdentity: false }` as opt-out. Identity fields auto-purge after N days (default 30, configurable); reports persist anonymised. RGPD Art. 13 notice belongs in integration docs.
-- **Verification** (R-12): **e2e and property assertions only** — one Playwright suite mapping 1:1 to CA-01…CA-05, plus the `check:size` build gate. No unit-test suites, no coverage thresholds.
+- **Verification** (R-19, amending R-12): a **six-type taxonomy** — unit, integration, contract, VRT, packaging, and e2e — each with its own runner and command (`AGENTS.md` → *Testing & QA*). E2E is structurally capped at ≤20 core user journeys (J-01..J-20) and runs on chromium + firefox + webkit; `npm run test:all` runs every type and `check:size` still gates the build. Security evidence stays at the artifact level; coverage % is not a gate.
 - **Scope discipline** (R-17): no calendar-driven descoping. Scope is cut by coherence only. All Mentorship Pack quality gates remain hard.
 - **License** (R-07): Apache-2.0. ⚠ Pending confirmation of the degree-awarding institution's IP policy (Q-05) before the repository is made public.
 

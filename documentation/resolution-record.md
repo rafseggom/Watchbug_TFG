@@ -35,7 +35,7 @@ Amendments to a governing document are appended to that document as an `## Enmie
 | R-09 | End-user identity **on by default, opt-out** | ✓ Approved | Owner |
 | R-10 | Retention: identity **auto-purged after N days** (default 30) + manual delete / erase | ✓ Approved | Owner |
 | R-11 | Screenshot encoding **WebP q≈0.8 with PNG fallback** | ✓ Approved | Owner |
-| R-12 | **E2E / property verification only.** Unit-test suite abolished | ✓ Approved | Owner |
+| R-12 | **E2E / property verification only.** Unit-test suite abolished → **amended by R-19** (six-type taxonomy; the artifact-level rule survives) | ✓ Approved | Owner |
 | R-13 | Masking **must not be reconstructible**: solid fill or block pixelation (block ≥8 px). Gaussian blur prohibited | ✓ Approved | Agent (SEC-02 derivation) |
 | R-14 | Shadow DOM `mode:'closed'` in production + build-time `SHADOW_MODE` flag for the e2e bundle | ◆ Proposed | Agent |
 | R-15 | **TypeScript end-to-end** monorepo (npm workspaces) | ◆ Proposed | Agent |
@@ -156,6 +156,8 @@ Identity fields (`user.*`) auto-purged after N days, default **30**, configurabl
 WebP at q≈0.8, PNG where unsupported. 1920×1080 screenshot: WebP ≈60–150 KB vs PNG ≈300–800 KB — a ~5× difference in storage and bandwidth. Masking runs on `ImageData` **before** encode (SEC-02) so the choice is orthogonal to privacy.
 
 ### R-12 · E2E / property verification only
+
+> **Superseded by R-19 (§1, below), 2026-10-29.** R-12's *artifact-level* security rule (CA-02 proven on the encoded bytes) and its refusal to let a coverage percentage become a vanity metric are **kept and inherited**. Only the "never unit tests" absolute is replaced, by the six-type taxonomy. Everything below is the original record, preserved verbatim as history — read it as *what R-12 said*, not as current policy.
 
 **Owner directive, stated twice: "DONT MAKE A BUNCH OF TESTS. Only make e2e as necessary, not unit tests."** This is policy.
 

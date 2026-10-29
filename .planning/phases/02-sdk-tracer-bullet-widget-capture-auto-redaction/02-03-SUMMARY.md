@@ -35,7 +35,7 @@ tech-stack:
   patterns:
     - "Outgoing bytes are read at the **fetch boundary** (an e2e `window.fetch` wrapper recording the actual `FormData` image Blob), never from `request.postDataBuffer()` — Playwright's WebKit drops blob-backed multipart payloads (02-02 deviation 2, now load-bearing for every decode row)"
     - "Refusal rows are proved non-vacuously with a `data-wb-stub-invoked` attribute: the row distinguishes 'the policy refused the fake' from 'the API was merely missing'"
-    - "RED-first e2e under R-12: the failing row itself is the RED (`test(02-03): …` + `gsd_run check tdd-red-evidence` → `RED_EVIDENCE_OK`), the implementation lands in the `feat(02-03): …` commit — no unit-test runner exists or may exist"
+    - "RED-first e2e under R-12: the failing row itself is the RED (`test(02-03): …` + `gsd_run check tdd-red-evidence` → `RED_EVIDENCE_OK`), the implementation lands in the `feat(02-03): …` commit — no unit-test runner existed then (amended by R-19)"
     - "Stub provocations (uniform / beyond-cap / prompt-rejected / non-tab-surface) are options on one `installCaptureStub(page, browserName, options)` helper, so no row carries bespoke init-script wiring"
 
 key-files:
@@ -131,6 +131,13 @@ metrics:
   completed: 2026-10-24
   status: complete
 ---
+
+> **Superseded by R-19 (2026-10-29):** this document predates the six-type test taxonomy.
+> Every "no unit tests / never unit tests / DONT MAKE A BUNCH OF TESTS / no other test
+> artefact" statement in it is a **historical record of R-12 as it stood then** — not current
+> policy. Current policy lives in `AGENTS.md` → *Testing & QA* and `.planning/REQUIREMENTS.md`
+> (R-19 amends R-12; artifact-level security evidence and the no-coverage-vanity rule survive).
+
 
 # Phase 2 Plan 3: Capture Fidelity & Honest Failure Summary
 

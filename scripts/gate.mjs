@@ -2,10 +2,11 @@
 /**
  * scripts/gate.mjs — static architecture assertions. Zero dependencies.
  *
- * R-12 abolishes unit tests and coverage thresholds. RSK-19 states the
- * compensation explicitly: *"aserciones a nivel de artefacto + puertas grep
- * estáticas + check:size"*. This file is the **static grep gates** half of
- * that contract — it is part of the verification architecture, not optional
+ * **Superseded by R-19 (AGENTS.md Testing & QA):** the six-type taxonomy is
+ * the current verification policy. What R-12 still contributes is stated by
+ * RSK-19: artifact-level assertions + static grep gates + `check:size` are the
+ * security evidence, and this file is the **static grep gates** half of that
+ * contract — it is part of the verification architecture, not optional
  * linting. A gate nobody executes is a comment.
  *
  * Boundary (R-18 reuse-first — do not re-implement what already exists):

@@ -15,13 +15,20 @@ must_haves:
     - "The guard in `createReadRateLimit` narrows the `createRateLimit()` return union by its `isAllowed` discriminant BEFORE reading `isExceeded` / `ttlInSeconds`, so those two reads are reachable only for the `isAllowed: false` variant."
     - "Runtime admission behaviour is unchanged and provably so: a counted request at or under the per-IP maximum still passes to the handler (no 429 on the first read of a fresh window — the exact regression 62195bb fixed), and an exceeded request still answers a structured 429 carrying an integer `retry-after` of at least 1."
     - "The ingest path is untouched: `createIngestRateLimit`, `resolveIngestRateLimits` and `retryAfterSeconds` keep their current bodies, so the ING-05 429 shapes asserted in e2e/hostile.spec.ts stay byte-identical."
-    - "No error-suppression construct was substituted for narrowing, and no unit test was added (R-12: this repo has no unit-test suite and never will)."
+    - "No error-suppression construct was substituted for narrowing, and no unit test was added (R-12 at the time; amended by R-19 on 2026-10-29)."
   artifacts:
     - "apps/api/src/plugins/rate-limit.ts — `createReadRateLimit`'s preHandler guard reads `if (ipStatus.isAllowed || !ipStatus.isExceeded) return;` on the line that currently reads `if (!ipStatus.isExceeded) return;`, and the explanatory comment immediately above it no longer reads as though `isAllowed` is never consulted."
   key_links:
     - "`app.createRateLimit()` return type (node_modules/@fastify/rate-limit/types/index.d.ts:15-31) ↔ the guard in `createReadRateLimit` (line 94) ↔ the `isExceeded` / `ttlInSeconds` reads (lines 94-95). Break the narrowing and the CI typecheck goes red again — this is the exact link CI is failing on today."
     - "`createReadRateLimit` guard ↔ e2e/read-surface.spec.ts:25 row, whose under-limit assertion (`expect(res.status()).toBe(200)`) plus its fresh-IP assertion are the runtime-semantics guard: they fail if the guard ever inverts back to gating on `isAllowed` alone."
 ---
+
+> **Superseded by R-19 (2026-10-29):** this document predates the six-type test taxonomy.
+> Every "no unit tests / never unit tests / DONT MAKE A BUNCH OF TESTS / no other test
+> artefact" statement in it is a **historical record of R-12 as it stood then** — not current
+> policy. Current policy lives in `AGENTS.md` → *Testing & QA* and `.planning/REQUIREMENTS.md`
+> (R-19 amends R-12; artifact-level security evidence and the no-coverage-vanity rule survive).
+
 
 <objective>
 Repair the type-level regression introduced by commit 62195bb in `createReadRateLimit` (apps/api/src/plugins/rate-limit.ts) so CI job "Build + typecheck" is green again, without changing one byte of runtime behaviour.

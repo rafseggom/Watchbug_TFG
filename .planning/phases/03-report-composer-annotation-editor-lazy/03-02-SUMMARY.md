@@ -50,7 +50,7 @@ key-files:
 
 key-decisions:
   - "Oversize fixture takes the plan-sanctioned synthetic-SOF route: a real 64x64 chromium JPEG whose SOFn is re-declared 8000x8192 — the guard reads only the header, so no 64 MP browser canvas (memory-flaky) is ever needed"
-  - "Non-E0 admission is proven by re-submitting the served libvips bytes (FF D8 FF DB) back through the route — round-trip at the artifact level, no unit test"
+  - "Non-E0 admission is proven by re-submitting the served libvips bytes (FF D8 FF DB) back through the route — round-trip at the artifact level, no unit test (policy amended by R-19)"
   - "validateStructure's JPEG arm returns the bytes unchanged with the full written rationale (no entropy-scan walker; the sharp re-encode is the control; the header guard precedes it) — the unreachable default FAILS CLOSED rather than passing"
   - "Truncated-header refusal relies on assertDecodeSafe's existing fail-closed null -> 400 contract (message interpolates ext.toUpperCase() — already reads 'the JPEG header is missing or unreadable'), so guard.ts messages were not touched"
 

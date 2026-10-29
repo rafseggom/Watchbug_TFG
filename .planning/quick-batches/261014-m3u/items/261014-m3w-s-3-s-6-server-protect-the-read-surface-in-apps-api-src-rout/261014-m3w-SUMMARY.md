@@ -28,6 +28,13 @@ plan_head_before: e60d55f4b67acb5e83b41e925f50f27cfe58a455
 plan_head_after: b1799e7f394dde73fe93d713660b28008d3a72b5
 ---
 
+> **Superseded by R-19 (2026-10-29):** this document predates the six-type test taxonomy.
+> Every "no unit tests / never unit tests / DONT MAKE A BUNCH OF TESTS / no other test
+> artefact" statement in it is a **historical record of R-12 as it stood then** — not current
+> policy. Current policy lives in `AGENTS.md` → *Testing & QA* and `.planning/REQUIREMENTS.md`
+> (R-19 amends R-12; artifact-level security evidence and the no-coverage-vanity rule survive).
+
+
 # Phase 261014-m3u Plan 1: Protect read surface in apps/api/src/routes
 
 **One-liner:** Per-IP read rate limit + bounded keyset pagination; read GET routes now throttled and list bounded.
