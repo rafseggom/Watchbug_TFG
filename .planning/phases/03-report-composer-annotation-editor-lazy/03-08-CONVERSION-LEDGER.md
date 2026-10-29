@@ -376,6 +376,66 @@ fixed against the real code paths before commit (not by weakening anything).
 
 ---
 
+### Task 3 — Batch 3d: J-01 in place, the J-14 block, the cap enforced as a test
+
+The closing pass. No row changed disposition and none moved between layers: this
+batch places the last journey, makes the cap executable, and repairs the
+documentation the earlier moves left behind.
+
+**Structural changes.**
+
+1. `e2e/sdk.spec.ts` — the five J-01 rows (74, 75, 77, 79, 80) moved into
+   `test.describe('J-01 — Script tag, boot and the global surface')`, and the
+   thirteen journey blocks were **sorted into numeric order**. The file now has
+   **0** rows at column 0.
+2. `e2e/hostile.spec.ts` — the nine J-14 declarations (rows 57, 59–66) were
+   wrapped in `test.describe('J-14 — Hostile host CSS and render-inert
+   payloads')`. J-14 was the only journey living outside a block after Batch
+   2b moved its rows to their own spec.
+3. `e2e/sdk.spec.ts` prologue — the orphaned family banners (`Tracer rows`,
+   `Status-machine rows`, `Auto-redaction artifact rows`, `Composition rows`,
+   `Self-hosted promise`, `S-8`, `CAP-02/CAP-03`, …) are gone. Each surviving
+   banner now names the **helper cluster** it introduces and the journey that
+   consumes it, and the file opens with a `Shared harness` note stating the
+   one-describe-per-journey contract. The old `R-12: e2e only, no unit tests`
+   paragraph was removed with them — R-19 supersedes it and the sentence was
+   the last stale copy in this file.
+4. `tests/packaging/journey-cap.test.ts` (**new, 5 tests, type 6**) — the cap
+   is now a failing test rather than an aspiration: the 13 + 1 block
+   inventory, the exact J-01..J-14 set with no duplicates, **zero** top-level
+   rows in either widget spec, and the absence of J-15..J-20. A reserved number
+   mentioned in *prose* is allowed (that is how the reservation is documented);
+   only a test/describe **titled** with one fails.
+
+**Rows reviewed and deliberately NOT converted in this batch:** the five J-01
+rows are boot/global-surface/geometry observations over the shipped artefacts
+(IIFE + ESM lanes, closed shadow root, 48×48 launcher, disabled-while-open) —
+INV-01/INV-02 are properties of the *running* bundles, and no cheaper layer can
+observe them. J-14 is hostile-CSS isolation (WDG-02/03/05, CA-04) plus the
+render-inert payload row: both need a real page with a hostile stylesheet or a
+stored hostile payload rendered by the panel. Nothing was converted, nothing
+was dropped, no threshold moved.
+
+**Verification for this batch (the Task 3 final gate).**
+
+| Gate | Result |
+|---|---|
+| `npm run verify` (chromium + firefox + webkit) | **279/279 passed** in 4.2 m, **no skips** |
+| `npx vitest run` | **143/143 passed** across 22 files (59 unit + 65 integration + 6 contract + 13 packaging) |
+| `npx playwright test --list` | **279 tests in 3 files** — identical to the pre-Task-3 count |
+| `test.describe('J-NN — ')` blocks | **13** in `sdk.spec.ts` (J-01..J-13, numeric order) + **1** in `hostile.spec.ts` (J-14) = **14 ≤ 14** |
+| Rows outside a journey block | **0** |
+| `J-15`..`J-20` present | **none** |
+| `npm run gate` | **5 passed, 0 failed, 0 skipped** |
+| `npm run check:size` | **PASSED** — core 17.2 / 45 KB gz, lazy 6.8 / 25, runtime 24.4 / 80 |
+
+**EOL note.** `sdk.spec.ts` was already mixed-EOL (4 CRLF lines among 4,340 LF);
+the batch preserved each line verbatim apart from indentation, and git reports
+the usual `LF will be replaced by CRLF` warning from `core.autocrlf`. No file
+content depends on the line ending.
+
+---
+
 ## Summary Counts (running)
 
 | Disposition | Count |
@@ -402,24 +462,53 @@ them to), so `88 − 8 = 80`. Instance counts are reported separately below.
 
 ---
 
-## Journey Mapping (J-01..J-14 widget subset)
+## Journey Mapping (J-01..J-14 widget subset) — final, structural
 
-| Journey | Spec Tests Kept |
-|---------|-----------------|
-| J-01: Script tag + init() | INT-01, INT-05, WDG-01, WDG-04 |
-| J-02: Golden path | CAP-01, ING-01, ENR-06, PRV-07, CA-01 + **ingest.spec.ts J-02 panel render** |
-| J-03: Capture integrity | CAP-04, M-6, P2-D-12, OQ-1 |
-| J-04: Auto-redaction T1 | PRV-01/02/03, SEC-01/02, R-13 |
-| J-05: Manual mask T2/T3 | ANN-05/06, PRV-04, CA-02 |
-| J-06: Full annotation | ANN-01..04, ANN-06, PRF-02, C-2 |
-| J-07: Degraded capture | CAP-02, CAP-03 + **ingest.spec.ts J-07 text-only panel** |
-| J-08: HiDPI fidelity | CAP-05, H-1 |
-| J-09: WebP→PNG fallback | M-3, R-11, A-14 |
-| J-10: Transport resilience | ING-03, P2-D-03 (kept for its shadow-DOM half; classification pinned in `tests/integration/transport-retry.test.ts`), UI-SPEC backstop |
-| J-11: Payload privacy | PRV-05, PRV-06, SEC-03 |
-| J-12: i18n en/es | WDG-06, RNF-03 (sdk.spec.ts only) |
-| J-13: Size budget | PRF-01..04, CA-03 |
-| J-14: Hostile CSS isolation | WDG-02/03/05, CA-04 |
+Every row that stayed in `e2e/` now lives inside exactly one
+`test.describe('J-NN — …')` block. `Rows` are this ledger's numbers; `Count`
+is declarations (instances are reported separately at the bottom).
+
+| Journey block title | Home spec | Rows | Count |
+|---|---|---|---|
+| `J-01 — Script tag, boot and the global surface` | `sdk` | 74, 75, 77, 79, 80 | 5 |
+| `J-02 — Golden path: capture, compose, review, send, panel` | `sdk` (+1 cross-spec) | 78, 81, 119, 120, 121, 122, 123 · *ingest row 23* | 7 (+1) |
+| `J-03 — Capture integrity: a real frame, no widget, fail-closed geometry` | `sdk` | 82, 89, 91, 106 | 4 |
+| `J-04 — Automatic redaction (tier 1), proven on decoded bytes` | `sdk` | 97, 98, 99, 100, 101, 102, 103, 104, 105, 112, 113 | 11 |
+| `J-05 — Manual mask (tier 2/3): the destructive bake` | `sdk` | 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153 | 11 |
+| `J-06 — Full annotation: ink, shapes, labels, undo, lazy recovery` | `sdk` | 132, 134, 135, 136, 137, 138, 139, 140, 141 | 9 |
+| `J-07 — Degraded capture and attachment` | `sdk` (+1 cross-spec) | 88, 90, 92, 126, 127, 128, 129, 130, 131 · *ingest row 21* | 9 (+1) |
+| `J-08 — HiDPI capture fidelity: the DPR matrix` | `sdk` | 83, 84, 85, 86, 108, 109, 110, 111 | 8 |
+| `J-09 — WebP→PNG silent fallback (R-11)` | `sdk` | 87 | 1 |
+| `J-10 — Transport resilience: retry, terminal failure, dismissal` | `sdk` | 93, 94, 95, 96 | 4 |
+| `J-11 — Payload privacy and self-hosting (SEC-03)` | `sdk` | 107, 114, 115, 117, 118 | 5 |
+| `J-12 — i18n: English and Spanish across core and the lazy chunk` | `sdk` | 76, 124, 125, 142 | 4 |
+| `J-13 — Lazy-chunk boundary: one fetch, no global` | `sdk` | 133 | 1 |
+| `J-14 — Hostile host CSS and render-inert payloads` | `hostile` | 57, 59, 60, 61, 62, 63, 64, 65, 66 | 9 |
+
+**Structural count (the part Task 3d had to prove):**
+
+| Claim | Value |
+|---|---|
+| `test.describe('J-NN — …')` blocks in `e2e/sdk.spec.ts` | **13** (J-01..J-13, in numeric order) |
+| … in `e2e/hostile.spec.ts` | **1** (J-14) |
+| Widget journeys total | **14** — at the cap, and below R-19's 20 |
+| Rows declared at column 0 (outside a journey) in either spec | **0** |
+| `J-15`..`J-20` claimed by any test/describe title | **0** (reserved for Phases 4–7) |
+| Instances per engine | **93** (sdk 79 + hostile 12 + ingest 2) |
+| Instances over 3 engines (`npm run verify`) | **279** |
+
+Two rows live *outside* the two widget specs by design: the panel-render
+halves of J-02 (row 23) and J-07 (row 21) stayed in `e2e/ingest.spec.ts`, where
+the whole ingest/panel stack already runs. Their titles name the journey
+(`"J-02 panel renders the row and its screenshot"`, `"J-07 CAP-03 text-only:
+the panel lists it"`) but they are not wrapped in a describe, so a journey is
+never described twice across the suite.
+
+The cap is **enforced**, not just measured: `tests/packaging/journey-cap.test.ts`
+(type 6) asserts the 13 + 1 block inventory, the exact J-01..J-14 set with no
+duplicates, zero top-level rows in either spec, and the absence of J-15..J-20.
+A 15th widget journey or a stray top-level row now fails `npm run
+test:packaging` in milliseconds.
 
 ---
 
@@ -455,4 +544,6 @@ them to), so `88 − 8 = 80`. Instance counts are reported separately below.
 - Batch 2c coverage audit: every original assertion survives. The two browser-only halves have named successors rather than drops — the rendered "Watchbug" heading/app frame is exercised by the kept J-02/J-07 panel journeys, and the "no CSP refusal" console watch is replaced by its artifact-level *cause* (the shipped `apps/panel/dist/index.html` carries no inline `<script>`/`<style>`, which is what `default-src 'self'` would refuse). Every live row targets the same `http://127.0.0.1:8080` same-origin surface the deleted spec used.
 - Batch 2c environment note: the three live rows need the compose stack, exactly as the integration suite needs the published API. `test:packaging` now runs `check:size` → `check:compose` → `vitest run tests/packaging` so the type-6 suite is actually executed by the command that names it (previously only the two gate scripts ran, leaving the packaging tests uninvoked by their own script). Verified: `test:packaging` 8/8 green, `npx vitest run tests/integration tests/contract tests/packaging` 62/62 (55 previous + 7 new), `npm run verify` 282/282, `gate` 5/5, `check:size` PASS.
 - Batch 2c docs: `.github/workflows/ci.yml`'s host-build comment referenced `deploy.spec.ts` as the spawner of `apps/api/dist/index.mjs`; it now names `tests/packaging/deploy-contract.test.ts`.
-- **Commit map** (the `Commit` column is left as `—` where a row's batch hash is recorded here instead): Task 1 / Batch 1c = `792ab96`; Batch 2a (rows 6–20, 22, 24–27, 29–31) = `132a2c5`; Batch 2b (rows 32–66) = `b1e2b35`, ledger hash backfill = `78d632e`; Batch 2c (rows 67–73) = `49ee180`; Batch 3a (rows 74–153) = `6723c68`.
+- **Commit map** (the `Commit` column is left as `—` where a row's batch hash is recorded here instead): Task 1 / Batch 1c = `792ab96`; Batch 2a (rows 6–20, 22, 24–27, 29–31) = `132a2c5`; Batch 2b (rows 32–66) = `b1e2b35`, ledger hash backfill = `78d632e`; Batch 2c (rows 67–73) = `49ee180`; Batch 3a (rows 74–153) = `6723c68`; Batch 3b (J-02/03/04/08/09/11 + `tests/unit/redaction-patterns.test.ts`) = `837e6e8`; Batch 3c (J-05/06/07/10/12/13 + `tests/unit/mask-geometry.test.ts`) = `e671c19`; Batch 3d (J-01, J-14 block, prologue banners, `tests/packaging/journey-cap.test.ts`) = the `refactor(03-08): Batch 3d …` commit, whose hash is recorded in `03-08-SUMMARY.md`.
+- **Batches 3b–3d in one line:** the widget suite is now *shaped* like the journey table — 13 describes in `sdk.spec.ts` plus J-14 in `hostile.spec.ts`, 0 rows outside a block, and `tests/packaging/journey-cap.test.ts` fails if that ever stops being true. Two new unit lanes (24 tests) pin the pure halves that were previously only implied by pixel rows: redaction pattern matching (J-04) and mask arithmetic (J-05). No row was deleted, no threshold weakened, no security row left e2e.
+- **Batch 3d measurement:** the four `WDG-06`/`PRV-04`/`CAP-05`/`H-1` `test.use()` groups are *nested* parameterisation describes (`deviceScaleFactor: N`, `locale: es-ES`) inside their journey. They are not journeys, which is why the J-NN count is 14 and not 22; the cap test counts only `J-NN — ` titles by construction.

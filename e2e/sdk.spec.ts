@@ -179,220 +179,23 @@ async function interceptIncidentPosts(
 }
 
 /**
- * INT-01 / WDG-04 — the boot and global-surface group.
+ * Shared harness for the widget journeys in this file.
  *
- * These are the first rows of the one suite (R-12: e2e only, no unit tests) and
- * they exist to make the two architecture-loaded SDK promises observable:
+ * The rows below are organised as **one `test.describe('J-NN — …')` per core
+ * user journey** — J-01..J-13 of the widget subset. J-14 (hostile host CSS)
+ * lives in `e2e/hostile.spec.ts`; J-15..J-20 are reserved for Phases 4–7.
+ * Nothing lives outside a journey block, which is what makes the R-19 journey
+ * cap structural rather than aspirational: a new journey cannot appear
+ * without a new describe, and `tests/packaging/journey-cap.test.ts` fails when
+ * one does.
  *
- *  - **INT-01** — a host page adds Watchbug with a single async script tag and
- *    the widget boots, with no bundler and no build step.
- *  - **WDG-04** — the IIFE lane adds exactly one global (`Watchbug`), the ESM
- *    lane adds none, and the four native prototypes are never patched.
- *
- * Isolation is asserted where it is observable: the production bundle runs
- * with a **closed** shadow root, so the row proves the page cannot pierce it
- * and that nothing was injected into the host document. The open-mode artifact
- * (`watchbug.e2e.js`, R-14) is used only where the root must be entered to see
- * the launcher — it differs from production by the `SHADOW_MODE` constant and
- * nothing else.
- *
- * Fixtures are served by `page.route` at the panel origin, never from the
- * nginx-served root (Pitfall 4: that location's CSP would block the fixture's
- * own inline instrumentation and the rows would pass on nothing).
+ * Everything here is plumbing shared by several journeys — types, fixtures,
+ * the artifact decoders (`analyzeImagePixels`, `analyzeRedaction`) and the
+ * one-shot walkers (`runRedactionRow`, `runDprMaskRow`, `maskAndSend`). R-12
+ * asserted the security properties at artifact level; R-19 keeps that and adds
+ * cheaper layers for the pure halves, so several helpers carry a note naming
+ * the unit or integration test that pins their logic.
  */
-
-test('INT-01: one async script tag boots the widget — window.Watchbug plus the isolated host in the closed production bundle', async ({ page }) => {
-  const pageErrors: string[] = [];
-  page.on('pageerror', (error) => pageErrors.push(error.message));
-
-  await openHostFixture(page, { bundle: 'watchbug.js', mode: 'iife' });
-
-  const booted = await page.evaluate(() => {
-    const api = (window as unknown as {
-      Watchbug?: { init?: unknown; WATCHBUG_VERSION?: unknown };
-    }).Watchbug;
-    const host = document.querySelector('watchbug-host');
-    return {
-      hasApi: typeof api === 'object' && api !== null,
-      initType: typeof api?.init,
-      version: api?.WATCHBUG_VERSION,
-      hostPresent: host !== null,
-      hostIsLastChild: host !== null && document.documentElement.lastElementChild === host,
-      // INV-01: production root is closed — `shadowRoot` must stay null.
-      shadowRoot: host?.shadowRoot ?? null,
-      hostStyle: host?.getAttribute('style') ?? '',
-      injectedStyleSheets: document.querySelectorAll('style, link[rel="stylesheet"]').length,
-    };
-  });
-
-  expect(pageErrors).toEqual([]);
-  expect(booted.hasApi).toBe(true);
-  expect(booted.initType).toBe('function');
-  expect(booted.version).toBe('0.1.0');
-  expect(booted.hostPresent).toBe(true);
-  expect(booted.hostIsLastChild).toBe(true);
-  expect(booted.shadowRoot).toBeNull();
-  expect(booted.hostStyle).toContain('position: fixed !important');
-  expect(booted.hostStyle).toContain('z-index: 2147483647 !important');
-  expect(booted.hostStyle).toContain('pointer-events: none !important');
-  // WDG-03: no stylesheet or class leaked into the host document.
-  expect(booted.injectedStyleSheets).toBe(0);
-});
-
-test('INT-01: the one-gesture launcher renders 48x48 inside the open-mode shadow root', async ({ page }) => {
-  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
-
-  const rendered = await page.evaluate(() => {
-    const host = document.querySelector('watchbug-host');
-    const root = host?.shadowRoot ?? null;
-    const button = root?.querySelector('button.launcher') as HTMLButtonElement | null;
-    const panel = root?.querySelector('.panel') as HTMLElement | null;
-    const text = root?.querySelector('.text') ?? null;
-    if (button === null) {
-      return { found: false as const };
-    }
-    const rect = button.getBoundingClientRect();
-    const style = getComputedStyle(button);
-    return {
-      found: true as const,
-      width: Math.round(rect.width),
-      height: Math.round(rect.height),
-      rightInset: Math.round(window.innerWidth - rect.right),
-      bottomInset: Math.round(window.innerHeight - rect.bottom),
-      radius: style.borderRadius,
-      position: style.position,
-      ariaLabel: button.getAttribute('aria-label'),
-      disabled: button.disabled,
-      panelHidden: panel?.getAttribute('data-hidden'),
-      liveRole: text?.getAttribute('role'),
-      liveMode: text?.getAttribute('aria-live'),
-    };
-  });
-
-  expect(rendered.found).toBe(true);
-  if (!rendered.found) return;
-  expect(rendered.width).toBe(48);
-  expect(rendered.height).toBe(48);
-  expect(rendered.radius).toBe('24px');
-  expect(rendered.position).toBe('fixed');
-  expect(rendered.rightInset).toBe(24);
-  expect(rendered.bottomInset).toBe(24);
-  expect(rendered.ariaLabel).toBe('Report a bug');
-  expect(rendered.disabled).toBe(false);
-  // The status panel is mounted but idle: launcher only until the flow runs.
-  expect(rendered.panelHidden).toBe('true');
-  expect(rendered.liveRole).toBe('status');
-  expect(rendered.liveMode).toBe('polite');
-});
-
-test('WDG-04: the IIFE lane adds exactly one global, the ESM lane adds none, and native prototypes are untouched', async ({ page, context }) => {
-  // --- IIFE lane: one `Watchbug` property, nothing else -------------------
-  await openHostFixture(page, { bundle: 'watchbug.js', mode: 'iife' });
-  await waitForSnapshot(page);
-
-  const iifeBefore = await readSnapshot(page, 'before');
-  const iifeAfter = await readSnapshot(page, 'after');
-
-  // Guard the measurement itself: the SDK must not be present before it loads,
-  // otherwise `addedNames` could pass while proving nothing.
-  expect(iifeBefore.w).not.toContain('Watchbug');
-  expect(addedNames(iifeAfter.w, iifeBefore.w)).toEqual(['Watchbug']);
-  expect(iifeAfter.p).toEqual(iifeBefore.p);
-
-  // --- ESM lane: no global at all, and the widget still mounts ------------
-  const esmPage = await context.newPage();
-  await openHostFixture(esmPage, { bundle: 'watchbug.mjs', mode: 'esm' });
-  await waitForSnapshot(esmPage);
-
-  const esmBefore = await readSnapshot(esmPage, 'before');
-  const esmAfter = await readSnapshot(esmPage, 'after');
-
-  expect(esmBefore.w).not.toContain('Watchbug');
-  expect(addedNames(esmAfter.w, esmBefore.w)).toEqual([]);
-  expect(esmAfter.p).toEqual(esmBefore.p);
-  await expect(esmPage.locator('watchbug-host')).toHaveCount(1);
-
-  await esmPage.close();
-});
-
-/* ------------------------------------------------------------------------- */
-/* Tracer rows — 02-02 Task 1                                                */
-/* ------------------------------------------------------------------------- */
-
-test('INT-05: the ESM build boots the same widget and adds zero window properties', async ({ page, context }) => {
-  await openHostFixture(page, { bundle: 'watchbug.mjs', mode: 'esm' });
-  await waitForSnapshot(page);
-  await waitForWidget(page);
-
-  const before = await readSnapshot(page, 'before');
-  const after = await readSnapshot(page, 'after');
-  expect(before.w).not.toContain('Watchbug');
-  expect(addedNames(after.w, before.w)).toEqual([]);
-  expect(after.p).toEqual(before.p);
-
-  const esm = await page.evaluate(async () => {
-    const host = document.querySelector('watchbug-host');
-    const module = (await import('/__e2e/bundles/watchbug.mjs')) as {
-      init?: unknown;
-      WATCHBUG_VERSION?: unknown;
-    };
-    return {
-      hostPresent: host !== null,
-      // Production ESM lane is the closed build: no page-visible shadow root.
-      shadowRoot: host?.shadowRoot ?? null,
-      hasInit: typeof module.init === 'function',
-      version: module.WATCHBUG_VERSION,
-      exports: Object.keys(module).sort(),
-    };
-  });
-
-  expect(esm.hostPresent).toBe(true);
-  expect(esm.shadowRoot).toBeNull();
-  expect(esm.hasInit).toBe(true);
-  expect(esm.version).toBe('0.1.0');
-
-  // One module namespace, two projections: the IIFE global must expose exactly
-  // the ESM exports (assumption-delta decision: the module export is primary).
-  const iifePage = await context.newPage();
-  await openHostFixture(iifePage, { bundle: 'watchbug.js', mode: 'iife' });
-  const iifeExports = await iifePage.evaluate(() => {
-    const api = (window as unknown as { Watchbug?: Record<string, unknown> }).Watchbug;
-    return api === undefined ? [] : Object.keys(api).sort();
-  });
-  expect(iifeExports).toEqual(esm.exports);
-  await iifePage.close();
-});
-
-test('WDG-01: the launcher is a 48x48 shadow-root button and renders disabled while the panel is open', async ({ page, browserName }) => {
-  await installCaptureStub(page, browserName);
-  await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
-  await waitForWidget(page);
-
-  // Hold the reply so the in-flight `Sending…` panel is observable.
-  let release: () => void = () => undefined;
-  const held = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  const calls = await interceptIncidentPosts(page, async () => {
-    await held;
-    return { status: 201, body: JSON.stringify({ id: INTERCEPTED_ID }) };
-  });
-
-  await clickLauncher(page);
-  await completeComposer(page);
-  await waitForHeadline(page, 'Sending…', 10_000);
-
-  const inFlight = await probeWidget(page);
-  expect(inFlight.launcherWidth).toBe(48);
-  expect(inFlight.launcherHeight).toBe(48);
-  expect(inFlight.launcherDisabled).toBe(true);
-  expect(inFlight.panelHidden).toBe('false');
-  expect(inFlight.headline).toBe('Sending…');
-
-  release();
-  await waitForHeadline(page, 'Report sent ✓', 10_000);
-  expect(calls).toHaveLength(1);
-});
 
 /* ------------------------------------------------------------------------- */
 /* Loud-failure helpers — shared by the J-03/J-07/J-08/J-09 rows              */
@@ -411,11 +214,7 @@ async function expectNoRequest(page: Page, calls: PostCall[]): Promise<void> {
 }
 
 /* ------------------------------------------------------------------------- */
-/* Status-machine rows — 02-02 Task 2 (P2-D-03, UI-SPEC loading/error/a11y)   */
-/* ------------------------------------------------------------------------- */
-
-/* ------------------------------------------------------------------------- */
-/* Auto-redaction artifact rows — 02-04 (PRV-01/02/03, H-1, P2-D-08, fail-closed) */
+/* Decoded-bytes and request helpers — shared by the J-04/J-11 rows           */
 /* ------------------------------------------------------------------------- */
 
 /**
@@ -883,7 +682,7 @@ async function runHidpiMaskRow(
 }
 
 /* ------------------------------------------------------------------------- */
-/* Fail-closed redaction — 02-04 Task 3 (T-02-10)                               */
+/* Fail-closed scan seam — the J-04 "fail-closed" row                        */
 /* ------------------------------------------------------------------------- */
 
 /**
@@ -903,8 +702,7 @@ const BREAK_DOM_SCAN = String.raw`(() => {
 })();`;
 
 /* ------------------------------------------------------------------ */
-/* PRV-05 — the outgoing report carries no host credential material     */
-/* (SEC-03 by payload, C-5 groundwork)                                  */
+/* Host-credential sentinels — the J-11 privacy rows (SEC-03, C-5)      */
 /* ------------------------------------------------------------------ */
 
 /**
@@ -955,7 +753,7 @@ const BROWSER_STANDARD_HEADERS = new Set([
 ]);
 
 /* ------------------------------------------------------------------ */
-/* PRV-06 / P2-D-01 — path-only URL and the capped auto-title on the wire */
+/* meta-part helper — the J-11 wire rows                               */
 /* ------------------------------------------------------------------ */
 
 /**
@@ -971,29 +769,8 @@ function interceptedMeta(call: PostCall): Record<string, unknown> {
   return JSON.parse(part.toString('utf8')) as Record<string, unknown>;
 }
 
-/**
- * P2-D-01 (auto-title clamp) lives in `tests/unit/sdk-meta.test.ts` — the
- * production clamp is `buildMeta`, a pure helper. The two claim halves it also
- * carried stay observable here: "the segment defaults to bug and reaches the
- * wire" is `INT-02` (`"type":"bug"` in the sent meta) and "the composer
- * prefills the clamped title" is `P3-D-02` below. 03-08 Batch 3a.
- */
-
 /* ------------------------------------------------------------------ */
-/* Self-hosted promise — the widget opens no third-party destination    */
-/* ------------------------------------------------------------------ */
-
-/* ------------------------------------------------------------------ */
-/* S-8 — the report destination is never guessed                       */
-/* ------------------------------------------------------------------ */
-
-/* ------------------------------------------------------------------------- */
-/* Composition rows — 03-03 (PRV-07, P3-D-02/03/04, WDG-06)                    */
-/* ------------------------------------------------------------------------- */
-
-/* ------------------------------------------------------------------ */
-/* CAP-02 — attach a picture from the device (03-04, file lane)         */
-/* CAP-03 — the degraded composer with two real ways forward (03-04)    */
+/* Fixture buffers — the J-07 attach rows                              */
 /* ------------------------------------------------------------------ */
 
 const repoRoot = resolve(__dirname, '..');
@@ -1036,7 +813,7 @@ function wireContainer(bytes: Buffer): 'png' | 'webp' | 'jpeg' | 'unknown' {
 }
 
 /* ------------------------------------------------------------------------- */
-/* Annotation editor rows — 03-05 (ANN-01, PRF-02 lazy, T-03-21 recovery)     */
+/* Lazy-chunk route — the J-06 and J-13 rows                                 */
 /* ------------------------------------------------------------------------- */
 
 /**
@@ -1046,7 +823,7 @@ function wireContainer(bytes: Buffer): 'png' | 'webp' | 'jpeg' | 'unknown' {
 const ANNOTATOR_CHUNK_ROUTE = /\/__e2e\/bundles\/watchbug-annotator\.mjs(\?retry=\d+)?$/;
 
 /* ------------------------------------------------------------------------- */
-/* ANN-02..04 rows — 03-05 Task 2 (arrow, rectangle, text on one geometry)    */
+/* Annotation walk helper — the J-06 rows                                     */
 /* ------------------------------------------------------------------------- */
 
 /** The shared walk of an annotation row: draw in the editor, Done, review,
@@ -1086,7 +863,7 @@ async function drawAndSend(
 }
 
 /* ------------------------------------------------------------------------- */
-/* ANN-06 + WDG-06 editor rows — 03-05 Task 3                                 */
+/* Stroke-band fixtures — the J-06 undo rows                                  */
 /* ------------------------------------------------------------------------- */
 
 // Two horizontal freehand strokes in the palette-block gap rows (y 105 and
@@ -1103,7 +880,7 @@ const UNDO_BANDS = [
 ];
 
 /* ------------------------------------------------------------------------- */
-/* PRV-04 — the user mask, proven at artifact level (03-06 Task 1, CA-02)     */
+/* Mask helpers — the J-05 rows (CA-02 at artifact level)                     */
 /* ------------------------------------------------------------------------- */
 
 /**
@@ -1240,7 +1017,7 @@ async function maskAndSend(
 }
 
 /* ------------------------------------------------------------------------- */
-/* ANN-05 + pixelate — 03-06 Task 2 (session confirmation, opt-in pixelate)   */
+/* Second-mask fixture — the J-05 confirmation rows                           */
 /* ------------------------------------------------------------------------- */
 
 /** The second mask's BITMAP rect (row A's later-no-dialog mask): clear of the
@@ -1248,7 +1025,7 @@ async function maskAndSend(
 const MASK_B_RECT = { left: 320, top: 240, right: 440, bottom: 280 };
 
 /* ------------------------------------------------------------------------- */
-/* PRV-04 stroke / ANN-06 masks / PRV-04 DPR — 03-06 Task 3                   */
+/* DPR mask-row helper — the J-05 matrix                                       */
 /* ------------------------------------------------------------------------- */
 
 /**
@@ -1298,6 +1075,216 @@ async function runDprMaskRow(
   expect(report.width).toBe(expectedWidth);
   expectMaskedAndTargeted(report, minInteriorBlack);
 }
+
+
+/**
+ * INT-01 / INT-05 / WDG-01 / WDG-04 — the architecture-loaded SDK promises made
+ * observable: a host page adds Watchbug with ONE async script tag and the widget boots
+ * with no bundler and no build step; the IIFE lane adds exactly one global
+ * (`window.Watchbug`), the ESM lane adds none, and the four native prototypes are never
+ * patched; the launcher is a 48×48 shadow-root button that renders disabled while the
+ * panel is open.
+ *
+ * Isolation is asserted where it is observable: the production bundle runs with a
+ * **closed** shadow root, so the row proves the page cannot pierce it and that nothing
+ * was injected into the host document. The open-mode artefact (`watchbug.e2e.js`, R-14)
+ * is used only where the root must be entered to see the launcher — it differs from
+ * production by the `SHADOW_MODE` constant and nothing else.
+ *
+ * Fixtures are served by `page.route` at the panel origin, never from the nginx-served
+ * root (Pitfall 4: that location's CSP would block the fixture's own inline
+ * instrumentation and the rows would pass on nothing).
+ */
+test.describe('J-01 — Script tag, boot and the global surface', () => {
+  test('INT-01: one async script tag boots the widget — window.Watchbug plus the isolated host in the closed production bundle', async ({ page }) => {
+    const pageErrors: string[] = [];
+    page.on('pageerror', (error) => pageErrors.push(error.message));
+
+    await openHostFixture(page, { bundle: 'watchbug.js', mode: 'iife' });
+
+    const booted = await page.evaluate(() => {
+      const api = (window as unknown as {
+        Watchbug?: { init?: unknown; WATCHBUG_VERSION?: unknown };
+      }).Watchbug;
+      const host = document.querySelector('watchbug-host');
+      return {
+        hasApi: typeof api === 'object' && api !== null,
+        initType: typeof api?.init,
+        version: api?.WATCHBUG_VERSION,
+        hostPresent: host !== null,
+        hostIsLastChild: host !== null && document.documentElement.lastElementChild === host,
+        // INV-01: production root is closed — `shadowRoot` must stay null.
+        shadowRoot: host?.shadowRoot ?? null,
+        hostStyle: host?.getAttribute('style') ?? '',
+        injectedStyleSheets: document.querySelectorAll('style, link[rel="stylesheet"]').length,
+      };
+    });
+
+    expect(pageErrors).toEqual([]);
+    expect(booted.hasApi).toBe(true);
+    expect(booted.initType).toBe('function');
+    expect(booted.version).toBe('0.1.0');
+    expect(booted.hostPresent).toBe(true);
+    expect(booted.hostIsLastChild).toBe(true);
+    expect(booted.shadowRoot).toBeNull();
+    expect(booted.hostStyle).toContain('position: fixed !important');
+    expect(booted.hostStyle).toContain('z-index: 2147483647 !important');
+    expect(booted.hostStyle).toContain('pointer-events: none !important');
+    // WDG-03: no stylesheet or class leaked into the host document.
+    expect(booted.injectedStyleSheets).toBe(0);
+  });
+
+  test('INT-01: the one-gesture launcher renders 48x48 inside the open-mode shadow root', async ({ page }) => {
+    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+
+    const rendered = await page.evaluate(() => {
+      const host = document.querySelector('watchbug-host');
+      const root = host?.shadowRoot ?? null;
+      const button = root?.querySelector('button.launcher') as HTMLButtonElement | null;
+      const panel = root?.querySelector('.panel') as HTMLElement | null;
+      const text = root?.querySelector('.text') ?? null;
+      if (button === null) {
+        return { found: false as const };
+      }
+      const rect = button.getBoundingClientRect();
+      const style = getComputedStyle(button);
+      return {
+        found: true as const,
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+        rightInset: Math.round(window.innerWidth - rect.right),
+        bottomInset: Math.round(window.innerHeight - rect.bottom),
+        radius: style.borderRadius,
+        position: style.position,
+        ariaLabel: button.getAttribute('aria-label'),
+        disabled: button.disabled,
+        panelHidden: panel?.getAttribute('data-hidden'),
+        liveRole: text?.getAttribute('role'),
+        liveMode: text?.getAttribute('aria-live'),
+      };
+    });
+
+    expect(rendered.found).toBe(true);
+    if (!rendered.found) return;
+    expect(rendered.width).toBe(48);
+    expect(rendered.height).toBe(48);
+    expect(rendered.radius).toBe('24px');
+    expect(rendered.position).toBe('fixed');
+    expect(rendered.rightInset).toBe(24);
+    expect(rendered.bottomInset).toBe(24);
+    expect(rendered.ariaLabel).toBe('Report a bug');
+    expect(rendered.disabled).toBe(false);
+    // The status panel is mounted but idle: launcher only until the flow runs.
+    expect(rendered.panelHidden).toBe('true');
+    expect(rendered.liveRole).toBe('status');
+    expect(rendered.liveMode).toBe('polite');
+  });
+
+  test('WDG-04: the IIFE lane adds exactly one global, the ESM lane adds none, and native prototypes are untouched', async ({ page, context }) => {
+    // --- IIFE lane: one `Watchbug` property, nothing else -------------------
+    await openHostFixture(page, { bundle: 'watchbug.js', mode: 'iife' });
+    await waitForSnapshot(page);
+
+    const iifeBefore = await readSnapshot(page, 'before');
+    const iifeAfter = await readSnapshot(page, 'after');
+
+    // Guard the measurement itself: the SDK must not be present before it loads,
+    // otherwise `addedNames` could pass while proving nothing.
+    expect(iifeBefore.w).not.toContain('Watchbug');
+    expect(addedNames(iifeAfter.w, iifeBefore.w)).toEqual(['Watchbug']);
+    expect(iifeAfter.p).toEqual(iifeBefore.p);
+
+    // --- ESM lane: no global at all, and the widget still mounts ------------
+    const esmPage = await context.newPage();
+    await openHostFixture(esmPage, { bundle: 'watchbug.mjs', mode: 'esm' });
+    await waitForSnapshot(esmPage);
+
+    const esmBefore = await readSnapshot(esmPage, 'before');
+    const esmAfter = await readSnapshot(esmPage, 'after');
+
+    expect(esmBefore.w).not.toContain('Watchbug');
+    expect(addedNames(esmAfter.w, esmBefore.w)).toEqual([]);
+    expect(esmAfter.p).toEqual(esmBefore.p);
+    await expect(esmPage.locator('watchbug-host')).toHaveCount(1);
+
+    await esmPage.close();
+  });
+
+  test('INT-05: the ESM build boots the same widget and adds zero window properties', async ({ page, context }) => {
+    await openHostFixture(page, { bundle: 'watchbug.mjs', mode: 'esm' });
+    await waitForSnapshot(page);
+    await waitForWidget(page);
+
+    const before = await readSnapshot(page, 'before');
+    const after = await readSnapshot(page, 'after');
+    expect(before.w).not.toContain('Watchbug');
+    expect(addedNames(after.w, before.w)).toEqual([]);
+    expect(after.p).toEqual(before.p);
+
+    const esm = await page.evaluate(async () => {
+      const host = document.querySelector('watchbug-host');
+      const module = (await import('/__e2e/bundles/watchbug.mjs')) as {
+        init?: unknown;
+        WATCHBUG_VERSION?: unknown;
+      };
+      return {
+        hostPresent: host !== null,
+        // Production ESM lane is the closed build: no page-visible shadow root.
+        shadowRoot: host?.shadowRoot ?? null,
+        hasInit: typeof module.init === 'function',
+        version: module.WATCHBUG_VERSION,
+        exports: Object.keys(module).sort(),
+      };
+    });
+
+    expect(esm.hostPresent).toBe(true);
+    expect(esm.shadowRoot).toBeNull();
+    expect(esm.hasInit).toBe(true);
+    expect(esm.version).toBe('0.1.0');
+
+    // One module namespace, two projections: the IIFE global must expose exactly
+    // the ESM exports (assumption-delta decision: the module export is primary).
+    const iifePage = await context.newPage();
+    await openHostFixture(iifePage, { bundle: 'watchbug.js', mode: 'iife' });
+    const iifeExports = await iifePage.evaluate(() => {
+      const api = (window as unknown as { Watchbug?: Record<string, unknown> }).Watchbug;
+      return api === undefined ? [] : Object.keys(api).sort();
+    });
+    expect(iifeExports).toEqual(esm.exports);
+    await iifePage.close();
+  });
+
+  test('WDG-01: the launcher is a 48x48 shadow-root button and renders disabled while the panel is open', async ({ page, browserName }) => {
+    await installCaptureStub(page, browserName);
+    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+    await waitForWidget(page);
+
+    // Hold the reply so the in-flight `Sending…` panel is observable.
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const calls = await interceptIncidentPosts(page, async () => {
+      await held;
+      return { status: 201, body: JSON.stringify({ id: INTERCEPTED_ID }) };
+    });
+
+    await clickLauncher(page);
+    await completeComposer(page);
+    await waitForHeadline(page, 'Sending…', 10_000);
+
+    const inFlight = await probeWidget(page);
+    expect(inFlight.launcherWidth).toBe(48);
+    expect(inFlight.launcherHeight).toBe(48);
+    expect(inFlight.launcherDisabled).toBe(true);
+    expect(inFlight.panelHidden).toBe('false');
+    expect(inFlight.headline).toBe('Sending…');
+
+    release();
+    await waitForHeadline(page, 'Report sent ✓', 10_000);
+    expect(calls).toHaveLength(1);
+  });
+});
 
 /**
  * The one journey that walks the whole stack: a launcher gesture produces a real
@@ -2147,696 +2134,6 @@ test.describe('J-04 — Automatic redaction (tier 1), proven on decoded bytes', 
       expect(observation, 'the capture stub must have run before the scan failed').not.toBeNull();
     }
     await expectNoRequest(page, calls);
-  });
-});
-
-/**
- * Two properties that only a real device scale can falsify: the capture is not blank
- * at `devicePixelRatio` > 1 (the classic HiDPI blank-capture failure), and the
- * redaction mask lands in **bitmap** space at every scale, including the DPR-2 encode
- * clamp that reshapes a DPR-3 frame after the mask is already burned in.
- *
- * The nested describes carry the per-row `test.use({ deviceScaleFactor })`; they are
- * parameterisation for one journey, not journeys of their own.
- */
-test.describe('J-08 — HiDPI capture fidelity: the DPR matrix', () => {
-  test('CAP-05: a frame wider than MAX_IMAGE_DIM is scaled to 8192 px before encode', async ({ page, browserName }) => {
-    test.setTimeout(60_000);
-    // The seam tier on every engine: the frame width is the variable under test,
-    // not which tier delivers it (CAP-01 already covers the media tier end to
-    // end on chromium/firefox). 9000 px wide × 1000 px = 9 MP — inside
-    // MAX_IMAGE_PIXELS, but over MAX_IMAGE_DIM (8192), so only the per-side
-    // clamp can bring it into contract.
-    await installCaptureStub(page, browserName, {
-      tier: 'seam',
-      frame: { width: 9000, height: 1000 },
-    });
-    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
-    await waitForWidget(page);
-
-    const calls = await interceptIncidentPosts(page, async () => ({
-      status: 201,
-      body: JSON.stringify({ id: INTERCEPTED_ID }),
-    }));
-
-    await clickLauncher(page);
-    await completeComposer(page, { timeout: 45_000 });
-    await waitForHeadline(page, 'Report sent ✓', 45_000);
-    expect(calls).toHaveLength(1);
-
-    const image = await readOutgoingImage(page);
-    expect(image.length).toBeLessThanOrEqual(2_097_152);
-    const analysis = await analyzeImagePixels(page, image);
-    // CAP-05: no side may exceed MAX_IMAGE_DIM (8192) …
-    expect(analysis.width).toBeLessThanOrEqual(8192);
-    // … and the total area stays within MAX_IMAGE_PIXELS (16,777,216).
-    expect(analysis.width * analysis.height).toBeLessThanOrEqual(16_777_216);
-    expect(analysis.sampledDistinct).toBeGreaterThan(4);
-  });
-
-  test('CAP-05: an oversized 16 MP synthetic frame is delivered inside the 16 MP and 2 MB contract', async ({ page, browserName }) => {
-    test.setTimeout(60_000);
-    // A frame AT the ceiling (4000×4000 = 16,000,000 px, both sides ≤ 4096 so
-    // every engine's canvas can hold it) — the largest capture the pipeline
-    // accepts (P2-D-12 refuses anything over the cap). Seam tier on every
-    // engine: the encode ladder is what this row exercises.
-    await installCaptureStub(page, browserName, {
-      tier: 'seam',
-      frame: { width: 4000, height: 4000 },
-    });
-    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
-    await waitForWidget(page);
-
-    const calls = await interceptIncidentPosts(page, async () => ({
-      status: 201,
-      body: JSON.stringify({ id: INTERCEPTED_ID }),
-    }));
-
-    await clickLauncher(page);
-    await completeComposer(page, { timeout: 45_000 });
-    await waitForHeadline(page, 'Report sent ✓', 45_000);
-    expect(calls).toHaveLength(1);
-
-    const image = await readOutgoingImage(page);
-    // CAP-05 hard ceilings: ≤ MAX_ENCODED_IMAGE_BYTES (2,097,152) on the wire …
-    expect(image.length).toBeLessThanOrEqual(2_097_152);
-    const analysis = await analyzeImagePixels(page, image);
-    // … and the decoded output inside MAX_IMAGE_PIXELS (16,777,216), at the
-    // frame's own dimensions (no clamp was needed at exactly this size).
-    expect(analysis.width).toBe(4000);
-    expect(analysis.height).toBe(4000);
-    expect(analysis.width * analysis.height).toBeLessThanOrEqual(16_777_216);
-    expect(analysis.sampledDistinct).toBeGreaterThan(4);
-  });
-
-  test.describe('CAP-05 — deviceScaleFactor: 2', () => {
-    test.use({ deviceScaleFactor: 2 });
-    
-    test('CAP-05: a deviceScaleFactor: 2 capture decodes non-blank at the expected dimensions', async ({ page, browserName }) => {
-      await installCaptureStub(page, browserName);
-      await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
-      await waitForWidget(page);
-
-      // Non-vacuity: the context really is HiDPI before anything is asserted.
-      expect(await page.evaluate(() => window.devicePixelRatio)).toBe(2);
-
-      const calls = await interceptIncidentPosts(page, async () => ({
-        status: 201,
-        body: JSON.stringify({ id: INTERCEPTED_ID }),
-      }));
-
-      await clickLauncher(page);
-      await completeComposer(page);
-      await waitForHeadline(page, 'Report sent ✓', 20_000);
-      expect(calls).toHaveLength(1);
-
-      const image = await readOutgoingImage(page);
-      expect(image.length).toBeLessThanOrEqual(2_097_152);
-      const analysis = await analyzeImagePixels(page, image);
-      // The stub frame at DPR 2: still 640×360 (DPR is clamped at 2, not doubled)
-      // and genuinely non-blank — the known HiDPI blank-capture failure is absent.
-      expect(analysis.width).toBe(640);
-      expect(analysis.height).toBe(360);
-      expect(analysis.sampledDistinct).toBeGreaterThan(4);
-    });
-  });
-
-  test.describe('CAP-05 — deviceScaleFactor: 3 (DPR clamp)', () => {
-    test.use({ deviceScaleFactor: 3 });
-    
-    test('CAP-05: a devicePixelRatio above the clamp of 2 is reduced before encode', async ({ page, browserName }) => {
-      await installCaptureStub(page, browserName);
-      await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
-      await waitForWidget(page);
-
-      expect(await page.evaluate(() => window.devicePixelRatio)).toBe(3);
-
-      const calls = await interceptIncidentPosts(page, async () => ({
-        status: 201,
-        body: JSON.stringify({ id: INTERCEPTED_ID }),
-      }));
-
-      await clickLauncher(page);
-      await completeComposer(page);
-      await waitForHeadline(page, 'Report sent ✓', 20_000);
-      expect(calls).toHaveLength(1);
-
-      const image = await readOutgoingImage(page);
-      const analysis = await analyzeImagePixels(page, image);
-      // DPR 3 on a 640×360 frame → clamped to 2× → round(640·2/3) × round(360·2/3).
-      expect(analysis.width).toBe(427);
-      expect(analysis.height).toBe(240);
-      expect(analysis.sampledDistinct).toBeGreaterThan(4);
-    });
-  });
-
-  // Explicit DSF: the `Desktop Safari` project descriptor defaults to
-  // deviceScaleFactor 2, so "dpr 1" must be pinned per-row rather than assumed
-  // from the project default (webkit failed exactly that assumption first).
-  test.describe('H-1 — deviceScaleFactor: 1', () => {
-    test.use({ deviceScaleFactor: 1 });
-    
-    test('H-1: devicePixelRatio 1 masks in bitmap space — zero original pixels in the rect and its 1-px boundary ring', async ({
-      page,
-      browserName,
-    }) => {
-      await runHidpiMaskRow(page, browserName, 1, { width: 1280, height: 720 }, 1280);
-    });
-  });
-
-  test.describe('H-1 — deviceScaleFactor: 1.25', () => {
-    test.use({ deviceScaleFactor: 1.25 });
-    
-    test('H-1: devicePixelRatio 1.25 (non-integer scale) masks in bitmap space — zero original pixels in the rect and its 1-px boundary ring', async ({
-      page,
-      browserName,
-    }) => {
-      await runHidpiMaskRow(page, browserName, 1.25, { width: 1600, height: 900 }, 1600);
-    });
-  });
-
-  test.describe('H-1 — deviceScaleFactor: 2', () => {
-    test.use({ deviceScaleFactor: 2 });
-    
-    test('H-1: devicePixelRatio 2 masks in bitmap space — zero original pixels in the rect and its 1-px boundary ring', async ({
-      page,
-      browserName,
-    }) => {
-      await runHidpiMaskRow(page, browserName, 2, { width: 2560, height: 1440 }, 2560);
-    });
-  });
-
-  test.describe('H-1 — deviceScaleFactor: 3 (DPR clamp)', () => {
-    test.use({ deviceScaleFactor: 3 });
-    
-    test('H-1: devicePixelRatio 3 masks before the DPR-2 encode clamp — zero original pixels in the rect and its 1-px boundary ring', async ({
-      page,
-      browserName,
-    }) => {
-      // Frame at 3× (3840×2160), clamped to 2560×1440 by initialDimensions —
-      // the mask is burned in BEFORE that resample, which is what makes the
-      // leak assertion meaningful at a clamped DPR.
-      await runHidpiMaskRow(page, browserName, 3, { width: 3840, height: 2160 }, 2560, 0.9);
-    });
-  });
-});
-
-/**
- * `toBlob` falls back to PNG silently: no throw, no null, only `blob.type` tells the
- * truth. This row provokes that fallback and asserts the delivered part is named and
- * typed for what it actually is — PNG magic in the bytes, `image/png` in the header,
- * never the requested `webp` — and that the real API still answers 201.
- */
-test.describe('J-09 — WebP→PNG silent fallback (R-11)', () => {
-  test('M-3: a forced PNG encode ships as a .png / image/png part and the real API returns 201', async ({ page, browserName }) => {
-    await installCaptureStub(page, browserName);
-    // The silent fallback, provoked deliberately: WebP requests answer PNG.
-    await forcePngEncode(page);
-    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
-    await waitForWidget(page);
-
-    let captured: PostCall | null = null;
-    await page.route(INCIDENT_POST_RE, async (route) => {
-      if (route.request().method() !== 'POST') {
-        await route.continue();
-        return;
-      }
-      const request = route.request();
-      const buffer = request.postDataBuffer() ?? Buffer.alloc(0);
-      captured = { headers: request.headers(), body: buffer.toString('utf8'), buffer };
-      await route.continue();
-    });
-    const responsePromise = page.waitForResponse(
-      (response) => response.url().endsWith('/api/incidents') && response.request().method() === 'POST',
-    );
-
-    await clickLauncher(page);
-    await completeComposer(page);
-    await waitForHeadline(page, 'Report sent ✓', 15_000);
-
-    const response = await responsePromise;
-    expect(response.status()).toBe(201);
-    expect(captured).not.toBeNull();
-    if (captured === null) return;
-
-    // The sniff — not the requested type — chose the part's name and MIME …
-    expect(captured.body).toContain('filename="screenshot.png"');
-    expect(captured.body).toMatch(/content-type: image\/png/i);
-    expect(captured.body).not.toContain('screenshot.webp');
-
-    // … and those bytes really are PNG (magic, not label).
-    const image = await readOutgoingImage(page);
-    expect(Array.from(image.subarray(0, 8))).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-  });
-});
-
-/**
- * The report must leave with none of the host's identity: no cookie, no storage, no
- * authorization material, no query string, no fragment, no third-party request, and no
- * guessed destination when the script is loaded cross-origin. Sentinels are planted in
- * the real host context, so the assertion is over the actual request bytes.
- *
- * The pure helper halves are pinned in `tests/unit/sdk-meta.test.ts` and
- * `tests/unit/url-path.test.ts`; the artifact-level proof stays here.
- */
-test.describe('J-11 — Payload privacy and self-hosting (SEC-03)', () => {
-  /**
-   * FX-01: the no-CSPRNG exit is a new path created by the WR-03 fix. The
-   * launcher hides the host in its OWN click handler, so a failure state
-   * rendered without restoring it is invisible and kills the widget -- the one
-   * thing M-6 forbids. Nothing else covered this path.
-   */
-  test('WR-03 guard: with no CSPRNG the flow fails visibly and leaves the widget usable — never a guessable key (FX-01)', async ({
-    page,
-    browserName,
-  }) => {
-    await page.addInitScript({
-      content: `(() => {
-    const c = globalThis.crypto;
-    if (c === undefined) return;
-    Object.defineProperty(c, 'randomUUID', { value: undefined, configurable: true });
-    Object.defineProperty(c, 'getRandomValues', { value: undefined, configurable: true });
-  })();`,
-    });
-    await installCaptureStub(page, browserName);
-    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
-    await waitForWidget(page);
-
-    const calls = await interceptIncidentPosts(page, async () => ({
-      status: 201,
-      body: JSON.stringify({ id: INTERCEPTED_ID }),
-    }));
-
-    await clickLauncher(page);
-    await waitForHeadline(page, "Couldn't capture the screen.", 10_000);
-
-    const failed = await probeWidget(page);
-    expect(failed.headlineRole).toBe('alert');
-    expect(failed.hint).toBe(CAPTURE_HINT);
-
-    // The host must be visible again, or the "loud terminal state" is invisible.
-    const hostDisplay = await page.evaluate(() => {
-      const host = document.querySelector('watchbug-host');
-      return host === null ? 'missing' : getComputedStyle(host).display;
-    });
-    expect(hostDisplay, 'the widget host must be restored after a failure (FX-01)').not.toBe('none');
-
-    await expectNoRequest(page, calls);
-  });
-
-  test('PRV-05: the intercepted report carries no host cookie, storage or auth material — zero sentinels across every header and every request byte', async ({
-    page,
-    browserName,
-  }) => {
-    await installCaptureStub(page, browserName);
-
-    // Seed the host cookie before the fixture document loads.
-    await page.context().addCookies([
-      { name: 'wb_session', value: SENTINELS.cookie, url: FIXTURE_ORIGIN },
-    ]);
-
-    // Non-vacuity for the two network provocations: this route records the host
-    // page's OWN requests, so the row proves the sentinels really do ride the
-    // page's traffic (Authorization attempt, and the cookie on a default
-    // same-origin request) before checking that the widget's report carries none.
-    const hostCalls: { headers: Record<string, string> }[] = [];
-    await page.route(/\/api\/health$/, async (route) => {
-      if (route.request().method() !== 'GET') {
-        await route.continue();
-        return;
-      }
-      hostCalls.push({ headers: await route.request().allHeaders() });
-      await route.continue();
-    });
-
-    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
-    await waitForWidget(page);
-
-    const seeded = await page.evaluate(async (sentinels) => {
-      localStorage.setItem('wb_local_token', sentinels.local);
-      sessionStorage.setItem('wb_session_token', sentinels.session);
-      document.cookie = 'wb_page_cookie=' + sentinels.cookie;
-      // The authorization-style header attempt: the host app's own authenticated
-      // call, carrying the sentinel on the wire.
-      await fetch('/api/health', { headers: { Authorization: 'Bearer ' + sentinels.auth } });
-      // And a default same-origin request, which the browser will attach the
-      // seeded cookie to — the provocation the SDK's `credentials: 'omit'` must
-      // neutralise for the report.
-      await fetch('/api/health', { credentials: 'include' });
-      return {
-        cookie: document.cookie,
-        local: localStorage.getItem('wb_local_token'),
-        session: sessionStorage.getItem('wb_session_token'),
-      };
-    }, SENTINELS);
-    expect(seeded.local, 'localStorage sentinel must be seeded').toBe(SENTINELS.local);
-    expect(seeded.session, 'sessionStorage sentinel must be seeded').toBe(SENTINELS.session);
-    expect(seeded.cookie, 'cookie sentinel must be seeded').toContain(SENTINELS.cookie);
-
-    expect(hostCalls, 'the host page must have made both provocation requests').toHaveLength(2);
-    expect(
-      hostCalls[0].headers['authorization'] ?? '',
-      'the Authorization attempt must ride the host request',
-    ).toContain(SENTINELS.auth);
-    if (browserName !== 'webkit') {
-      expect(
-        hostCalls[1].headers['cookie'] ?? '',
-        'the seeded cookie must ride a default same-origin request',
-      ).toContain(SENTINELS.cookie);
-    }
-    // webkit: Playwright's WebKit exposes NO cookie header on intercepted
-    // requests at all — `headerValue('cookie')` is null even with seeded cookies
-    // and `credentials: 'include'` (probe 2026-10-24, this host). The cookie
-    // provocation is therefore asserted on chromium/firefox only; the SDK-side
-    // guarantee (`credentials: 'omit'` in lane1) is source-asserted by
-    // `gate.mjs sdk-no-host-storage`'s credentials rule.
-
-    // Intercept the outgoing report: full headers plus the raw bytes Node sees.
-    // Fulfilled with 201 — the real-stack path is INT-02's; this row's subject is
-    // the request itself.
-    let report: { headers: Record<string, string>; buffer: Buffer } | null = null;
-    await page.route(INCIDENT_POST_RE, async (route) => {
-      if (route.request().method() !== 'POST') {
-        await route.continue();
-        return;
-      }
-      const request = route.request();
-      report = {
-        headers: await request.allHeaders(),
-        buffer: request.postDataBuffer() ?? Buffer.alloc(0),
-      };
-      await route.fulfill({
-        status: 201,
-        contentType: 'application/json',
-        body: JSON.stringify({ id: INTERCEPTED_ID }),
-      });
-    });
-
-    await clickLauncher(page);
-    await completeComposer(page);
-    await waitForHeadline(page, 'Report sent ✓', 15_000);
-
-    expect(report, 'the gesture must have sent a report').not.toBeNull();
-    if (report === null) return;
-    const sent = report;
-
-    // Non-vacuity: a real multipart request was inspected (meta part present on
-    // every engine — WebKit drops only the blob-backed image part, 02-02 dev. 2).
-    expect(sent.buffer.toString('utf8')).toContain('name="meta"');
-
-    // (1) Zero sentinel occurrences in every header name and value.
-    for (const [name, value] of Object.entries(sent.headers)) {
-      const haystack = `${name}\n${value}`;
-      for (const [surface, sentinel] of Object.entries(SENTINELS)) {
-        expect(
-          haystack.includes(sentinel),
-          `the ${surface} sentinel must not appear in request header "${name}"`,
-        ).toBe(false);
-      }
-    }
-
-    // (2) No credential header of any kind — not even an empty one. On webkit
-    // the cookie half is trivially satisfied (that engine exposes no cookie
-    // header at all, see the provocation comment above); the Authorization half
-    // is observable on every engine.
-    expect(sent.headers['authorization']).toBeUndefined();
-    expect(sent.headers['cookie']).toBeUndefined();
-
-    // (2b) No Referer either (review CR-01): `referrerPolicy: 'no-referrer'`
-    // pins the report's referrer at the fetch init, so the host page's URL —
-    // and any `?token=` query it carries — never rides the request in a header.
-    // `sent.headers` comes from `request.allHeaders()`, which does surface
-    // browser-composed headers, so this proves absence rather than merely
-    // screening the value: a regression to the browser default
-    // (`strict-origin-when-cross-origin`, full URL on same-origin) fails here,
-    // in the header allowlist (3), and in PRV-06's query-string assertion.
-    expect(
-      sent.headers['referer'],
-      'the report POST must carry no referer header at all (R-08 / CR-01)',
-    ).toBeUndefined();
-
-    // (3) Beyond the browser's own headers, exactly the two contract headers ride.
-    const nonBrowserHeaders = Object.keys(sent.headers)
-      .filter((name) => !BROWSER_STANDARD_HEADERS.has(name))
-      .sort();
-    expect(nonBrowserHeaders).toEqual(['idempotency-key', 'x-project-key']);
-    expect(sent.headers['x-project-key']).toBe(projectKey());
-    expect(sent.headers['idempotency-key']).toMatch(/^[0-9a-f-]{36}$/);
-
-    // (4) Zero sentinel occurrences in the raw multipart bytes Node received.
-    const rawBody = sent.buffer.toString('latin1');
-    for (const [surface, sentinel] of Object.entries(SENTINELS)) {
-      expect(
-        rawBody.includes(sentinel),
-        `the ${surface} sentinel must not appear in the raw request body`,
-      ).toBe(false);
-    }
-
-    // (5) …and in the image bytes read at the fetch boundary: WebKit's
-    // `postDataBuffer()` reports 0 bytes for blob-backed parts, so the
-    // intercepted buffer alone cannot cover the image on that engine.
-    const image = await readOutgoingImage(page);
-    const imageText = image.toString('latin1');
-    for (const [surface, sentinel] of Object.entries(SENTINELS)) {
-      expect(
-        imageText.includes(sentinel),
-        `the ${surface} sentinel must not appear in the outgoing image bytes`,
-      ).toBe(false);
-    }
-  });
-
-  test('PRV-06: meta.url is path-only — the query string and fragment never enter the report', async ({
-    page,
-    browserName,
-  }) => {
-    await installCaptureStub(page, browserName);
-    await openHostileFixture(page, { variant: 'clean', bundle: 'watchbug.e2e.js', mode: 'iife' });
-    // Navigate to a URL carrying a query secret and a fragment. The hostile
-    // fixture's route regex is unanchored (host-fixtures.ts), so the same
-    // document serves this URL — unlike the plain fixture route, which is
-    // anchored to the bare path and would fall through to nginx's 404.
-    await page.goto(`${HOSTILE_URL}?variant=clean&token=secret#frag`, { waitUntil: 'load' });
-    await waitForWidget(page);
-
-    // Non-vacuity: the document really is addressed with a query and a fragment.
-    const location = await page.evaluate(() => ({
-      href: location.href,
-      pathname: location.pathname,
-      search: location.search,
-      hash: location.hash,
-    }));
-    expect(location.pathname).toBe('/__e2e/hostile-host.html');
-    expect(location.search).toBe('?variant=clean&token=secret');
-    expect(location.hash).toBe('#frag');
-    expect(location.href).toContain('token=secret');
-
-    // A short title passes through unchanged (the truncation row owns the cap).
-    await page.evaluate(() => {
-      document.title = 'PRV-06 path-only report';
-    });
-
-    // Non-vacuity for the CR-01 header assertion: this document's URL carries
-    // `?token=secret`, and a plain same-origin fetch under the browser's DEFAULT
-    // referrer policy does put that full URL in `referer` — proving both that
-    // the query string really would leave in a header without the SDK's
-    // `referrerPolicy: 'no-referrer'` pin, and that the route handler can
-    // observe the header on this engine. If this probe passed vacuously (header
-    // unobservable), the report assertion below would prove nothing.
-    const probe: { headers: Record<string, string> }[] = [];
-    await page.route(/\/api\/health$/, async (route) => {
-      if (route.request().method() !== 'GET') {
-        await route.continue();
-        return;
-      }
-      probe.push({ headers: await route.request().allHeaders() });
-      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"status":"ok"}' });
-    });
-    const probeBody = await page.evaluate(() => fetch('/api/health').then((r) => r.json()));
-    expect(probeBody).toEqual({ status: 'ok' });
-    expect(probe, 'the referrer probe request must have been intercepted').toHaveLength(1);
-    expect(
-      probe[0].headers['referer'] ?? '',
-      'non-vacuity: a browser-default same-origin request must leak ?token=secret in its referer, so the header is observable here',
-    ).toContain('token=secret');
-    await page.unroute(/\/api\/health$/);
-
-    const calls = await interceptIncidentPosts(page, async () => ({
-      status: 201,
-      body: JSON.stringify({ id: INTERCEPTED_ID }),
-    }));
-
-    await clickLauncher(page);
-    await completeComposer(page);
-    await waitForHeadline(page, 'Report sent ✓', 15_000);
-    expect(calls, 'the gesture must send exactly one report').toHaveLength(1);
-
-    // CR-01: with the same document URL and the same same-origin destination,
-    // the SDK's report must carry NO referer header at all — the query string
-    // must not leave the browser in a header (R-08). `allHeaders()` surfaces
-    // browser-composed headers, so an absent entry is genuine absence.
-    const reportReferer = calls[0].allHeaders['referer'];
-    expect(reportReferer, 'the report POST must send no referer header (R-08 / CR-01)').toBeUndefined();
-    expect(reportReferer ?? '').not.toContain('token=secret');
-
-    const meta = interceptedMeta(calls[0]);
-    // The raw wire value: path only — no query, no fragment, no origin.
-    expect(meta.url).toBe('/__e2e/hostile-host.html');
-    expect(String(meta.url)).not.toContain('?');
-    expect(String(meta.url)).not.toContain('#');
-    expect(String(meta.url)).not.toContain('://');
-    expect(String(meta.url)).not.toContain('token=secret');
-    // Short title untouched.
-    expect(meta.title).toBe('PRV-06 path-only report');
-    expect(meta.type).toBe('bug');
-    // And the meta as sent satisfies the published closed contract.
-    const parsed = reportSchema.parse(meta);
-    expect(parsed.url).toBe('/__e2e/hostile-host.html');
-  });
-
-  test('self-hosted: the widget makes zero third-party network requests — only the configured Watchbug API base', async ({
-    page,
-    browserName,
-  }) => {
-    await installCaptureStub(page, browserName);
-
-    // Every request the page makes from the very first navigation, including
-    // the fixture document, the bundle and the report POST.
-    const destinations: string[] = [];
-    page.on('request', (request) => destinations.push(request.url()));
-
-    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
-    await waitForWidget(page);
-
-    const calls = await interceptIncidentPosts(page, async () => ({
-      status: 201,
-      body: JSON.stringify({ id: INTERCEPTED_ID }),
-    }));
-
-    await clickLauncher(page);
-    await completeComposer(page);
-    await waitForHeadline(page, 'Report sent ✓', 15_000);
-
-    // Non-vacuity: the flow really did reach the API on this origin.
-    expect(calls, 'the gesture must send exactly one report').toHaveLength(1);
-    expect(
-      destinations,
-      'the report must target the configured API base',
-    ).toContain(`${FIXTURE_ORIGIN}/api/incidents`);
-
-    const external = destinations.filter((url) => {
-      if (url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('about:')) return false;
-      try {
-        return new URL(url).origin !== FIXTURE_ORIGIN;
-      } catch {
-        return true;
-      }
-    });
-    expect(
-      external,
-      `no request may leave the Watchbug origin — destinations seen: ${destinations.join(', ')}`,
-    ).toEqual([]);
-  });
-
-  /**
-   * The default endpoint is the DOCUMENT's origin. A bundle served from another
-   * origin (a CDN) cannot supply that default: guessing the script's own origin
-   * would post captures to a third party, and guessing the document's origin
-   * would silently file reports somewhere the integrator never chose. So
-   * `init()` refuses and asks for `endpoint` explicitly (S-8 / WR-02).
-   */
-  test('S-8: a cross-origin loading script refuses to init without an explicit endpoint — the report destination is never guessed', async ({
-    page,
-    browserName,
-  }) => {
-    await installCaptureStub(page, browserName);
-
-    // Every request the page makes, so the refusal can be shown to send nothing
-    // and the explicit endpoint can be shown to be the one that is used.
-    const destinations: string[] = [];
-    page.on('request', (request) => destinations.push(request.url()));
-
-    await openHostFixture(page, {
-      bundle: 'watchbug.e2e.js',
-      mode: 'iife',
-      // The document stays at FIXTURE_ORIGIN while the bundle is served from a
-      // DIFFERENT origin — the CDN delivery shape. `page.route` fulfils it, so no
-      // real second server is involved.
-      scriptOrigin: 'http://localhost:8080',
-      autoInit: false,
-    });
-
-    const calls = await interceptIncidentPosts(page, async () => ({
-      status: 201,
-      body: JSON.stringify({ id: INTERCEPTED_ID }),
-    }));
-
-    // The bundle booted (the IIFE global exists) but nothing is mounted.
-    await page.waitForFunction(
-      () => (window as unknown as { Watchbug?: unknown }).Watchbug !== undefined,
-      null,
-      { timeout: 10_000 },
-    );
-
-    const key = projectKey();
-    const refusal = await page.evaluate((projectKey) => {
-      try {
-        (window as unknown as { Watchbug: { init: (o: { projectKey: string }) => void } }).Watchbug.init({
-          projectKey,
-        });
-        return 'no-throw';
-      } catch (error) {
-        return error instanceof Error ? error.message : String(error);
-      }
-    }, key);
-    expect(refusal, 'init() must refuse rather than default the endpoint to the script origin').toContain(
-      'pass `endpoint` explicitly',
-    );
-    expect(await page.locator('watchbug-host').count(), 'nothing may mount on a refused init').toBe(0);
-    await expectNoRequest(page, calls);
-
-    // FX-03: `endpoint: null` (the shape a JSON config produces) is a hard
-    // error, NOT "absent". Treated as absent it would slip past the refusal
-    // above and silently fall back to the document origin.
-    const nullEndpoint = await page.evaluate((projectKey) => {
-      try {
-        (window as unknown as { Watchbug: { init: (o: Record<string, unknown>) => void } }).Watchbug.init({
-          projectKey,
-          endpoint: null,
-        });
-        return 'no-throw';
-      } catch (error) {
-        return error instanceof Error ? error.message : String(error);
-      }
-    }, key);
-    expect(nullEndpoint, 'endpoint: null must be a hard error (FX-03)').toContain(
-      'must be an absolute http(s) URL',
-    );
-    expect(await page.locator('watchbug-host').count(), 'endpoint: null must not mount').toBe(0);
-
-    // With the destination stated explicitly the very same bundle mounts and
-    // files a real report — the refusal is about GUESSING, not about the bundle.
-    await page.evaluate(
-      (projectKey) => {
-        (window as unknown as {
-          Watchbug: { init: (o: { projectKey: string; endpoint: string }) => void };
-        }).Watchbug.init({ projectKey, endpoint: 'http://127.0.0.1:8080' });
-      },
-      key,
-    );
-    await waitForWidget(page);
-    await clickLauncher(page);
-    await completeComposer(page);
-    await waitForHeadline(page, 'Report sent ✓', 15_000);
-
-    expect(calls, 'the explicit endpoint is honoured').toHaveLength(1);
-    expect(
-      destinations,
-      'the report must go to the explicitly configured API base',
-    ).toContain('http://127.0.0.1:8080/api/incidents');
-    expect(
-      destinations,
-      'the report must never be posted to the loading script origin',
-    ).not.toContain('http://localhost:8080/api/incidents');
   });
 });
 
@@ -4037,6 +3334,246 @@ test.describe('J-07 — Degraded capture and attachment', () => {
 });
 
 /**
+ * Two properties that only a real device scale can falsify: the capture is not blank
+ * at `devicePixelRatio` > 1 (the classic HiDPI blank-capture failure), and the
+ * redaction mask lands in **bitmap** space at every scale, including the DPR-2 encode
+ * clamp that reshapes a DPR-3 frame after the mask is already burned in.
+ *
+ * The nested describes carry the per-row `test.use({ deviceScaleFactor })`; they are
+ * parameterisation for one journey, not journeys of their own.
+ */
+test.describe('J-08 — HiDPI capture fidelity: the DPR matrix', () => {
+  test('CAP-05: a frame wider than MAX_IMAGE_DIM is scaled to 8192 px before encode', async ({ page, browserName }) => {
+    test.setTimeout(60_000);
+    // The seam tier on every engine: the frame width is the variable under test,
+    // not which tier delivers it (CAP-01 already covers the media tier end to
+    // end on chromium/firefox). 9000 px wide × 1000 px = 9 MP — inside
+    // MAX_IMAGE_PIXELS, but over MAX_IMAGE_DIM (8192), so only the per-side
+    // clamp can bring it into contract.
+    await installCaptureStub(page, browserName, {
+      tier: 'seam',
+      frame: { width: 9000, height: 1000 },
+    });
+    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+    await waitForWidget(page);
+
+    const calls = await interceptIncidentPosts(page, async () => ({
+      status: 201,
+      body: JSON.stringify({ id: INTERCEPTED_ID }),
+    }));
+
+    await clickLauncher(page);
+    await completeComposer(page, { timeout: 45_000 });
+    await waitForHeadline(page, 'Report sent ✓', 45_000);
+    expect(calls).toHaveLength(1);
+
+    const image = await readOutgoingImage(page);
+    expect(image.length).toBeLessThanOrEqual(2_097_152);
+    const analysis = await analyzeImagePixels(page, image);
+    // CAP-05: no side may exceed MAX_IMAGE_DIM (8192) …
+    expect(analysis.width).toBeLessThanOrEqual(8192);
+    // … and the total area stays within MAX_IMAGE_PIXELS (16,777,216).
+    expect(analysis.width * analysis.height).toBeLessThanOrEqual(16_777_216);
+    expect(analysis.sampledDistinct).toBeGreaterThan(4);
+  });
+
+  test('CAP-05: an oversized 16 MP synthetic frame is delivered inside the 16 MP and 2 MB contract', async ({ page, browserName }) => {
+    test.setTimeout(60_000);
+    // A frame AT the ceiling (4000×4000 = 16,000,000 px, both sides ≤ 4096 so
+    // every engine's canvas can hold it) — the largest capture the pipeline
+    // accepts (P2-D-12 refuses anything over the cap). Seam tier on every
+    // engine: the encode ladder is what this row exercises.
+    await installCaptureStub(page, browserName, {
+      tier: 'seam',
+      frame: { width: 4000, height: 4000 },
+    });
+    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+    await waitForWidget(page);
+
+    const calls = await interceptIncidentPosts(page, async () => ({
+      status: 201,
+      body: JSON.stringify({ id: INTERCEPTED_ID }),
+    }));
+
+    await clickLauncher(page);
+    await completeComposer(page, { timeout: 45_000 });
+    await waitForHeadline(page, 'Report sent ✓', 45_000);
+    expect(calls).toHaveLength(1);
+
+    const image = await readOutgoingImage(page);
+    // CAP-05 hard ceilings: ≤ MAX_ENCODED_IMAGE_BYTES (2,097,152) on the wire …
+    expect(image.length).toBeLessThanOrEqual(2_097_152);
+    const analysis = await analyzeImagePixels(page, image);
+    // … and the decoded output inside MAX_IMAGE_PIXELS (16,777,216), at the
+    // frame's own dimensions (no clamp was needed at exactly this size).
+    expect(analysis.width).toBe(4000);
+    expect(analysis.height).toBe(4000);
+    expect(analysis.width * analysis.height).toBeLessThanOrEqual(16_777_216);
+    expect(analysis.sampledDistinct).toBeGreaterThan(4);
+  });
+
+  test.describe('CAP-05 — deviceScaleFactor: 2', () => {
+    test.use({ deviceScaleFactor: 2 });
+    
+    test('CAP-05: a deviceScaleFactor: 2 capture decodes non-blank at the expected dimensions', async ({ page, browserName }) => {
+      await installCaptureStub(page, browserName);
+      await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+      await waitForWidget(page);
+
+      // Non-vacuity: the context really is HiDPI before anything is asserted.
+      expect(await page.evaluate(() => window.devicePixelRatio)).toBe(2);
+
+      const calls = await interceptIncidentPosts(page, async () => ({
+        status: 201,
+        body: JSON.stringify({ id: INTERCEPTED_ID }),
+      }));
+
+      await clickLauncher(page);
+      await completeComposer(page);
+      await waitForHeadline(page, 'Report sent ✓', 20_000);
+      expect(calls).toHaveLength(1);
+
+      const image = await readOutgoingImage(page);
+      expect(image.length).toBeLessThanOrEqual(2_097_152);
+      const analysis = await analyzeImagePixels(page, image);
+      // The stub frame at DPR 2: still 640×360 (DPR is clamped at 2, not doubled)
+      // and genuinely non-blank — the known HiDPI blank-capture failure is absent.
+      expect(analysis.width).toBe(640);
+      expect(analysis.height).toBe(360);
+      expect(analysis.sampledDistinct).toBeGreaterThan(4);
+    });
+  });
+
+  test.describe('CAP-05 — deviceScaleFactor: 3 (DPR clamp)', () => {
+    test.use({ deviceScaleFactor: 3 });
+    
+    test('CAP-05: a devicePixelRatio above the clamp of 2 is reduced before encode', async ({ page, browserName }) => {
+      await installCaptureStub(page, browserName);
+      await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+      await waitForWidget(page);
+
+      expect(await page.evaluate(() => window.devicePixelRatio)).toBe(3);
+
+      const calls = await interceptIncidentPosts(page, async () => ({
+        status: 201,
+        body: JSON.stringify({ id: INTERCEPTED_ID }),
+      }));
+
+      await clickLauncher(page);
+      await completeComposer(page);
+      await waitForHeadline(page, 'Report sent ✓', 20_000);
+      expect(calls).toHaveLength(1);
+
+      const image = await readOutgoingImage(page);
+      const analysis = await analyzeImagePixels(page, image);
+      // DPR 3 on a 640×360 frame → clamped to 2× → round(640·2/3) × round(360·2/3).
+      expect(analysis.width).toBe(427);
+      expect(analysis.height).toBe(240);
+      expect(analysis.sampledDistinct).toBeGreaterThan(4);
+    });
+  });
+
+  // Explicit DSF: the `Desktop Safari` project descriptor defaults to
+  // deviceScaleFactor 2, so "dpr 1" must be pinned per-row rather than assumed
+  // from the project default (webkit failed exactly that assumption first).
+  test.describe('H-1 — deviceScaleFactor: 1', () => {
+    test.use({ deviceScaleFactor: 1 });
+    
+    test('H-1: devicePixelRatio 1 masks in bitmap space — zero original pixels in the rect and its 1-px boundary ring', async ({
+      page,
+      browserName,
+    }) => {
+      await runHidpiMaskRow(page, browserName, 1, { width: 1280, height: 720 }, 1280);
+    });
+  });
+
+  test.describe('H-1 — deviceScaleFactor: 1.25', () => {
+    test.use({ deviceScaleFactor: 1.25 });
+    
+    test('H-1: devicePixelRatio 1.25 (non-integer scale) masks in bitmap space — zero original pixels in the rect and its 1-px boundary ring', async ({
+      page,
+      browserName,
+    }) => {
+      await runHidpiMaskRow(page, browserName, 1.25, { width: 1600, height: 900 }, 1600);
+    });
+  });
+
+  test.describe('H-1 — deviceScaleFactor: 2', () => {
+    test.use({ deviceScaleFactor: 2 });
+    
+    test('H-1: devicePixelRatio 2 masks in bitmap space — zero original pixels in the rect and its 1-px boundary ring', async ({
+      page,
+      browserName,
+    }) => {
+      await runHidpiMaskRow(page, browserName, 2, { width: 2560, height: 1440 }, 2560);
+    });
+  });
+
+  test.describe('H-1 — deviceScaleFactor: 3 (DPR clamp)', () => {
+    test.use({ deviceScaleFactor: 3 });
+    
+    test('H-1: devicePixelRatio 3 masks before the DPR-2 encode clamp — zero original pixels in the rect and its 1-px boundary ring', async ({
+      page,
+      browserName,
+    }) => {
+      // Frame at 3× (3840×2160), clamped to 2560×1440 by initialDimensions —
+      // the mask is burned in BEFORE that resample, which is what makes the
+      // leak assertion meaningful at a clamped DPR.
+      await runHidpiMaskRow(page, browserName, 3, { width: 3840, height: 2160 }, 2560, 0.9);
+    });
+  });
+});
+
+/**
+ * `toBlob` falls back to PNG silently: no throw, no null, only `blob.type` tells the
+ * truth. This row provokes that fallback and asserts the delivered part is named and
+ * typed for what it actually is — PNG magic in the bytes, `image/png` in the header,
+ * never the requested `webp` — and that the real API still answers 201.
+ */
+test.describe('J-09 — WebP→PNG silent fallback (R-11)', () => {
+  test('M-3: a forced PNG encode ships as a .png / image/png part and the real API returns 201', async ({ page, browserName }) => {
+    await installCaptureStub(page, browserName);
+    // The silent fallback, provoked deliberately: WebP requests answer PNG.
+    await forcePngEncode(page);
+    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+    await waitForWidget(page);
+
+    let captured: PostCall | null = null;
+    await page.route(INCIDENT_POST_RE, async (route) => {
+      if (route.request().method() !== 'POST') {
+        await route.continue();
+        return;
+      }
+      const request = route.request();
+      const buffer = request.postDataBuffer() ?? Buffer.alloc(0);
+      captured = { headers: request.headers(), body: buffer.toString('utf8'), buffer };
+      await route.continue();
+    });
+    const responsePromise = page.waitForResponse(
+      (response) => response.url().endsWith('/api/incidents') && response.request().method() === 'POST',
+    );
+
+    await clickLauncher(page);
+    await completeComposer(page);
+    await waitForHeadline(page, 'Report sent ✓', 15_000);
+
+    const response = await responsePromise;
+    expect(response.status()).toBe(201);
+    expect(captured).not.toBeNull();
+    if (captured === null) return;
+
+    // The sniff — not the requested type — chose the part's name and MIME …
+    expect(captured.body).toContain('filename="screenshot.png"');
+    expect(captured.body).toMatch(/content-type: image\/png/i);
+    expect(captured.body).not.toContain('screenshot.webp');
+
+    // … and those bytes really are PNG (magic, not label).
+    const image = await readOutgoingImage(page);
+    expect(Array.from(image.subarray(0, 8))).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  });
+});
+
+/**
  * The only user-visible half of the transport: a transient 500 retries with the SAME
  * `Idempotency-Key` and the SAME encoded bytes and says so (`Retrying (1 of 3)…`), a
  * contract 4xx fails at once and renders the server's own message, a long reason is
@@ -4220,6 +3757,456 @@ test.describe('J-10 — Transport resilience: retry, terminal failure, dismissal
     );
     const dismissed = await probeWidget(page);
     expect(dismissed.launcherDisabled).toBe(false);
+  });
+});
+
+/**
+ * The report must leave with none of the host's identity: no cookie, no storage, no
+ * authorization material, no query string, no fragment, no third-party request, and no
+ * guessed destination when the script is loaded cross-origin. Sentinels are planted in
+ * the real host context, so the assertion is over the actual request bytes.
+ *
+ * The pure helper halves are pinned in `tests/unit/sdk-meta.test.ts` and
+ * `tests/unit/url-path.test.ts`; the artifact-level proof stays here.
+ */
+test.describe('J-11 — Payload privacy and self-hosting (SEC-03)', () => {
+  /**
+   * FX-01: the no-CSPRNG exit is a new path created by the WR-03 fix. The
+   * launcher hides the host in its OWN click handler, so a failure state
+   * rendered without restoring it is invisible and kills the widget -- the one
+   * thing M-6 forbids. Nothing else covered this path.
+   */
+  test('WR-03 guard: with no CSPRNG the flow fails visibly and leaves the widget usable — never a guessable key (FX-01)', async ({
+    page,
+    browserName,
+  }) => {
+    await page.addInitScript({
+      content: `(() => {
+    const c = globalThis.crypto;
+    if (c === undefined) return;
+    Object.defineProperty(c, 'randomUUID', { value: undefined, configurable: true });
+    Object.defineProperty(c, 'getRandomValues', { value: undefined, configurable: true });
+  })();`,
+    });
+    await installCaptureStub(page, browserName);
+    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+    await waitForWidget(page);
+
+    const calls = await interceptIncidentPosts(page, async () => ({
+      status: 201,
+      body: JSON.stringify({ id: INTERCEPTED_ID }),
+    }));
+
+    await clickLauncher(page);
+    await waitForHeadline(page, "Couldn't capture the screen.", 10_000);
+
+    const failed = await probeWidget(page);
+    expect(failed.headlineRole).toBe('alert');
+    expect(failed.hint).toBe(CAPTURE_HINT);
+
+    // The host must be visible again, or the "loud terminal state" is invisible.
+    const hostDisplay = await page.evaluate(() => {
+      const host = document.querySelector('watchbug-host');
+      return host === null ? 'missing' : getComputedStyle(host).display;
+    });
+    expect(hostDisplay, 'the widget host must be restored after a failure (FX-01)').not.toBe('none');
+
+    await expectNoRequest(page, calls);
+  });
+
+  test('PRV-05: the intercepted report carries no host cookie, storage or auth material — zero sentinels across every header and every request byte', async ({
+    page,
+    browserName,
+  }) => {
+    await installCaptureStub(page, browserName);
+
+    // Seed the host cookie before the fixture document loads.
+    await page.context().addCookies([
+      { name: 'wb_session', value: SENTINELS.cookie, url: FIXTURE_ORIGIN },
+    ]);
+
+    // Non-vacuity for the two network provocations: this route records the host
+    // page's OWN requests, so the row proves the sentinels really do ride the
+    // page's traffic (Authorization attempt, and the cookie on a default
+    // same-origin request) before checking that the widget's report carries none.
+    const hostCalls: { headers: Record<string, string> }[] = [];
+    await page.route(/\/api\/health$/, async (route) => {
+      if (route.request().method() !== 'GET') {
+        await route.continue();
+        return;
+      }
+      hostCalls.push({ headers: await route.request().allHeaders() });
+      await route.continue();
+    });
+
+    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+    await waitForWidget(page);
+
+    const seeded = await page.evaluate(async (sentinels) => {
+      localStorage.setItem('wb_local_token', sentinels.local);
+      sessionStorage.setItem('wb_session_token', sentinels.session);
+      document.cookie = 'wb_page_cookie=' + sentinels.cookie;
+      // The authorization-style header attempt: the host app's own authenticated
+      // call, carrying the sentinel on the wire.
+      await fetch('/api/health', { headers: { Authorization: 'Bearer ' + sentinels.auth } });
+      // And a default same-origin request, which the browser will attach the
+      // seeded cookie to — the provocation the SDK's `credentials: 'omit'` must
+      // neutralise for the report.
+      await fetch('/api/health', { credentials: 'include' });
+      return {
+        cookie: document.cookie,
+        local: localStorage.getItem('wb_local_token'),
+        session: sessionStorage.getItem('wb_session_token'),
+      };
+    }, SENTINELS);
+    expect(seeded.local, 'localStorage sentinel must be seeded').toBe(SENTINELS.local);
+    expect(seeded.session, 'sessionStorage sentinel must be seeded').toBe(SENTINELS.session);
+    expect(seeded.cookie, 'cookie sentinel must be seeded').toContain(SENTINELS.cookie);
+
+    expect(hostCalls, 'the host page must have made both provocation requests').toHaveLength(2);
+    expect(
+      hostCalls[0].headers['authorization'] ?? '',
+      'the Authorization attempt must ride the host request',
+    ).toContain(SENTINELS.auth);
+    if (browserName !== 'webkit') {
+      expect(
+        hostCalls[1].headers['cookie'] ?? '',
+        'the seeded cookie must ride a default same-origin request',
+      ).toContain(SENTINELS.cookie);
+    }
+    // webkit: Playwright's WebKit exposes NO cookie header on intercepted
+    // requests at all — `headerValue('cookie')` is null even with seeded cookies
+    // and `credentials: 'include'` (probe 2026-10-24, this host). The cookie
+    // provocation is therefore asserted on chromium/firefox only; the SDK-side
+    // guarantee (`credentials: 'omit'` in lane1) is source-asserted by
+    // `gate.mjs sdk-no-host-storage`'s credentials rule.
+
+    // Intercept the outgoing report: full headers plus the raw bytes Node sees.
+    // Fulfilled with 201 — the real-stack path is INT-02's; this row's subject is
+    // the request itself.
+    let report: { headers: Record<string, string>; buffer: Buffer } | null = null;
+    await page.route(INCIDENT_POST_RE, async (route) => {
+      if (route.request().method() !== 'POST') {
+        await route.continue();
+        return;
+      }
+      const request = route.request();
+      report = {
+        headers: await request.allHeaders(),
+        buffer: request.postDataBuffer() ?? Buffer.alloc(0),
+      };
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ id: INTERCEPTED_ID }),
+      });
+    });
+
+    await clickLauncher(page);
+    await completeComposer(page);
+    await waitForHeadline(page, 'Report sent ✓', 15_000);
+
+    expect(report, 'the gesture must have sent a report').not.toBeNull();
+    if (report === null) return;
+    const sent = report;
+
+    // Non-vacuity: a real multipart request was inspected (meta part present on
+    // every engine — WebKit drops only the blob-backed image part, 02-02 dev. 2).
+    expect(sent.buffer.toString('utf8')).toContain('name="meta"');
+
+    // (1) Zero sentinel occurrences in every header name and value.
+    for (const [name, value] of Object.entries(sent.headers)) {
+      const haystack = `${name}\n${value}`;
+      for (const [surface, sentinel] of Object.entries(SENTINELS)) {
+        expect(
+          haystack.includes(sentinel),
+          `the ${surface} sentinel must not appear in request header "${name}"`,
+        ).toBe(false);
+      }
+    }
+
+    // (2) No credential header of any kind — not even an empty one. On webkit
+    // the cookie half is trivially satisfied (that engine exposes no cookie
+    // header at all, see the provocation comment above); the Authorization half
+    // is observable on every engine.
+    expect(sent.headers['authorization']).toBeUndefined();
+    expect(sent.headers['cookie']).toBeUndefined();
+
+    // (2b) No Referer either (review CR-01): `referrerPolicy: 'no-referrer'`
+    // pins the report's referrer at the fetch init, so the host page's URL —
+    // and any `?token=` query it carries — never rides the request in a header.
+    // `sent.headers` comes from `request.allHeaders()`, which does surface
+    // browser-composed headers, so this proves absence rather than merely
+    // screening the value: a regression to the browser default
+    // (`strict-origin-when-cross-origin`, full URL on same-origin) fails here,
+    // in the header allowlist (3), and in PRV-06's query-string assertion.
+    expect(
+      sent.headers['referer'],
+      'the report POST must carry no referer header at all (R-08 / CR-01)',
+    ).toBeUndefined();
+
+    // (3) Beyond the browser's own headers, exactly the two contract headers ride.
+    const nonBrowserHeaders = Object.keys(sent.headers)
+      .filter((name) => !BROWSER_STANDARD_HEADERS.has(name))
+      .sort();
+    expect(nonBrowserHeaders).toEqual(['idempotency-key', 'x-project-key']);
+    expect(sent.headers['x-project-key']).toBe(projectKey());
+    expect(sent.headers['idempotency-key']).toMatch(/^[0-9a-f-]{36}$/);
+
+    // (4) Zero sentinel occurrences in the raw multipart bytes Node received.
+    const rawBody = sent.buffer.toString('latin1');
+    for (const [surface, sentinel] of Object.entries(SENTINELS)) {
+      expect(
+        rawBody.includes(sentinel),
+        `the ${surface} sentinel must not appear in the raw request body`,
+      ).toBe(false);
+    }
+
+    // (5) …and in the image bytes read at the fetch boundary: WebKit's
+    // `postDataBuffer()` reports 0 bytes for blob-backed parts, so the
+    // intercepted buffer alone cannot cover the image on that engine.
+    const image = await readOutgoingImage(page);
+    const imageText = image.toString('latin1');
+    for (const [surface, sentinel] of Object.entries(SENTINELS)) {
+      expect(
+        imageText.includes(sentinel),
+        `the ${surface} sentinel must not appear in the outgoing image bytes`,
+      ).toBe(false);
+    }
+  });
+
+  test('PRV-06: meta.url is path-only — the query string and fragment never enter the report', async ({
+    page,
+    browserName,
+  }) => {
+    await installCaptureStub(page, browserName);
+    await openHostileFixture(page, { variant: 'clean', bundle: 'watchbug.e2e.js', mode: 'iife' });
+    // Navigate to a URL carrying a query secret and a fragment. The hostile
+    // fixture's route regex is unanchored (host-fixtures.ts), so the same
+    // document serves this URL — unlike the plain fixture route, which is
+    // anchored to the bare path and would fall through to nginx's 404.
+    await page.goto(`${HOSTILE_URL}?variant=clean&token=secret#frag`, { waitUntil: 'load' });
+    await waitForWidget(page);
+
+    // Non-vacuity: the document really is addressed with a query and a fragment.
+    const location = await page.evaluate(() => ({
+      href: location.href,
+      pathname: location.pathname,
+      search: location.search,
+      hash: location.hash,
+    }));
+    expect(location.pathname).toBe('/__e2e/hostile-host.html');
+    expect(location.search).toBe('?variant=clean&token=secret');
+    expect(location.hash).toBe('#frag');
+    expect(location.href).toContain('token=secret');
+
+    // A short title passes through unchanged (the truncation row owns the cap).
+    await page.evaluate(() => {
+      document.title = 'PRV-06 path-only report';
+    });
+
+    // Non-vacuity for the CR-01 header assertion: this document's URL carries
+    // `?token=secret`, and a plain same-origin fetch under the browser's DEFAULT
+    // referrer policy does put that full URL in `referer` — proving both that
+    // the query string really would leave in a header without the SDK's
+    // `referrerPolicy: 'no-referrer'` pin, and that the route handler can
+    // observe the header on this engine. If this probe passed vacuously (header
+    // unobservable), the report assertion below would prove nothing.
+    const probe: { headers: Record<string, string> }[] = [];
+    await page.route(/\/api\/health$/, async (route) => {
+      if (route.request().method() !== 'GET') {
+        await route.continue();
+        return;
+      }
+      probe.push({ headers: await route.request().allHeaders() });
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"status":"ok"}' });
+    });
+    const probeBody = await page.evaluate(() => fetch('/api/health').then((r) => r.json()));
+    expect(probeBody).toEqual({ status: 'ok' });
+    expect(probe, 'the referrer probe request must have been intercepted').toHaveLength(1);
+    expect(
+      probe[0].headers['referer'] ?? '',
+      'non-vacuity: a browser-default same-origin request must leak ?token=secret in its referer, so the header is observable here',
+    ).toContain('token=secret');
+    await page.unroute(/\/api\/health$/);
+
+    const calls = await interceptIncidentPosts(page, async () => ({
+      status: 201,
+      body: JSON.stringify({ id: INTERCEPTED_ID }),
+    }));
+
+    await clickLauncher(page);
+    await completeComposer(page);
+    await waitForHeadline(page, 'Report sent ✓', 15_000);
+    expect(calls, 'the gesture must send exactly one report').toHaveLength(1);
+
+    // CR-01: with the same document URL and the same same-origin destination,
+    // the SDK's report must carry NO referer header at all — the query string
+    // must not leave the browser in a header (R-08). `allHeaders()` surfaces
+    // browser-composed headers, so an absent entry is genuine absence.
+    const reportReferer = calls[0].allHeaders['referer'];
+    expect(reportReferer, 'the report POST must send no referer header (R-08 / CR-01)').toBeUndefined();
+    expect(reportReferer ?? '').not.toContain('token=secret');
+
+    const meta = interceptedMeta(calls[0]);
+    // The raw wire value: path only — no query, no fragment, no origin.
+    expect(meta.url).toBe('/__e2e/hostile-host.html');
+    expect(String(meta.url)).not.toContain('?');
+    expect(String(meta.url)).not.toContain('#');
+    expect(String(meta.url)).not.toContain('://');
+    expect(String(meta.url)).not.toContain('token=secret');
+    // Short title untouched.
+    expect(meta.title).toBe('PRV-06 path-only report');
+    expect(meta.type).toBe('bug');
+    // And the meta as sent satisfies the published closed contract.
+    const parsed = reportSchema.parse(meta);
+    expect(parsed.url).toBe('/__e2e/hostile-host.html');
+  });
+
+  test('self-hosted: the widget makes zero third-party network requests — only the configured Watchbug API base', async ({
+    page,
+    browserName,
+  }) => {
+    await installCaptureStub(page, browserName);
+
+    // Every request the page makes from the very first navigation, including
+    // the fixture document, the bundle and the report POST.
+    const destinations: string[] = [];
+    page.on('request', (request) => destinations.push(request.url()));
+
+    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+    await waitForWidget(page);
+
+    const calls = await interceptIncidentPosts(page, async () => ({
+      status: 201,
+      body: JSON.stringify({ id: INTERCEPTED_ID }),
+    }));
+
+    await clickLauncher(page);
+    await completeComposer(page);
+    await waitForHeadline(page, 'Report sent ✓', 15_000);
+
+    // Non-vacuity: the flow really did reach the API on this origin.
+    expect(calls, 'the gesture must send exactly one report').toHaveLength(1);
+    expect(
+      destinations,
+      'the report must target the configured API base',
+    ).toContain(`${FIXTURE_ORIGIN}/api/incidents`);
+
+    const external = destinations.filter((url) => {
+      if (url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('about:')) return false;
+      try {
+        return new URL(url).origin !== FIXTURE_ORIGIN;
+      } catch {
+        return true;
+      }
+    });
+    expect(
+      external,
+      `no request may leave the Watchbug origin — destinations seen: ${destinations.join(', ')}`,
+    ).toEqual([]);
+  });
+
+  /**
+   * The default endpoint is the DOCUMENT's origin. A bundle served from another
+   * origin (a CDN) cannot supply that default: guessing the script's own origin
+   * would post captures to a third party, and guessing the document's origin
+   * would silently file reports somewhere the integrator never chose. So
+   * `init()` refuses and asks for `endpoint` explicitly (S-8 / WR-02).
+   */
+  test('S-8: a cross-origin loading script refuses to init without an explicit endpoint — the report destination is never guessed', async ({
+    page,
+    browserName,
+  }) => {
+    await installCaptureStub(page, browserName);
+
+    // Every request the page makes, so the refusal can be shown to send nothing
+    // and the explicit endpoint can be shown to be the one that is used.
+    const destinations: string[] = [];
+    page.on('request', (request) => destinations.push(request.url()));
+
+    await openHostFixture(page, {
+      bundle: 'watchbug.e2e.js',
+      mode: 'iife',
+      // The document stays at FIXTURE_ORIGIN while the bundle is served from a
+      // DIFFERENT origin — the CDN delivery shape. `page.route` fulfils it, so no
+      // real second server is involved.
+      scriptOrigin: 'http://localhost:8080',
+      autoInit: false,
+    });
+
+    const calls = await interceptIncidentPosts(page, async () => ({
+      status: 201,
+      body: JSON.stringify({ id: INTERCEPTED_ID }),
+    }));
+
+    // The bundle booted (the IIFE global exists) but nothing is mounted.
+    await page.waitForFunction(
+      () => (window as unknown as { Watchbug?: unknown }).Watchbug !== undefined,
+      null,
+      { timeout: 10_000 },
+    );
+
+    const key = projectKey();
+    const refusal = await page.evaluate((projectKey) => {
+      try {
+        (window as unknown as { Watchbug: { init: (o: { projectKey: string }) => void } }).Watchbug.init({
+          projectKey,
+        });
+        return 'no-throw';
+      } catch (error) {
+        return error instanceof Error ? error.message : String(error);
+      }
+    }, key);
+    expect(refusal, 'init() must refuse rather than default the endpoint to the script origin').toContain(
+      'pass `endpoint` explicitly',
+    );
+    expect(await page.locator('watchbug-host').count(), 'nothing may mount on a refused init').toBe(0);
+    await expectNoRequest(page, calls);
+
+    // FX-03: `endpoint: null` (the shape a JSON config produces) is a hard
+    // error, NOT "absent". Treated as absent it would slip past the refusal
+    // above and silently fall back to the document origin.
+    const nullEndpoint = await page.evaluate((projectKey) => {
+      try {
+        (window as unknown as { Watchbug: { init: (o: Record<string, unknown>) => void } }).Watchbug.init({
+          projectKey,
+          endpoint: null,
+        });
+        return 'no-throw';
+      } catch (error) {
+        return error instanceof Error ? error.message : String(error);
+      }
+    }, key);
+    expect(nullEndpoint, 'endpoint: null must be a hard error (FX-03)').toContain(
+      'must be an absolute http(s) URL',
+    );
+    expect(await page.locator('watchbug-host').count(), 'endpoint: null must not mount').toBe(0);
+
+    // With the destination stated explicitly the very same bundle mounts and
+    // files a real report — the refusal is about GUESSING, not about the bundle.
+    await page.evaluate(
+      (projectKey) => {
+        (window as unknown as {
+          Watchbug: { init: (o: { projectKey: string; endpoint: string }) => void };
+        }).Watchbug.init({ projectKey, endpoint: 'http://127.0.0.1:8080' });
+      },
+      key,
+    );
+    await waitForWidget(page);
+    await clickLauncher(page);
+    await completeComposer(page);
+    await waitForHeadline(page, 'Report sent ✓', 15_000);
+
+    expect(calls, 'the explicit endpoint is honoured').toHaveLength(1);
+    expect(
+      destinations,
+      'the report must go to the explicitly configured API base',
+    ).toContain('http://127.0.0.1:8080/api/incidents');
+    expect(
+      destinations,
+      'the report must never be posted to the loading script origin',
+    ).not.toContain('http://localhost:8080/api/incidents');
   });
 });
 
