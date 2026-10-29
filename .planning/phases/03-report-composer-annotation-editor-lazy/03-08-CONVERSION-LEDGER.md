@@ -69,41 +69,41 @@
 
 | # | Original Spec / Test Title | Disposition | Target File / Justification | Commit |
 |---|----------------------------|-------------|----------------------------|--------|
-| 32 | `hostile.spec.ts` — "ING-06 layer 1: image part > MAX_IMAGE_PART_BYTES (4 MB) → 413 structured at the multipart parser" | `converted` | `tests/integration/hostile-size-caps.test.ts` | — |
-| 33 | `hostile.spec.ts` — "ING-06 layer 2: body > MAX_BODY_BYTES (5 MB) → 413 structured from the Content-Length pre-read (direct to API)" | `converted` | `tests/integration/hostile-size-caps.test.ts` | — |
-| 34 | `hostile.spec.ts` — "ING-06 layer 2b: a chunked body with NO Content-Length over MAX_BODY_BYTES is aborted by the streaming counter → 413" | `converted` | `tests/integration/hostile-size-caps.test.ts` | — |
-| 35 | `hostile.spec.ts` — "ING-06 layer 3: the stated nginx limit (client_max_body_size 5m) stops the same body at the panel origin" | `converted` | `tests/integration/hostile-size-caps.test.ts` | — |
-| 36 | `hostile.spec.ts` — "ING-06: an encoded image over MAX_ENCODED_IMAGE_BYTES is rejected 413 (semantic cap, A-06 hard)" | `converted` | `tests/integration/hostile-size-caps.test.ts` | — |
-| 37 | `hostile.spec.ts` — "C-3: SVG, GIF/HTML polyglot and decode-bomb payloads are rejected 400 (structured)" | `converted` | `tests/contract/hostile-payload-control.test.ts` (3 sub-tests) | — |
-| 38 | `hostile.spec.ts` — "C-4: traversal-shaped client filenames are rejected 400 — the name never reaches a path" | `converted` | `tests/contract/hostile-payload-control.test.ts` (3 sub-tests) | — |
-| 39 | `hostile.spec.ts` — "C-3/C-4: the blob route serves the report with the full inert header set and a fixed ASCII name" | `converted` | `tests/contract/hostile-payload-control.test.ts` | — |
-| 40 | `hostile.spec.ts` — "C-4: an unknown incident id is 404 — never 400, and the body shape matches the other 404s" | `converted` | `tests/contract/hostile-payload-control.test.ts` | — |
-| 41 | `hostile.spec.ts` — "ING-04: missing, unknown and malformed project keys all get the same structured 401 and nothing is stored" | `converted` | `tests/integration/hostile-auth-rate-limit.test.ts` | — |
-| 42 | `hostile.spec.ts` — "ING-04 concurrency: a parallel burst of invalid-key requests each receives its own uniform 401 and stores nothing" | `converted` | `tests/integration/hostile-auth-rate-limit.test.ts` | — |
-| 43 | `hostile.spec.ts` — "ING-05 per key: exactly RATE_LIMIT_PER_KEY_PER_MIN requests pass on a fresh key, max+1 is 429 + Retry-After" | `converted` | `tests/integration/hostile-auth-rate-limit.test.ts` | — |
-| 44 | `hostile.spec.ts` — "ING-05 per IP: exactly RATE_LIMIT_PER_IP_PER_MIN requests pass from one forwarded IP, max+1 is 429 + Retry-After" | `converted` | `tests/integration/hostile-auth-rate-limit.test.ts` | — |
-| 45 | `hostile.spec.ts` — "ING-05 per day: the daily project quota trips at RATE_LIMIT_PER_PROJECT_PER_DAY + 1 with Retry-After" | `converted` | `tests/integration/hostile-auth-rate-limit.test.ts` | — |
-| 46 | `hostile.spec.ts` — "CR-01: NBSP-padded X-Project-Key shares the padded key's bucket — padding never mints fresh per-key quota" | `converted` | `tests/integration/hostile-auth-rate-limit.test.ts` | — |
-| 47 | `hostile.spec.ts` — "CR-02 (direct): a forged leftmost X-Forwarded-For entry never becomes req.ip — the asserted rightmost hop owns the per-IP bucket" | `converted` | `tests/integration/hostile-auth-rate-limit.test.ts` | — |
-| 48 | `hostile.spec.ts` — "CR-02 (proxy): nginx overwrites the client X-Forwarded-For — a forged entry cannot ride the panel edge into a fresh per-IP bucket" | `converted` | `tests/integration/hostile-auth-rate-limit.test.ts` | — |
-| 49 | `hostile.spec.ts` — "ING-08 trio: non-allowlisted Origin → 403 + nothing stored; allowlisted Origin → 201 + CORS headers; no Origin → 201" | `converted` | `tests/integration/hostile-auth-rate-limit.test.ts` | — |
-| 50 | `hostile.spec.ts` — "ING-08 concurrency: a mixed parallel burst yields per-request decisions matching each request's own Origin" | `converted` | `tests/integration/hostile-auth-rate-limit.test.ts` | — |
-| 51 | `hostile.spec.ts` — "ING-07 pass 1: hostile text payloads are stored with all markup removed (img-onerror, script, BOM, UTF-7, entity-encoded)" | `converted` | `tests/integration/hostile-sanitisation.test.ts` | — |
-| 52 | `hostile.spec.ts` — "ING-07 pass 1: plain text with angle brackets round-trips exactly; styled fragments keep document order" | `converted` | `tests/integration/hostile-sanitisation.test.ts` | — |
-| 53 | `hostile.spec.ts` — "ING-07 empty edge: a zero-length title is rejected 400; absent optional fields are stored as null" | `converted` | `tests/integration/hostile-sanitisation.test.ts` | — |
-| 54 | `hostile.spec.ts` — "ING-07 encoding edge: caps count Unicode code points (inclusive at the cap, one over is 400) and sanitised output never exceeds its cap" | `converted` | `tests/integration/hostile-sanitisation.test.ts` | — |
-| 55 | `hostile.spec.ts` — "ING-07: control characters are stripped from every user string on write" | `converted` | `tests/integration/hostile-sanitisation.test.ts` | — |
-| 56 | `hostile.spec.ts` — "R-08/S-5: meta.url is stored path-only — query string and fragment stripped on ingest" | `converted` | `tests/integration/hostile-sanitisation.test.ts` | — |
-| 57 | `hostile.spec.ts` — "ING-07 pass 2: stored hostile payloads render as literal text and inject zero elements into the panel DOM" | `kept-in-journey` | J-14 (XSS-render-inert representative) | — |
-| 58 | `hostile.spec.ts` — "ING-07 pass 2: apps/panel/src contains no HTML-rendering sink (dangerouslySetInnerHTML / innerHTML)" | `converted` | `tests/packaging/no-dangerouslySetInnerHTML.test.ts` | — |
-| 59 | `sdk.spec.ts` — "WDG-02: hostile host CSS cannot hide, restyle or break the widget — display/fontsize/unset/transform (4 variants)" | `kept-in-journey` | J-14 (moved to `e2e/hostile.spec.ts`) | — |
-| 60 | `sdk.spec.ts` — "WDG-02: the closed production bundle keeps the inline isolation contract under *:not(html):not(body) { display: none !important }" | `kept-in-journey` | J-14 (moved to `e2e/hostile.spec.ts`) | — |
-| 61 | `sdk.spec.ts` — "CA-04: every hostile rule in the matrix demonstrably applies to its control element" | `kept-in-journey` | J-14 (moved to `e2e/hostile.spec.ts`) | — |
-| 62 | `sdk.spec.ts` — "WDG-03: init and a full report flow leak zero styles, classes or custom properties into the host document" | `kept-in-journey` | J-14 (moved to `e2e/hostile.spec.ts`) | — |
-| 63 | `sdk.spec.ts` — "WDG-05: the widget wins the stacking contest over a hostile max-z-index modal and the flow still completes" | `kept-in-journey` | J-14 (moved to `e2e/hostile.spec.ts`) | — |
-| 64 | `sdk.spec.ts` — "WDG-05: a hostile element painted at the widget coordinates neither captures its hit target nor swallows host clicks" | `kept-in-journey` | J-14 (moved to `e2e/hostile.spec.ts`) | — |
-| 65 | `sdk.spec.ts` — "WDG-05: an empty host page still renders the launcher at 24 px insets and starts the flow" | `kept-in-journey` | J-14 (moved to `e2e/hostile.spec.ts`) | — |
-| 66 | `sdk.spec.ts` — "WDG-05: a z-index tie stays resolved by DOM order and the host is re-appended after a documentElement replacement" | `kept-in-journey` | J-14 (moved to `e2e/hostile.spec.ts`) | — |
+| 32 | `hostile.spec.ts` — "ING-06 layer 1: image part > MAX_IMAGE_PART_BYTES (4 MB) → 413 structured at the multipart parser" | `converted` | `tests/integration/hostile-size-caps.test.ts` | b1e2b35 |
+| 33 | `hostile.spec.ts` — "ING-06 layer 2: body > MAX_BODY_BYTES (5 MB) → 413 structured from the Content-Length pre-read (direct to API)" | `converted` | `tests/integration/hostile-size-caps.test.ts` | b1e2b35 |
+| 34 | `hostile.spec.ts` — "ING-06 layer 2b: a chunked body with NO Content-Length over MAX_BODY_BYTES is aborted by the streaming counter → 413" | `converted` | `tests/integration/hostile-size-caps.test.ts` | b1e2b35 |
+| 35 | `hostile.spec.ts` — "ING-06 layer 3: the stated nginx limit (client_max_body_size 5m) stops the same body at the panel origin" | `converted` | `tests/integration/hostile-size-caps.test.ts` | b1e2b35 |
+| 36 | `hostile.spec.ts` — "ING-06: an encoded image over MAX_ENCODED_IMAGE_BYTES is rejected 413 (semantic cap, A-06 hard)" | `converted` | `tests/integration/hostile-size-caps.test.ts` | b1e2b35 |
+| 37 | `hostile.spec.ts` — "C-3: SVG, GIF/HTML polyglot and decode-bomb payloads are rejected 400 (structured)" | `converted` | `tests/contract/hostile-payload-control.test.ts` (3 sub-tests) | b1e2b35 |
+| 38 | `hostile.spec.ts` — "C-4: traversal-shaped client filenames are rejected 400 — the name never reaches a path" | `converted` | `tests/contract/hostile-payload-control.test.ts` (3 sub-tests) | b1e2b35 |
+| 39 | `hostile.spec.ts` — "C-3/C-4: the blob route serves the report with the full inert header set and a fixed ASCII name" | `converted` | `tests/contract/hostile-payload-control.test.ts` | b1e2b35 |
+| 40 | `hostile.spec.ts` — "C-4: an unknown incident id is 404 — never 400, and the body shape matches the other 404s" | `converted` | `tests/contract/hostile-payload-control.test.ts` | b1e2b35 |
+| 41 | `hostile.spec.ts` — "ING-04: missing, unknown and malformed project keys all get the same structured 401 and nothing is stored" | `converted` | `tests/integration/hostile-auth-rate-limit.test.ts` | b1e2b35 |
+| 42 | `hostile.spec.ts` — "ING-04 concurrency: a parallel burst of invalid-key requests each receives its own uniform 401 and stores nothing" | `converted` | `tests/integration/hostile-auth-rate-limit.test.ts` | b1e2b35 |
+| 43 | `hostile.spec.ts` — "ING-05 per key: exactly RATE_LIMIT_PER_KEY_PER_MIN requests pass on a fresh key, max+1 is 429 + Retry-After" | `converted` | `tests/integration/hostile-auth-rate-limit.test.ts` | b1e2b35 |
+| 44 | `hostile.spec.ts` — "ING-05 per IP: exactly RATE_LIMIT_PER_IP_PER_MIN requests pass from one forwarded IP, max+1 is 429 + Retry-After" | `converted` | `tests/integration/hostile-auth-rate-limit.test.ts` | b1e2b35 |
+| 45 | `hostile.spec.ts` — "ING-05 per day: the daily project quota trips at RATE_LIMIT_PER_PROJECT_PER_DAY + 1 with Retry-After" | `converted` | `tests/integration/hostile-auth-rate-limit.test.ts` | b1e2b35 |
+| 46 | `hostile.spec.ts` — "CR-01: NBSP-padded X-Project-Key shares the padded key's bucket — padding never mints fresh per-key quota" | `converted` | `tests/integration/hostile-auth-rate-limit.test.ts` | b1e2b35 |
+| 47 | `hostile.spec.ts` — "CR-02 (direct): a forged leftmost X-Forwarded-For entry never becomes req.ip — the asserted rightmost hop owns the per-IP bucket" | `converted` | `tests/integration/hostile-auth-rate-limit.test.ts` | b1e2b35 |
+| 48 | `hostile.spec.ts` — "CR-02 (proxy): nginx overwrites the client X-Forwarded-For — a forged entry cannot ride the panel edge into a fresh per-IP bucket" | `converted` | `tests/integration/hostile-auth-rate-limit.test.ts` | b1e2b35 |
+| 49 | `hostile.spec.ts` — "ING-08 trio: non-allowlisted Origin → 403 + nothing stored; allowlisted Origin → 201 + CORS headers; no Origin → 201" | `converted` | `tests/integration/hostile-auth-rate-limit.test.ts` | b1e2b35 |
+| 50 | `hostile.spec.ts` — "ING-08 concurrency: a mixed parallel burst yields per-request decisions matching each request's own Origin" | `converted` | `tests/integration/hostile-auth-rate-limit.test.ts` | b1e2b35 |
+| 51 | `hostile.spec.ts` — "ING-07 pass 1: hostile text payloads are stored with all markup removed (img-onerror, script, BOM, UTF-7, entity-encoded)" | `converted` | `tests/integration/hostile-sanitisation.test.ts` | b1e2b35 |
+| 52 | `hostile.spec.ts` — "ING-07 pass 1: plain text with angle brackets round-trips exactly; styled fragments keep document order" | `converted` | `tests/integration/hostile-sanitisation.test.ts` | b1e2b35 |
+| 53 | `hostile.spec.ts` — "ING-07 empty edge: a zero-length title is rejected 400; absent optional fields are stored as null" | `converted` | `tests/integration/hostile-sanitisation.test.ts` | b1e2b35 |
+| 54 | `hostile.spec.ts` — "ING-07 encoding edge: caps count Unicode code points (inclusive at the cap, one over is 400) and sanitised output never exceeds its cap" | `converted` | `tests/integration/hostile-sanitisation.test.ts` | b1e2b35 |
+| 55 | `hostile.spec.ts` — "ING-07: control characters are stripped from every user string on write" | `converted` | `tests/integration/hostile-sanitisation.test.ts` | b1e2b35 |
+| 56 | `hostile.spec.ts` — "R-08/S-5: meta.url is stored path-only — query string and fragment stripped on ingest" | `converted` | `tests/integration/hostile-sanitisation.test.ts` | b1e2b35 |
+| 57 | `hostile.spec.ts` — "ING-07 pass 2: stored hostile payloads render as literal text and inject zero elements into the panel DOM" | `kept-in-journey` | J-14 (XSS-render-inert representative) | b1e2b35 |
+| 58 | `hostile.spec.ts` — "ING-07 pass 2: apps/panel/src contains no HTML-rendering sink (dangerouslySetInnerHTML / innerHTML)" | `converted` | `tests/packaging/no-dangerouslySetInnerHTML.test.ts` | b1e2b35 |
+| 59 | `sdk.spec.ts` — "WDG-02: hostile host CSS cannot hide, restyle or break the widget — display/fontsize/unset/transform (4 variants)" | `kept-in-journey` | J-14 (moved to `e2e/hostile.spec.ts`) | b1e2b35 |
+| 60 | `sdk.spec.ts` — "WDG-02: the closed production bundle keeps the inline isolation contract under *:not(html):not(body) { display: none !important }" | `kept-in-journey` | J-14 (moved to `e2e/hostile.spec.ts`) | b1e2b35 |
+| 61 | `sdk.spec.ts` — "CA-04: every hostile rule in the matrix demonstrably applies to its control element" | `kept-in-journey` | J-14 (moved to `e2e/hostile.spec.ts`) | b1e2b35 |
+| 62 | `sdk.spec.ts` — "WDG-03: init and a full report flow leak zero styles, classes or custom properties into the host document" | `kept-in-journey` | J-14 (moved to `e2e/hostile.spec.ts`) | b1e2b35 |
+| 63 | `sdk.spec.ts` — "WDG-05: the widget wins the stacking contest over a hostile max-z-index modal and the flow still completes" | `kept-in-journey` | J-14 (moved to `e2e/hostile.spec.ts`) | b1e2b35 |
+| 64 | `sdk.spec.ts` — "WDG-05: a hostile element painted at the widget coordinates neither captures its hit target nor swallows host clicks" | `kept-in-journey` | J-14 (moved to `e2e/hostile.spec.ts`) | b1e2b35 |
+| 65 | `sdk.spec.ts` — "WDG-05: an empty host page still renders the launcher at 24 px insets and starts the flow" | `kept-in-journey` | J-14 (moved to `e2e/hostile.spec.ts`) | b1e2b35 |
+| 66 | `sdk.spec.ts` — "WDG-05: a z-index tie stays resolved by DOM order and the host is re-appended after a documentElement replacement" | `kept-in-journey` | J-14 (moved to `e2e/hostile.spec.ts`) | b1e2b35 |
 
 ---
 
