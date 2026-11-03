@@ -73,11 +73,33 @@ export type HardenResult =
 /** T-01-08: how long one decode/re-encode may run before sharp aborts it. */
 const HARDEN_TIMEOUT_SECONDS = 5;
 
-/** Client-facing message shape — never echo raw codec internals verbatim. */
+/** The fixed client-facing categories — never echo raw codec internals. */
+type CodecFailure = 'decode' | 'timeout' | 'unsupported';
+
+const CODEC_FAILURE_MESSAGES: Record<CodecFailure, string> = {
+  decode: 'image rejected by the re-encode stage (decode)',
+  timeout: 'image rejected by the re-encode stage (timeout)',
+  unsupported: 'image rejected by the re-encode stage (unsupported)',
+};
+
+function classifyCodecFailure(err: unknown): CodecFailure {
+  const detail = err instanceof Error ? err.message.toLowerCase() : '';
+  if (detail.includes('timeout') || detail.includes('timed out')) return 'timeout';
+  if (detail.includes('unsupported') || detail.includes('input buffer')) return 'unsupported';
+  return 'decode';
+}
+
+/**
+ * Log the codec's own detail for operators, return a fixed category to the
+ * client. The first line is bounded so a pathological error cannot flood the
+ * log, and the caller never receives a library path, version or redaction.
+ */
 function codecMessage(err: unknown): string {
-  const detail = err instanceof Error ? err.message.split('\n')[0] : '';
+  const category = classifyCodecFailure(err);
+  const detail = err instanceof Error ? err.message.split('\n')[0] : String(err);
   const cleaned = detail.replace(/\s+/g, ' ').slice(0, 160);
-  return `image rejected by the re-encode stage${cleaned === '' ? '' : `: ${cleaned}`}`;
+  if (cleaned !== '') console.error(`[watchbug] re-encode rejected image (${category}): ${cleaned}`);
+  return CODEC_FAILURE_MESSAGES[category];
 }
 
 export async function hardenImage(input: Uint8Array): Promise<HardenResult> {

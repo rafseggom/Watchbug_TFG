@@ -20,8 +20,27 @@ function readProjectKey(): string {
   return key;
 }
 
-async function getIncidents(key: string, query?: string, forwardedFor?: string): Promise<{ status: number; body: unknown; headers: Record<string, string> }> {
-  const headers: Record<string, string> = { 'X-Project-Key': key };
+/** The read limiter shares the configured per-IP ingest maximum. */
+function readPerIpLimit(): number {
+  const envFile = readFileSync(resolve(repoRoot, '.env'), 'utf8');
+  const match = /^WATCHBUG_RATE_LIMIT_PER_IP_PER_MIN=(\d+)$/m.exec(envFile);
+  if (match === null) {
+    throw new Error('.env must set WATCHBUG_RATE_LIMIT_PER_IP_PER_MIN to an integer');
+  }
+  return Number(match[1]);
+}
+
+/** A unique forwarded IP per test run — a reused bucket would poison the boundary. */
+let ipSequence = 0;
+function freshReadIp(): string {
+  ipSequence += 1;
+  return `198.18.${(ipSequence >>> 8) & 255}.${ipSequence & 255}`;
+}
+
+async function getIncidents(_key: string, query?: string, forwardedFor?: string): Promise<{ status: number; body: unknown; headers: Record<string, string> }> {
+  // The read surface does not consult the project key (H-7 / DEP-03). Sending
+  // it here would imply an authentication contract that does not exist.
+  const headers: Record<string, string> = {};
   if (forwardedFor) headers['x-forwarded-for'] = forwardedFor;
 
   const url = `${API_BASE}/api/incidents${query ? '?' + query : ''}`;
@@ -64,24 +83,25 @@ describe('integration: read surface rate limiting & pagination', () => {
   });
 
   it('read surface: GET routes are rate-limited per IP with integer Retry-After', async () => {
-    const bucket = `203.0.113.${1 + (Date.now() % 250)}`;
-    let saw429 = false;
+    const limit = readPerIpLimit();
+    const bucket = freshReadIp();
 
-    for (let i = 0; i < 610; i++) {
+    // The inclusive boundary: 1..limit must answer 200, limit+1 must be 429.
+    // A limiter that rejects the first request (or a permanent 429) can no
+    // longer satisfy this loop.
+    for (let i = 1; i <= limit; i++) {
       const res = await getIncidents(KEY, undefined, bucket);
-      if (res.status === 429) {
-        saw429 = true;
-        expect(res.headers['retry-after']).toBeDefined();
-        const retry = Number(res.headers['retry-after']);
-        expect(Number.isInteger(retry)).toBe(true);
-        expect(retry).toBeGreaterThanOrEqual(1);
-        break;
-      }
-      expect(res.status).toBe(200);
+      expect(res.status, `read ${i} of ${limit} from one IP must answer 200`).toBe(200);
     }
-    expect(saw429, 'expected 429 after exceeding read rate limit').toBe(true);
 
-    const fresh = await getIncidents(KEY, undefined, '198.51.100.9');
+    const over = await getIncidents(KEY, undefined, bucket);
+    expect(over.status, `read ${limit + 1} must be rate limited`).toBe(429);
+    expect(over.headers['retry-after']).toBeDefined();
+    const retry = Number(over.headers['retry-after']);
+    expect(Number.isInteger(retry)).toBe(true);
+    expect(retry).toBeGreaterThanOrEqual(1);
+
+    const fresh = await getIncidents(KEY, undefined, freshReadIp());
     expect(fresh.status).toBe(200);
   });
 
@@ -94,15 +114,18 @@ describe('integration: read surface rate limiting & pagination', () => {
     const res = await getIncidents(KEY, 'limit=5');
     expect(res.status).toBe(200);
     const data = res.body as Array<any>;
-    expect(data.length).toBeLessThanOrEqual(5);
+    // 50 rows were seeded; a page of five must be full and must advertise a
+    // continuation. The old `if (next)` skipped the pagination row entirely
+    // when the cursor disappeared.
+    expect(data.length).toBe(5);
 
     const next = res.headers['x-next-cursor'];
-    if (next) {
-      expect(typeof next).toBe('string');
-      expect(next.length).toBeGreaterThan(0);
-      const res2 = await getIncidents(KEY, `limit=5&cursor=${encodeURIComponent(next)}`);
-      expect(res2.status).toBe(200);
-    }
+    expect(next, 'a full page must advertise the next cursor').toBeDefined();
+    expect(typeof next).toBe('string');
+    expect(next.length).toBeGreaterThan(0);
+    const res2 = await getIncidents(KEY, `limit=5&cursor=${encodeURIComponent(next)}`);
+    expect(res2.status).toBe(200);
+    expect((res2.body as Array<any>).length).toBeGreaterThan(0);
   });
 
   it('read surface: malformed limit and cursor return 400', async () => {

@@ -50,8 +50,8 @@ const EXEMPT: Array<{ path: string; reason: string }> = [
   },
 ];
 
-const SCAN_ROOTS = ['AGENTS.md', 'documentation', 'scripts', '.planning'];
-const SCAN_EXTENSIONS = ['.md', '.mjs'];
+const SCAN_ROOTS = ['AGENTS.md', 'README.md', 'package.json', '.github', 'documentation', 'scripts', '.planning'];
+const SCAN_EXTENSIONS = ['.md', '.mjs', '.ts', '.yml', '.yaml', '.json'];
 
 function walk(target: string, out: string[]): void {
   const absolute = resolve(repoRoot, target);
@@ -97,9 +97,24 @@ for (const file of files) {
   if (slash === SELF) continue;
 
   const lines = readFileSync(resolve(repoRoot, file), 'utf8').split(/\r?\n/);
-  const markerLine = lines.findIndex((line) => SUPERSESSION_MARKERS.some((m) => m.test(line)));
   const exemption = EXEMPT.find((entry) => slash === entry.path);
   let quotes = 0;
+
+  // Historical planning artifacts were written under the old policy and quote
+  // it in their evidence blocks; a marker anywhere in the file is accepted
+  // for them. Governing docs (AGENTS.md, documentation, scripts, .github,
+  // package.json) must qualify the absolute in its own section, so a banner
+  // cannot launder a later contradiction.
+  const fileLevelMarker =
+    slash.startsWith('.planning/') && lines.some((line) => SUPERSESSION_MARKERS.some((m) => m.test(line)));
+  const sectionStartAt = (index: number): number => {
+    for (let at = index; at >= 0; at -= 1) {
+      if (/^#{1,6}\s/.test(lines[at])) return at;
+    }
+    return 0;
+  };
+  const hasMarkerInSection = (index: number): boolean =>
+    lines.slice(sectionStartAt(index), index + 1).some((line) => SUPERSESSION_MARKERS.some((m) => m.test(line)));
 
   for (const [index, line] of lines.entries()) {
     const absolute = RETIRED_ABSOLUTES.find((candidate) => candidate.pattern.test(line));
@@ -110,9 +125,11 @@ for (const file of files) {
       exemptHits.push({ file: slash, line: index + 1, absolute: absolute.name });
       continue;
     }
-    // The marker may appear on an earlier line (a document-level banner) or on
-    // the same line as an inline qualifier ("… → amended by R-19").
-    if ((markerLine !== -1 && markerLine < index) || SUPERSESSION_MARKERS.some((m) => m.test(line))) continue;
+    // The marker may appear in the same section (a section-level banner), on
+    // the same line as an inline qualifier, or — for historical .planning
+    // artifacts only — as a file-level banner before the quote.
+    if (hasMarkerInSection(index) || SUPERSESSION_MARKERS.some((m) => m.test(line))) continue;
+    if (fileLevelMarker) continue;
     violations.push({ file: slash, line: index + 1, absolute: absolute.name, text: line.trim().slice(0, 180) });
   }
 

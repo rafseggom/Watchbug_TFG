@@ -125,6 +125,14 @@ function validate(schema: JsonSchema, value: unknown, path = '$'): string[] {
       for (const key of Object.keys(record)) {
         if (!(key in properties)) errors.push(`${path}.${key}: additional property is not allowed`);
       }
+    } else if (typeof schema.additionalProperties === 'object') {
+      // A schema-valued `additionalProperties` is a validation rule, not a
+      // hint: ignoring it would under-validate every extra field silently.
+      for (const [key, value] of Object.entries(record)) {
+        if (!(key in properties)) {
+          errors.push(...validate(schema.additionalProperties, value, `${path}.${key}`));
+        }
+      }
     }
   }
 
@@ -258,7 +266,9 @@ describe('CA-01 contract: the artifact rejects what the contract forbids', () =>
   }
 
   it('rejects a non-object payload outright', () => {
-    expect(validate(artifact, 'a bare string')[0]).toMatch(/expected object/);
+    const errors = validate(artifact, 'a bare string');
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors.join('\n')).toMatch(/expected object/);
   });
 });
 

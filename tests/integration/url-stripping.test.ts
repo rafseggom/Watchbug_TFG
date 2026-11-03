@@ -45,10 +45,9 @@ async function postIncident(opts: {
   return { status: res.status, body: (await res.json()) as Record<string, unknown> };
 }
 
-async function getIncidents(key: string): Promise<Array<Record<string, unknown>>> {
-  const res = await fetch(`${API_BASE}/api/incidents`, {
-    headers: { 'X-Project-Key': key },
-  });
+async function getIncidents(_key: string): Promise<Array<Record<string, unknown>>> {
+  // Read endpoints never consult the project key (H-7 / DEP-03).
+  const res = await fetch(`${API_BASE}/api/incidents`);
   return (await res.json()) as Array<Record<string, unknown>>;
 }
 

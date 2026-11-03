@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
  * One-shot fixture generator (not part of the build or verify pipeline):
- * draws a deterministic 64×64 two-tone canvas in chromium and exports both
- * fixtures with the browser's own encoders.
+ * draws deterministic canvases in chromium and exports the fixtures with the
+ * browser's own encoders.
  *
  *   e2e/fixtures/valid-64x64.png  — PNG via canvas.toBlob('image/png')
  *   e2e/fixtures/valid-64x64.webp — WebP via canvas.toBlob('image/webp')
@@ -33,131 +33,85 @@ mkdirSync(outDir, { recursive: true });
 const browser = await chromium.launch();
 const page = await browser.newPage();
 
-const pngBase64 = await page.evaluate(async () => {
-  const canvas = document.createElement('canvas');
-  canvas.width = 64;
-  canvas.height = 64;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#2f6feb';
-  ctx.fillRect(0, 0, 64, 64);
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(8, 8, 48, 48);
-  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
-  const buf = await blob.arrayBuffer();
-  let binary = '';
-  new Uint8Array(buf).forEach((b) => { binary += String.fromCharCode(b); });
-  return btoa(binary);
-});
+const fixtures = await page.evaluate(async () => {
+  /** The shared two-tone fixture paint. */
+  const paint = (canvas, width, height, margin = 8) => {
+    const ctx = canvas.getContext('2d');
+    if (ctx === null) throw new Error('fixture canvas has no 2D context');
+    ctx.fillStyle = '#2f6feb';
+    ctx.fillRect(0, 0, width, height);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(margin, margin, width - margin * 2, height - margin * 2);
+  };
 
-const webpBase64 = await page.evaluate(async () => {
-  const canvas = document.createElement('canvas');
-  canvas.width = 64;
-  canvas.height = 64;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#2f6feb';
-  ctx.fillRect(0, 0, 64, 64);
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(8, 8, 48, 48);
-  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/webp'));
-  if (blob.type !== 'image/webp') throw new Error(`expected image/webp, got ${blob.type}`);
-  const buf = await blob.arrayBuffer();
-  let binary = '';
-  new Uint8Array(buf).forEach((b) => { binary += String.fromCharCode(b); });
-  return btoa(binary);
-});
+  const encode = async (width, height, mime, quality, margin) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    paint(canvas, width, height, margin);
+    const blob = await new Promise((resolveBlob) => canvas.toBlob(resolveBlob, mime, quality));
+    if (blob === null) throw new Error(`canvas.toBlob returned null for ${mime}`);
+    if (blob.type !== mime) throw new Error(`expected ${mime}, got ${blob.type}`);
+    return new Uint8Array(await blob.arrayBuffer());
+  };
 
-const jpegBase64 = await page.evaluate(async () => {
-  const canvas = document.createElement('canvas');
-  canvas.width = 64;
-  canvas.height = 64;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#2f6feb';
-  ctx.fillRect(0, 0, 64, 64);
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(8, 8, 48, 48);
-  // quality 0.9: the fixture is submitted input, not a stored artifact — the
-  // harden stage re-encodes at its own explicit quality regardless.
-  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
-  if (blob.type !== 'image/jpeg') throw new Error(`expected image/jpeg, got ${blob.type}`);
-  const buf = await blob.arrayBuffer();
-  const bytes = new Uint8Array(buf);
-  // The 3-byte SOI+marker prefix the server sniffer keys on (research F1):
-  // a 4-byte JFIF check would reject libvips' own output, so assert the
-  // fixture at least carries the prefix the lane accepts.
-  if (!(bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff)) {
-    throw new Error(`fixture does not start with the JPEG magic prefix FF D8 FF`);
-  }
-  let binary = '';
-  bytes.forEach((b) => { binary += String.fromCharCode(b); });
-  return btoa(binary);
-});
+  const jpeg = async (width, height, margin) => {
+    const bytes = await encode(width, height, 'image/jpeg', 0.9, margin);
+    // The 3-byte SOI+marker prefix the server sniffer keys on (research F1):
+    // a 4-byte JFIF check would reject libvips' own output, so assert the
+    // fixture at least carries the prefix the lane accepts.
+    if (!(bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff)) {
+      throw new Error('fixture does not start with the JPEG magic prefix FF D8 FF');
+    }
+    return bytes;
+  };
 
-const oversizeBase64 = await page.evaluate(async () => {
+  const base64 = (bytes) => {
+    let binary = '';
+    bytes.forEach((b) => {
+      binary += String.fromCharCode(b);
+    });
+    return btoa(binary);
+  };
+
+  const png = await encode(64, 64, 'image/png');
+  const webp = await encode(64, 64, 'image/webp');
+  const jpegBytes = await jpeg(64, 64);
+
   // Encode the same two-tone 64×64 canvas, then re-declare the SOFn frame as
   // 8000×8192. A real 64 MP browser canvas is memory-bound and flaky; the
   // decode-bomb guard never decodes — it reads ONLY the header — so a
   // SOF-patched ordinary JPEG is the faithful hostile shape (PLAN Task 2
   // sanctions the synthetic-SOF route with exactly this note).
-  const canvas = document.createElement('canvas');
-  canvas.width = 64;
-  canvas.height = 64;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#2f6feb';
-  ctx.fillRect(0, 0, 64, 64);
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(8, 8, 48, 48);
-  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
-  if (blob.type !== 'image/jpeg') throw new Error(`expected image/jpeg, got ${blob.type}`);
-  const bytes = new Uint8Array(await blob.arrayBuffer());
-  if (!(bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff)) {
-    throw new Error('fixture does not start with the JPEG magic prefix FF D8 FF');
-  }
-  // Walk to the first SOFn the same way the server guard does: standalone
-  // markers carry no length; everything else is an explicit segment.
+  const oversize = new Uint8Array(jpegBytes);
   let off = 2;
-  while (off + 4 <= bytes.length) {
-    if (bytes[off] !== 0xff) throw new Error('marker walk desynced');
-    const marker = bytes[off + 1];
+  while (off + 4 <= oversize.length) {
+    if (oversize[off] !== 0xff) throw new Error('marker walk desynced');
+    const marker = oversize[off + 1];
     if (marker === 0xd9 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
       off += 2;
       continue;
     }
-    const length = (bytes[off + 2] << 8) | bytes[off + 3];
+    const length = (oversize[off + 2] << 8) | oversize[off + 3];
     const isSof = marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc;
     if (isSof) {
       // [precision:1][height:2 BE][width:2 BE] after the length field.
-      bytes[off + 5] = 0x1f; bytes[off + 6] = 0x40; // height 8000 (≤ MAX_IMAGE_DIM)
-      bytes[off + 7] = 0x20; bytes[off + 8] = 0x00; // width  8192 (≤ MAX_IMAGE_DIM)
-      // 65,536,000 px — over MAX_IMAGE_PIXELS on a file that stays tiny.
-      let binary = '';
-      bytes.forEach((b) => { binary += String.fromCharCode(b); });
-      return btoa(binary);
+      oversize[off + 5] = 0x1f;
+      oversize[off + 6] = 0x40; // height 8000 (≤ MAX_IMAGE_DIM)
+      oversize[off + 7] = 0x20;
+      oversize[off + 8] = 0x00; // width  8192 (≤ MAX_IMAGE_DIM)
+      break;
     }
     off += 2 + length;
   }
-  throw new Error('no SOF marker found in the encoded JPEG');
-});
+  if (off + 4 > oversize.length) throw new Error('no SOF marker found in the encoded JPEG');
 
-const rotatedBase64 = await page.evaluate(async () => {
   // An 80×40 raw frame carrying EXIF Orientation = 6: the reporter SAW a
   // 40×80 portrait (rotate 90° clockwise on display). This is the fixture
   // that proves `autoOrient: true` runs — without it sharp stores the
   // sideways 80×40 raw order and its default metadata strip removes the tag,
   // making the intended orientation unrecoverable (research Pitfall 9).
-  const canvas = document.createElement('canvas');
-  canvas.width = 80;
-  canvas.height = 40;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#2f6feb';
-  ctx.fillRect(0, 0, 80, 40);
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(4, 4, 72, 32);
-  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
-  if (blob.type !== 'image/jpeg') throw new Error(`expected image/jpeg, got ${blob.type}`);
-  const src = new Uint8Array(await blob.arrayBuffer());
-
-  // APP1 Exif segment: length + "Exif\0\0" + a little-endian TIFF holding
-  // exactly one IFD0 entry — tag 0x0112 (Orientation), type SHORT, value 6.
+  const rotatedSource = await jpeg(80, 40, 4);
   const exifHeader = [0x45, 0x78, 0x69, 0x66, 0x00, 0x00]; // "Exif\0\0"
   const tiff = [
     0x49, 0x49, 0x2a, 0x00, // "II" + magic 42
@@ -172,33 +126,38 @@ const rotatedBase64 = await page.evaluate(async () => {
   const segLen = 2 + exifHeader.length + tiff.length; // the length field counts itself
   const app1 = [0xff, 0xe1, (segLen >> 8) & 0xff, segLen & 0xff, ...exifHeader, ...tiff];
 
-  // Insert immediately after SOI (PLAN Task 3).
-  const bytes = new Uint8Array(src.length + app1.length);
-  bytes.set(src.subarray(0, 2), 0);
-  bytes.set(app1, 2);
-  bytes.set(src.subarray(2), 2 + app1.length);
+  const rotated = new Uint8Array(rotatedSource.length + app1.length);
+  rotated.set(rotatedSource.subarray(0, 2), 0);
+  rotated.set(app1, 2);
+  rotated.set(rotatedSource.subarray(2), 2 + app1.length);
 
   // The script-level assertions the plan mandates: the produced bytes carry
   // the Exif segment and still begin with the JPEG magic prefix.
-  if (!(bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff)) {
+  if (!(rotated[0] === 0xff && rotated[1] === 0xd8 && rotated[2] === 0xff)) {
     throw new Error('fixture no longer starts with the JPEG magic prefix');
   }
-  const asLatin1 = Array.from(bytes.slice(0, 2 + app1.length))
+  const asLatin1 = Array.from(rotated.slice(0, 2 + app1.length))
     .map((x) => String.fromCharCode(x))
     .join('');
   if (!asLatin1.includes('Exif')) throw new Error('APP1 Exif segment missing from the fixture');
-  if (!(bytes[2] === 0xff && bytes[3] === 0xe1)) throw new Error('APP1 marker was not placed right after SOI');
+  if (!(rotated[2] === 0xff && rotated[3] === 0xe1)) {
+    throw new Error('APP1 marker was not placed right after SOI');
+  }
 
-  let binary = '';
-  bytes.forEach((b) => { binary += String.fromCharCode(b); });
-  return btoa(binary);
+  return {
+    png: base64(png),
+    webp: base64(webp),
+    jpeg: base64(jpegBytes),
+    oversize: base64(oversize),
+    rotated: base64(rotated),
+  };
 });
 
 await browser.close();
 
-writeFileSync(join(outDir, 'valid-64x64.png'), Buffer.from(pngBase64, 'base64'));
-writeFileSync(join(outDir, 'valid-64x64.webp'), Buffer.from(webpBase64, 'base64'));
-writeFileSync(join(outDir, 'valid-64x64.jpg'), Buffer.from(jpegBase64, 'base64'));
-writeFileSync(join(outDir, 'oversize-64mp.jpg'), Buffer.from(oversizeBase64, 'base64'));
-writeFileSync(join(outDir, 'rotated-exif-80x40.jpg'), Buffer.from(rotatedBase64, 'base64'));
+writeFileSync(join(outDir, 'valid-64x64.png'), Buffer.from(fixtures.png, 'base64'));
+writeFileSync(join(outDir, 'valid-64x64.webp'), Buffer.from(fixtures.webp, 'base64'));
+writeFileSync(join(outDir, 'valid-64x64.jpg'), Buffer.from(fixtures.jpeg, 'base64'));
+writeFileSync(join(outDir, 'oversize-64mp.jpg'), Buffer.from(fixtures.oversize, 'base64'));
+writeFileSync(join(outDir, 'rotated-exif-80x40.jpg'), Buffer.from(fixtures.rotated, 'base64'));
 console.log(`fixtures written to ${outDir}`);

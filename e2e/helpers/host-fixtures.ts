@@ -121,12 +121,13 @@ function fixtureKey(options: HostFixtureOptions): string {
 }
 
 /**
- * Snapshot of `window`'s own property names plus the own properties of the four
- * prototypes WDG-04 names. Serialised into an attribute, never onto `window`.
+ * Snapshot of `window`'s own property names plus the own properties of every
+ * prototype an accidental native patch could target. Serialised into an
+ * attribute, never onto `window`.
  */
 const SNAPSHOT_EXPRESSION = `JSON.stringify({
   w: Object.getOwnPropertyNames(window).sort(),
-  p: [Object, Element, HTMLElement, EventTarget].map(function (ctor) {
+  p: [Object, Element, Node, Document, Navigator, EventTarget, HTMLElement, HTMLInputElement, CanvasRenderingContext2D, CSSStyleDeclaration].map(function (ctor) {
     return Object.getOwnPropertyNames(ctor.prototype).sort();
   })
 })`;
@@ -183,7 +184,7 @@ ${AFTER_SCRIPT}
 export interface GlobalSnapshot {
   /** `Object.getOwnPropertyNames(window)`, sorted. */
   w: string[];
-  /** Own properties of Object, Element, HTMLElement, EventTarget prototypes. */
+  /** Own properties of every prototype in `SNAPSHOT_EXPRESSION`, sorted. */
   p: string[][];
 }
 
@@ -305,7 +306,13 @@ export async function openHostileFixture(page: Page, options: HostileFixtureOpti
     );
   }
   if (options.autoInit === false) {
-    html = html.replace(/\s+onload="[^"]*"/, '');
+    // Remove the loader's `onload` only — a global `replace` would delete the
+    // host page's own handler (and the first-match form would leave a second
+    // widget bootstrap in place, silently defeating `autoInit: false`).
+    html = html.replace(
+      /(<script\b[^>]*\bsrc="[^"]*\/__e2e\/bundles\/[^"]*"[^>]*?)\s+onload="[^"]*"/g,
+      '$1',
+    );
   }
 
   await serveBundle(page, options.bundle);

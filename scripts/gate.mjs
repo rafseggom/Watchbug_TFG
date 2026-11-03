@@ -18,10 +18,10 @@
  *   node scripts/gate.mjs                    # run every rule
  *   node scripts/gate.mjs sdk-runtime-deps   # run one rule
  *
- * Exit code 1 if any rule FAILs. A rule whose subject does not exist yet
- * reports SKIP — visible in the summary, never silently. Flip `STRICT` to
- * true at Phase 7 release closeout so a SKIP becomes a FAIL and no rule can
- * quietly never run again.
+ * Exit code 1 if any rule FAILs. A rule whose subject does not exist reports
+ * SKIP — visible in the summary, never silently. `STRICT` is on: a SKIP is a
+ * FAIL, so no rule can quietly never run again. A gate that passes because its
+ * subject disappeared is not a gate.
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, extname, join, relative, resolve } from 'node:path';
@@ -30,8 +30,8 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const rel = (p) => relative(repoRoot, p).replaceAll('\\', '/');
 
-/** @type {boolean} Phase 7 closeout: turn SKIP into FAIL. */
-const STRICT = false;
+/** @type {boolean} A SKIP is a FAIL: absence of the subject is not evidence. */
+const STRICT = true;
 
 /**
  * The only runtime dependencies `packages/sdk` may declare. Everything else is
@@ -150,8 +150,8 @@ const RULES = [
         ]);
       }
       if (sinks === 0) {
-        return skip([
-          'no encode sink found — encodeFinal() has disappeared from the lane; this is a build defect, not a pending phase (the sink shipped with 03-03)',
+        return fail([
+          'no encode sink found — encodeFinal() has disappeared from the lane; the single-sink invariant is unverified, not satisfied',
         ]);
       }
       return pass(hits);

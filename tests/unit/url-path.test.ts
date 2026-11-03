@@ -1,49 +1,52 @@
 import { describe, it, expect } from 'vitest';
+import { stripQueryFragment } from '@watchbug/contracts/schema';
 
 /**
- * Unit test for URL path extraction logic.
+ * Unit test for the **production** URL transform (R-08).
  *
- * This is a pure function test that exercises the same logic used by the
- * API's ingest route to strip query strings and fragments from URLs.
- * It does not require a running server — it tests the logic in isolation.
+ * The previous version re-implemented the logic locally (`new URL(...).pathname`),
+ * which returned `/cb` for an absolute URL while the real contract preserves
+ * scheme and host. A green test against a copy is not evidence about the code
+ * that ships; this one imports `stripQueryFragment` from `packages/contracts`.
  */
 
-function extractPathOnly(url: string): string {
-  try {
-    const parsed = new URL(url, 'http://localhost');
-    return parsed.pathname;
-  } catch {
-    // If the URL is already path-only or malformed, return as-is (fallback)
-    return url.split('?')[0].split('#')[0];
-  }
-}
-
-describe('unit: URL path extraction', () => {
+describe('unit: contract stripQueryFragment', () => {
   it('strips query string and fragment', () => {
-    expect(extractPathOnly('/checkout?token=secret&session=abc#step-2')).toBe('/checkout');
+    expect(stripQueryFragment('/checkout?session=abc&step=2#step-2')).toBe('/checkout');
   });
 
   it('strips only fragment when no query', () => {
-    expect(extractPathOnly('/dashboard#section-3')).toBe('/dashboard');
+    expect(stripQueryFragment('/dashboard#section-3')).toBe('/dashboard');
   });
 
   it('strips only query when no fragment', () => {
-    expect(extractPathOnly('/search?q=watchbug')).toBe('/search');
+    expect(stripQueryFragment('/search?q=watchbug')).toBe('/search');
   });
 
   it('preserves path when clean', () => {
-    expect(extractPathOnly('/settings/profile')).toBe('/settings/profile');
+    expect(stripQueryFragment('/settings/profile')).toBe('/settings/profile');
   });
 
   it('handles root path', () => {
-    expect(extractPathOnly('/')).toBe('/');
+    expect(stripQueryFragment('/')).toBe('/');
   });
 
   it('handles empty string', () => {
-    expect(extractPathOnly('')).toBe('/');
+    expect(stripQueryFragment('')).toBe('');
   });
 
   it('handles path with multiple slashes', () => {
-    expect(extractPathOnly('/api/v1/incidents/123?foo=bar#baz')).toBe('/api/v1/incidents/123');
+    expect(stripQueryFragment('/api/v1/incidents/123?foo=bar#baz')).toBe('/api/v1/incidents/123');
+  });
+
+  it('preserves scheme and host on an absolute URL (the contract real behaviour)', () => {
+    expect(stripQueryFragment('https://example.test/cb?code=secret#done')).toBe(
+      'https://example.test/cb',
+    );
+  });
+
+  it('is idempotent — the ingest re-validates the already-stripped value', () => {
+    const once = stripQueryFragment('/checkout?session=abc#step-2');
+    expect(stripQueryFragment(once)).toBe(once);
   });
 });

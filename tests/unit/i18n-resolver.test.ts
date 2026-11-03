@@ -90,8 +90,22 @@ describe('unit: t() lookup and interpolation (WDG-06 EN/ES)', () => {
 
   it('translates every EN string to a different ES string where copy differs', () => {
     // Sanity that the Spanish dictionary is really Spanish and not a copy of
-    // English for the visible composer surface.
-    expect(stringsEs['composer.heading.feedback']).not.toBe(strings['composer.heading.feedback']);
+    // English for the visible composer surface. The only composer key allowed
+    // to be byte-identical is the placeholder-only counter: every other key
+    // must carry Spanish copy, so a 90 %-English dictionary cannot pass on the
+    // strength of one heading.
+    const unchanged = Object.keys(strings).filter(
+      (key) => key.startsWith('composer.') && strings[key] === stringsEs[key],
+    );
+    expect(unchanged).toEqual(['composer.note.counter']);
+
+    const composerKeys = Object.keys(strings).filter((key) => key.startsWith('composer.'));
+    expect(composerKeys.length).toBeGreaterThan(20);
+    expect(
+      composerKeys.filter((key) => strings[key] !== stringsEs[key]).length,
+      'at least 90 % of composer copy must be genuinely translated',
+    ).toBeGreaterThanOrEqual(Math.ceil(composerKeys.length * 0.9));
+
     expect(stringsEs['composer.heading.feedback']).toBe('Enviar una sugerencia');
     expect(strings['composer.heading.feedback']).toBe('Send feedback');
   });

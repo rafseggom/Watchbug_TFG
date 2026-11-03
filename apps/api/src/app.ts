@@ -118,6 +118,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     db,
     storage,
     intervalMinutes: config.purgeIntervalMinutes,
+    logger: app.log,
   });
   app.addHook('onClose', async () => {
     purge.stop();

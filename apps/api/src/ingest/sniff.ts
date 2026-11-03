@@ -17,16 +17,33 @@ import type { ImageExt } from '@watchbug/contracts/types';
 
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 
+/**
+ * The signature table, in match order. Each entry says how many leading bytes
+ * it needs and a predicate over that slice — adding a container is one row,
+ * never another `if` on a growing boolean chain.
+ */
+const SIGNATURES: ReadonlyArray<{
+  ext: ImageExt;
+  length: number;
+  matches: (buf: Buffer) => boolean;
+}> = [
+  { ext: 'png', length: 8, matches: (buf) => buf.subarray(0, 8).equals(PNG_SIGNATURE) },
+  {
+    ext: 'webp',
+    length: 12,
+    matches: (buf) => buf.toString('latin1', 0, 4) === 'RIFF' && buf.toString('latin1', 8, 12) === 'WEBP',
+  },
+  {
+    ext: 'jpeg',
+    length: 3,
+    matches: (buf) => buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff,
+  },
+];
+
 export function sniffImage(bytes: Uint8Array): ImageExt | null {
   const buf = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
-  if (buf.length >= 8 && buf.subarray(0, 8).equals(PNG_SIGNATURE)) return 'png';
-  if (
-    buf.length >= 12 &&
-    buf.toString('latin1', 0, 4) === 'RIFF' &&
-    buf.toString('latin1', 8, 12) === 'WEBP'
-  ) {
-    return 'webp';
+  for (const signature of SIGNATURES) {
+    if (buf.length >= signature.length && signature.matches(buf)) return signature.ext;
   }
-  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'jpeg';
   return null;
 }

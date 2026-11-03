@@ -94,7 +94,7 @@ describe('ING-04: project-key capability gate', () => {
   const fetch = globalThis.fetch;
 
   it('missing, unknown and malformed project keys all get the same structured 401 and nothing is stored', async () => {
-    const listBefore = await (await fetch(`${API_ORIGIN}/api/incidents`, { headers: { 'X-Project-Key': KEY } })).json() as unknown[];
+    const listBefore = await (await fetch(`${API_ORIGIN}/api/incidents`)).json() as unknown[];
     const before = listBefore.length;
 
     const missing = await postHostile(fetch, { filename: 'shot.png', mime: 'image/png', bytes: png }, { key: null });
@@ -122,13 +122,13 @@ describe('ING-04: project-key capability gate', () => {
     expect(encoded[1]).toBe(encoded[0]);
     expect(encoded[2]).toBe(encoded[0]);
 
-    const listAfter = await (await fetch(`${API_ORIGIN}/api/incidents`, { headers: { 'X-Project-Key': KEY } })).json() as unknown[];
+    const listAfter = await (await fetch(`${API_ORIGIN}/api/incidents`)).json() as unknown[];
     const after = listAfter.length;
     expect(after).toBe(before);
   });
 
   it('concurrency: a parallel burst of invalid-key requests each receives its own uniform 401 and stores nothing', async () => {
-    const listBefore = await (await fetch(`${API_ORIGIN}/api/incidents`, { headers: { 'X-Project-Key': KEY } })).json() as unknown[];
+    const listBefore = await (await fetch(`${API_ORIGIN}/api/incidents`)).json() as unknown[];
     const before = listBefore.length;
 
     const image: ImagePart = { filename: 'shot.png', mime: 'image/png', bytes: png };
@@ -146,7 +146,7 @@ describe('ING-04: project-key capability gate', () => {
       expect(res.json).toEqual(UNIFORM_401_BODY);
     }
 
-    const listAfter = await (await fetch(`${API_ORIGIN}/api/incidents`, { headers: { 'X-Project-Key': KEY } })).json() as unknown[];
+    const listAfter = await (await fetch(`${API_ORIGIN}/api/incidents`)).json() as unknown[];
     const after = listAfter.length;
     expect(after).toBe(before);
   });
@@ -384,7 +384,15 @@ describe('CR-02: forged X-Forwarded-For never owns the per-IP bucket', () => {
     expectRateLimited(over, 'RATE_LIMIT_PER_IP_PER_MIN');
 
     const viaPanel = await postProbe(fetch, { key, ip: forged, baseUrl: PANEL_ORIGIN });
+    // A 429 here would mean the forged entry survived the edge. A 404/502/503
+    // would mean `/api` never reached Fastify — also a failure of the proxy
+    // row, not a pass. The request is JSON (not multipart), so Fastify answers
+    // a structured 4xx; its body proves which layer answered.
     expect(viaPanel.status, 'the forged X-Forwarded-For entry must not survive the nginx edge').not.toBe(429);
+    expect(viaPanel.status, 'the panel proxy must route /api to the API').toBeGreaterThanOrEqual(400);
+    expect(viaPanel.status, 'the panel proxy must route /api to the API').toBeLessThan(500);
+    expect(viaPanel.json, 'the response must be Fastify JSON, not an nginx error page').not.toBeNull();
+    expect(viaPanel.json?.statusCode).toBe(viaPanel.status);
   });
 });
 
@@ -437,12 +445,12 @@ describe('ING-08: CORS Origin allowlist with Origin-present rule', () => {
   it('trio: non-allowlisted Origin → 403 + nothing stored; allowlisted Origin → 201 + CORS headers; no Origin → 201', async () => {
     const allowed = allowedOrigin();
 
-    const listBefore = await (await fetch(`${API_ORIGIN}/api/incidents`, { headers: { 'X-Project-Key': KEY } })).json() as unknown[];
+    const listBefore = await (await fetch(`${API_ORIGIN}/api/incidents`)).json() as unknown[];
     const before = listBefore.length;
 
     const rejected = await ingestWithOrigin(fetch, 'https://evil.example');
     expect(rejected.status).toBe(403);
-    const listAfterReject = await (await fetch(`${API_ORIGIN}/api/incidents`, { headers: { 'X-Project-Key': KEY } })).json() as unknown[];
+    const listAfterReject = await (await fetch(`${API_ORIGIN}/api/incidents`)).json() as unknown[];
     expect(listAfterReject.length).toBe(before);
 
     const accepted = await ingestWithOrigin(fetch, allowed);

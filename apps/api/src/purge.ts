@@ -33,11 +33,24 @@ import type { Storage } from './ports';
 /** Artifact sweep batch size — bounds one tick's row/blob work (T-m3v-02). */
 const ARTIFACT_BATCH = 100;
 
+/** The structured logger slice the sweep needs (Fastify's pino logger). */
+export interface PurgeLogger {
+  info: (obj: Record<string, unknown>, msg: string) => void;
+  error: (obj: Record<string, unknown>, msg: string) => void;
+}
+
+const FALLBACK_LOGGER: PurgeLogger = {
+  info: (obj, msg) => console.log(`[watchbug] ${msg}`, obj),
+  error: (obj, msg) => console.error(`[watchbug] ${msg}`, obj),
+};
+
 export interface PurgeDeps {
   db: AppDb;
   storage: Storage;
   /** Sweep cadence in minutes; validated positive-integer by config `readInt`. */
   intervalMinutes: number;
+  /** Fastify's pino logger; falls back to the console outside `buildApp` tests. */
+  logger?: PurgeLogger;
 }
 
 export interface PurgeHandle {
@@ -50,6 +63,7 @@ export interface PurgeHandle {
  */
 export async function runPurge(deps: PurgeDeps): Promise<void> {
   const { db, storage } = deps;
+  const logger = deps.logger ?? FALLBACK_LOGGER;
   const now = new Date();
 
   // Identity sweep (RET-01 / R-09): one set-based UPDATE. The `or(isNotNull…)`
@@ -93,7 +107,7 @@ export async function runPurge(deps: PurgeDeps): Promise<void> {
       } catch (err) {
         // Counts and uuids only — never the PII the job exists to destroy
         // (T-m3v-03).
-        console.error(`[watchbug] purge: artifact blob delete failed (id=${row.id}, kept for retry):`, err);
+        logger.error({ err, incidentId: row.id }, 'purge: artifact blob delete failed (kept for retry)');
         continue;
       }
     }
@@ -103,7 +117,7 @@ export async function runPurge(deps: PurgeDeps): Promise<void> {
 
   // Repudiation guard (T-m3v-04): every non-empty sweep is observable.
   if (stripped.length > 0 || deleted > 0) {
-    console.log(`[watchbug] purge: identity=${stripped.length} artifacts=${deleted}`);
+    logger.info({ identity: stripped.length, artifacts: deleted }, 'purge: sweep complete');
   }
 }
 
@@ -115,6 +129,7 @@ export async function runPurge(deps: PurgeDeps): Promise<void> {
  */
 export function startPurge(deps: PurgeDeps): PurgeHandle {
   let running = false;
+  const logger = deps.logger ?? FALLBACK_LOGGER;
 
   const sweep = async (): Promise<void> => {
     if (running) return;
@@ -122,7 +137,7 @@ export function startPurge(deps: PurgeDeps): PurgeHandle {
     try {
       await runPurge(deps);
     } catch (err) {
-      console.error('[watchbug] purge sweep failed:', err);
+      logger.error({ err }, 'purge: sweep failed');
     } finally {
       running = false;
     }

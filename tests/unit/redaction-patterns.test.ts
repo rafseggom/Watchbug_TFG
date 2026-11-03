@@ -69,6 +69,16 @@ function familiesHit(text: string): string[] {
   }).map((family) => family.id);
 }
 
+/** The redactor's rule for a form-control value (`INPUT_VALUE_FAMILIES`). */
+function inputFamiliesHit(value: string): string[] {
+  return INPUT_VALUE_FAMILIES.filter((family) => {
+    const matches = matchesOf(family, value);
+    if (matches.length === 0) return false;
+    const validate = family.validate;
+    return validate === undefined || matches.some((match) => validate(match));
+  }).map((family) => family.id);
+}
+
 describe('unit: P2-D-07 redaction pattern catalog', () => {
   it('records every family once per DOM location — four ids, both sources', () => {
     expect(PATTERN_FAMILIES).toHaveLength(8);
@@ -148,5 +158,18 @@ describe('unit: P2-D-07 redaction pattern catalog', () => {
     expect(matches.length).toBeGreaterThan(0);
     expect(luhnValid(matches[0].replace(/[^0-9]/g, ''))).toBe(false);
     expect(familiesHit(CARDS_GLUED)).toEqual(['card']);
+  });
+
+  it('exercises every *-in-input family, not only its text-node twin', () => {
+    // SEC-01 has a second scan surface: form-control values. The catalog is a
+    // partition, so a broken input regex would otherwise leave every row above
+    // green (the text families use the same shapes today, but the split is the
+    // contract — a future divergent regex must fail here).
+    expect(inputFamiliesHit(JWT)).toEqual(['jwt-in-input']);
+    expect(inputFamiliesHit(`before ${BEARER_TEXT} after`)).toEqual(['bearer-in-input']);
+    expect(inputFamiliesHit(ASSIGNMENT_TEXT)).toEqual(['assignment-in-input']);
+    expect(inputFamiliesHit(CARD_VALID)).toEqual(['card-in-input']);
+    expect(inputFamiliesHit(CARD_INVALID)).toEqual([]);
+    expect(inputFamiliesHit('a plain value with no credential')).toEqual([]);
   });
 });

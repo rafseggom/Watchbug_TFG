@@ -713,8 +713,8 @@ export function createComposer(
   };
 
   /** The single accent authority: the custom property's COMPUTED value with
-   * the design-token literal as fallback only (P3-D-07 — the chunk carries no
-   * colour literal of its own; `--wb-color-accent` stays the one definition). */
+   * the design-token literal as a fallback only when the property is absent
+   * (P3-D-07 — `--wb-color-accent` stays the one definition). */
   const resolveInk = (): string => {
     const value = getComputedStyle(editorDeps.wrap).getPropertyValue('--wb-color-accent').trim();
     return value.length > 0 ? value : '#2f6feb';
@@ -929,7 +929,10 @@ export function createComposer(
       return;
     }
     draft.title = clampCodePoints(trimmed, MAX_TITLE_CHARS);
-    draft.note = noteInput.value;
+    // The same code-point clamp the `input` handler applies: a value written
+    // programmatically can bypass `maxlength`, and an unclamped note would go
+    // straight to the wire (P3-D-02).
+    draft.note = clampCodePoints(noteInput.value, MAX_NOTE_CHARS);
     handlers.onReview(draft);
   });
   discardButton.addEventListener('click', () => {

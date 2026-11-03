@@ -45,8 +45,13 @@ import { createComposer, COMPOSER_CSS, type Composer, type LocaleCode } from './
 import { createReview, REVIEW_CSS, type Review } from './widget/review.ts';
 import { detectLocale, locale, setLocale } from './strings.ts';
 
-/** Bundle identity, surfaced on the IIFE global for support/debug. */
-export const WATCHBUG_VERSION = '0.1.0';
+/**
+ * Bundle identity, surfaced on the IIFE global for support/debug. The value is
+ * injected by `packages/sdk/scripts/build.mjs` from `package.json.version`, so
+ * the manifest is the single source of truth (no duplicated literal).
+ */
+declare const __WATCHBUG_VERSION__: string;
+export const WATCHBUG_VERSION = __WATCHBUG_VERSION__;
 
 /** The surface the router currently shows. `editor` mounts with 03-05. */
 export type Screen = 'idle' | 'status' | 'composer' | 'editor' | 'review';
@@ -72,15 +77,6 @@ export interface WatchbugInitOptions {
 interface ResolvedInitOptions {
   projectKey: string;
   endpoint: string;
-}
-
-interface MountedWidget {
-  host: WatchbugHost;
-  launcher: Launcher;
-  panel: StatusPanel;
-  composer: Composer;
-  review: Review;
-  config: ResolvedInitOptions;
 }
 
 /**
@@ -118,7 +114,7 @@ function loadingScriptOrigin(): string | null {
   }
 }
 
-let mounted: MountedWidget | null = null;
+let mounted = false;
 
 function isAbsoluteHttpUrl(value: string): boolean {
   try {
@@ -187,7 +183,7 @@ function resolveOptions(options: WatchbugInitOptions): ResolvedInitOptions {
  * introduces an `await` in the click's task.
  */
 export function init(options: WatchbugInitOptions): void {
-  if (mounted !== null) return;
+  if (mounted) return;
 
   // WDG-06: resolve the locale ONCE, before anything is constructed — the
   // launcher/panel/composer read `t()` at creation, and `mountHost` declares
@@ -402,7 +398,7 @@ export function init(options: WatchbugInitOptions): void {
   host.content.appendChild(panel.element);
   host.content.appendChild(composer.element);
   host.content.appendChild(review.element);
-  mounted = { host, launcher, panel, composer, review, config };
+  mounted = true;
 }
 
 export default { WATCHBUG_VERSION, init };

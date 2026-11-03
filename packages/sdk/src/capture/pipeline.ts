@@ -243,11 +243,13 @@ export async function runCaptureStage(deps: CaptureStageDeps): Promise<CaptureOu
   }
 
   // SEC-02/T-02-03: destructive fill on the raw pixels, before any encode can
-  // exist. `measured.rects` is set by every `CaptureSource` that honours
-  // `beforeRead`; the fallback re-measures so a misbehaving seam degrades to a
-  // later measurement, never to unredacted bytes (T-02-10).
+  // exist. `beforeRead` is mandatory on every `CaptureSource`; a seam that
+  // never measured at the pixel-read instant cannot be second-guessed later
+  // (WR-01/H-1), so a missing measurement is a loud no-send, never a re-measure
+  // of the live viewport (T-02-10).
   try {
-    const rects = measured.rects ?? redactor.collect();
+    const rects = measured.rects;
+    if (rects === null) return { ok: false, captureNote: 'denied' };
     const transform = transformFor(image.width, image.height, view.innerWidth, view.innerHeight);
     const t1: BitmapRect[] = [];
     for (const rect of rects) {

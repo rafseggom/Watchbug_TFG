@@ -1,15 +1,15 @@
 # CI — the verification architecture of this repository, in executable form.
 #
-# R-12 (owner policy, stated twice) abolishes unit tests and coverage
-# thresholds. PRD RSK-19 names the compensation: artifact-level assertions +
-# static grep gates + `check:size`. Those three only mean anything if a machine
-# runs them on every change, so this workflow is not "quality tooling" — it is
-# the only test suite R-12 permits, and PITFALLS M-2 requires `check:size` on
-# *every PR*, not at milestone end ("a budget enforced late is a budget
-# missed").
+# R-19 (which amends R-12) defines six verification types: unit, integration,
+# contract, VRT, packaging and e2e. Every type that this project calls policy
+# runs here — a suite that only exists in package.json is documentation, not a
+# gate. `check:size` stays on *every PR* (PITFALLS M-2: "a budget enforced late
+# is a budget missed"), and the e2e job still targets the REAL three-container
+# deployment.
 #
-# Deliberately absent, per R-12: unit tests, coverage upload, Codecov, Sonar
-# quality gates, a Node version matrix. Do not add them.
+# Deliberately absent: coverage uploads, Codecov, Sonar quality gates and a
+# Node version matrix. R-19 keeps R-12's no-coverage-vanity stance and the e2e
+# suite's ≤ 20 journey cap.
 
 name: CI
 
@@ -115,6 +115,31 @@ jobs:
       - name: Compose assertions (C-4 / INV-03)
         run: npm run check:compose
 
+  suites:
+    name: Unit + contract suites (R-19 types 1 & 5)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # The contract suite re-emits the published artifact from Zod and the
+      # unit lane exercises pure production helpers; neither needs a browser
+      # or the compose stack.
+      - name: Unit suite
+        run: npm run test:unit
+
+      - name: Contract suite (CA-01)
+        run: npm run test:contract
+
   sdk-deps:
     name: SDK runtime dependencies (RNF-01 zero-deps)
     runs-on: ubuntu-latest
@@ -150,17 +175,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # R-12's other half: `check:size` above plus `npm run verify` IS the entire
-  # verification policy. A CI without this job would be green while the suite
-  # it claims to protect is red.
-  #
-  # Runs on the bare runner, not in a Playwright container: the suite targets
-  # the REAL three-container deployment (INV-03) - global-setup.ts fails loud
-  # unless http://127.0.0.1:8080/api/health answers through the nginx proxy -
-  # and a `container:` job has no Docker CLI/daemon to run `docker compose`.
-  # This mirrors the documented SKELETON.md quickstart verbatim.
+  # The compose-backed half of R-19: integration (real API + DB), packaging
+  # (the deployment contract's live rows) and VRT (pixel baselines of the
+  # flagship surfaces) all run against the stack this job already starts.
+  # `npm run verify` remains the functional CA-01...CA-05 suite.
   e2e:
-    name: E2E suite (CA-01...CA-05)
+    name: Integration + packaging + VRT + E2E
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -214,6 +234,21 @@ jobs:
           docker compose ps
           docker compose logs --tail=200
           exit 1
+
+      # R-19 type 2: API routes against the REAL stack (ingest, auth, rate
+      # limits, sanitisation, idempotency) — no browser.
+      - name: Integration suite
+        run: npm run test:integration
+
+      # R-19 type 6: the deployment contract's live rows plus the size/compose
+      # gates, all against the same running stack.
+      - name: Packaging suite
+        run: npm run test:packaging
+
+      # R-19 type 4: chromium-only baselines (the config deliberately has no
+      # webkit project yet — see playwright.vrt.config.ts).
+      - name: Visual regression
+        run: npm run test:vrt
 
       - name: npm run verify
         run: npm run verify -- --project=chromium --project=firefox --project=webkit

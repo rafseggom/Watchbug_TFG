@@ -317,30 +317,30 @@ export async function expectMaskConfirmation(
   visible: boolean,
   timeout = 5_000,
 ): Promise<MaskConfirmationState> {
-  await page.waitForFunction(
+  // One predicate both waits for the state AND returns it: waiting and then
+  // re-reading in a second `evaluate` leaves a TOCTOU window in which the
+  // dialog can close between the two calls.
+  const handle = await page.waitForFunction(
     (want) => {
       const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
-      const dialog = root?.querySelector('div.mask-dialog');
+      const dialog = root?.querySelector('div.mask-dialog') as HTMLElement | null;
       const shown = dialog?.getAttribute('data-shown') === 'true';
-      return want === shown;
+      if (want !== shown) return null;
+      const action = dialog?.querySelector('button.mask-dialog-action') ?? null;
+      const maskTool = root?.querySelector('button.tool[data-wb-tool="mask"]') ?? null;
+      const active = root?.activeElement ?? null;
+      return {
+        visible: shown,
+        role: dialog?.getAttribute('role') ?? '',
+        ariaModal: dialog?.getAttribute('aria-modal') ?? '',
+        focusOnAction: action !== null && active === action,
+        focusOnMaskTool: maskTool !== null && active === maskTool,
+      };
     },
     visible,
     { timeout },
   );
-  return page.evaluate(() => {
-    const root = document.querySelector('watchbug-host')?.shadowRoot ?? null;
-    const dialog = root?.querySelector('div.mask-dialog') as HTMLElement | null;
-    const action = dialog?.querySelector('button.mask-dialog-action') ?? null;
-    const maskTool = root?.querySelector('button.tool[data-wb-tool="mask"]') ?? null;
-    const active = root?.activeElement ?? null;
-    return {
-      visible: dialog?.getAttribute('data-shown') === 'true',
-      role: dialog?.getAttribute('role') ?? '',
-      ariaModal: dialog?.getAttribute('aria-modal') ?? '',
-      focusOnAction: action !== null && active === action,
-      focusOnMaskTool: maskTool !== null && active === maskTool,
-    };
-  });
+  return (await handle.jsonValue()) as MaskConfirmationState;
 }
 
 /** Whether the `.mask-mode` toggle is currently visible, and what is pressed. */

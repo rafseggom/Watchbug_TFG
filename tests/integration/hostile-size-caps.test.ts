@@ -4,14 +4,14 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { connect } from 'node:net';
 import { once } from 'node:events';
+import {
+  MAX_BODY_BYTES,
+  MAX_ENCODED_IMAGE_BYTES,
+  MAX_IMAGE_PART_BYTES,
+} from '@watchbug/contracts/constants';
 
 const repoRoot = resolve(__dirname, '../..');
 const png = readFileSync(resolve(repoRoot, 'e2e/fixtures/valid-64x64.png'));
-
-/** Layer caps under test (mirrors packages/contracts/src/constants.ts). */
-const MAX_BODY_BYTES = 5 * 1024 * 1024; // 5 MB — Content-Length pre-read + streaming counter
-const MAX_IMAGE_PART_BYTES = 4 * 1024 * 1024; // 4 MB — multipart parser limit
-const MAX_ENCODED_IMAGE_BYTES = 2 * 1024 * 1024; // 2 MB — semantic cap (A-06 "hard")
 
 /** Direct-to-API origin: bypasses nginx, reaches Fastify's own gates. */
 const API_ORIGIN = 'http://127.0.0.1:3000';
@@ -259,6 +259,11 @@ describe('ING-06: size caps — hostile submission layer enforcement', () => {
       bytes: Buffer.alloc(MAX_BODY_BYTES + 1024 * 1024, 0x41),
     }, { baseUrl: PANEL_ORIGIN }); // panel origin via nginx
     expect(viaNginx.status).toBe(413);
+    // Attribution: the edge, not Fastify's own 413. nginx answers with its
+    // HTML error page; Fastify answers with structured JSON. Without this the
+    // row would stay green after `client_max_body_size` disappeared.
+    expect(viaNginx.contentType).toContain('text/html');
+    expect(viaNginx.json, 'the 413 must come from nginx, not the API JSON body').toBeNull();
   });
 
   it('an encoded image over MAX_ENCODED_IMAGE_BYTES is rejected 413 (semantic cap, A-06 hard)', { timeout: 60_000 }, async () => {

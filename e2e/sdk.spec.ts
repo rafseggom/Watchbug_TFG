@@ -77,6 +77,10 @@ import {
  * convention `e2e/ingest.spec.ts` adopted for the list route).
  */
 const INCIDENT_POST_RE = /\/api\/incidents$/;
+/** The fixture origin's health probe — anchored so another origin cannot satisfy it. */
+const HEALTH_ROUTE = new RegExp(
+  `^${FIXTURE_ORIGIN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/api/health$`,
+);
 const INTERCEPTED_ID = '11111111-1111-4111-8111-111111111111';
 
 interface PostCall {
@@ -158,6 +162,7 @@ async function interceptIncidentPosts(
   reply: (call: PostCall, index: number) => Promise<{ status: number; body: string }>,
 ): Promise<PostCall[]> {
   const calls: PostCall[] = [];
+  const expectedKey = projectKey();
   await page.route(INCIDENT_POST_RE, async (route) => {
     if (route.request().method() !== 'POST') {
       await route.continue();
@@ -172,6 +177,21 @@ async function interceptIncidentPosts(
       buffer,
     };
     calls.push(call);
+    // The mock models the real gate: a report without the project's key is a
+    // 401, not a 201. Otherwise a regression that stopped sending the key
+    // would still show "Report sent ✓".
+    if (call.headers['x-project-key'] !== expectedKey) {
+      await route.fulfill({
+        status: 401,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          statusCode: 401,
+          error: 'Unauthorized',
+          message: 'invalid or missing project key',
+        }),
+      });
+      return;
+    }
     const { status, body } = await reply(call, calls.length - 1);
     await route.fulfill({ status, contentType: 'application/json', body });
   });
@@ -207,9 +227,10 @@ const CAPTURE_HINT = 'Nothing was sent. Allow screen sharing, then try again.';
 
 /** One shared shape for every loud-failure row: copy first, zero POSTs after. */
 async function expectNoRequest(page: Page, calls: PostCall[]): Promise<void> {
-  // Give a would-be request time to land before counting attempts — "nothing
-  // was sent" is an assertion, not a race we hope to win.
-  await page.waitForTimeout(600);
+  // Wait for the browser's own quiet signal instead of a fixed sleep: a
+  // would-be POST keeps the network busy, so `networkidle` cannot resolve
+  // while one is in flight.
+  await page.waitForLoadState('networkidle', { timeout: 2_000 }).catch(() => undefined);
   expect(calls, 'no POST /api/incidents attempt may be made').toHaveLength(0);
 }
 
@@ -1795,6 +1816,34 @@ test.describe('J-03 — Capture integrity: a real frame, no widget, fail-closed 
     await expectZoneState(page, 'degraded');
     await expectNoRequest(page, calls);
   });
+
+  /**
+   * S-9: every engine must exercise the production adapter it is claimed to
+   * cover. WebKit normally runs the seam tier, so this row deliberately leaves
+   * the seam uninstalled: with no `getDisplayMedia`, the real
+   * `DisplayMediaCapture` still classifies the failure as `no-api` and the
+   * composer opens in its degraded state.
+   */
+  test('WebKit production adapter: missing getDisplayMedia is classified as no-api', async ({ page, browserName }) => {
+    test.skip(browserName !== 'webkit', 'WebKit-only: the other engines already run the media tier');
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: undefined });
+    });
+    await openHostFixture(page, { bundle: 'watchbug.e2e.js', mode: 'iife' });
+    await waitForWidget(page);
+
+    const calls = await interceptIncidentPosts(page, async () => ({
+      status: 201,
+      body: JSON.stringify({ id: INTERCEPTED_ID }),
+    }));
+
+    await clickLauncher(page);
+    await expectZoneState(page, 'degraded');
+    const degraded = await probeWidget(page);
+    expect(degraded.composerNoticeHeading).toBe('Capture unavailable');
+    expect(degraded.composerNoticeHint).toBe(CAPTURE_HINT);
+    await expectNoRequest(page, calls);
+  });
 });
 
 /**
@@ -3232,9 +3281,9 @@ test.describe('J-07 — Degraded capture and attachment', () => {
     expect(degraded.composerAttachVisible).toBe(true);
     expect(degraded.composerContinueVisible).toBe(true);
 
-    // Nothing posts while the diagnosis sits on screen (T-03-01): give a
-    // would-be request time to land before counting.
-    await page.waitForTimeout(600);
+    // Nothing posts while the diagnosis sits on screen (T-03-01): wait for the
+    // browser's quiet signal rather than a fixed sleep.
+    await page.waitForLoadState('networkidle', { timeout: 2_000 }).catch(() => undefined);
     expect(posts, 'zero POST /api/incidents before the user chooses').toHaveLength(0);
 
     await clickContinueTextOnly(page);
@@ -3308,7 +3357,7 @@ test.describe('J-07 — Degraded capture and attachment', () => {
     expect(degraded.composerNoticeHint, 'the no-api diagnosis keeps the capture-failed hint').toBe(
       CAPTURE_HINT,
     );
-    await page.waitForTimeout(600);
+    await page.waitForLoadState('networkidle', { timeout: 2_000 }).catch(() => undefined);
     expect(posts, 'nothing posts from the degraded state').toHaveLength(0);
 
     await clickContinueTextOnly(page);
@@ -3830,7 +3879,7 @@ test.describe('J-11 — Payload privacy and self-hosting (SEC-03)', () => {
     // page's traffic (Authorization attempt, and the cookie on a default
     // same-origin request) before checking that the widget's report carries none.
     const hostCalls: { headers: Record<string, string> }[] = [];
-    await page.route(/\/api\/health$/, async (route) => {
+    await page.route(HEALTH_ROUTE, async (route) => {
       if (route.request().method() !== 'GET') {
         await route.continue();
         return;
@@ -4013,7 +4062,7 @@ test.describe('J-11 — Payload privacy and self-hosting (SEC-03)', () => {
     // observe the header on this engine. If this probe passed vacuously (header
     // unobservable), the report assertion below would prove nothing.
     const probe: { headers: Record<string, string> }[] = [];
-    await page.route(/\/api\/health$/, async (route) => {
+    await page.route(HEALTH_ROUTE, async (route) => {
       if (route.request().method() !== 'GET') {
         await route.continue();
         return;
@@ -4028,7 +4077,7 @@ test.describe('J-11 — Payload privacy and self-hosting (SEC-03)', () => {
       probe[0].headers['referer'] ?? '',
       'non-vacuity: a browser-default same-origin request must leak ?token=secret in its referer, so the header is observable here',
     ).toContain('token=secret');
-    await page.unroute(/\/api\/health$/);
+    await page.unroute(HEALTH_ROUTE);
 
     const calls = await interceptIncidentPosts(page, async () => ({
       status: 201,

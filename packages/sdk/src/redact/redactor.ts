@@ -30,7 +30,7 @@
 import { MASK_ALPHA_OPAQUE } from '@watchbug/contracts/constants';
 import { INPUT_VALUE_FAMILIES, TEXT_FAMILIES, type PatternFamily } from './patterns.ts';
 import { toBitmapRect, transformFor, type BitmapRect, type RectLike } from './geometry.ts';
-import { MASK_RGB, type MaskRgb } from './masks.ts';
+import { assertFiniteRect, MASK_RGB, type MaskRgb } from './masks.ts';
 
 /**
  * The fill colour lives in the leaf `./masks.ts` so the lazy mask lane can
@@ -197,7 +197,8 @@ function textMatchesFamily(text: string, family: PatternFamily): boolean {
     const match = regex.exec(text);
     if (match === null) return false;
     if (family.validate === undefined || family.validate(match[0])) return true;
-    if (match[0].length === 0) regex.lastIndex = match.index + 1;
+    // Every family is a global pattern that consumes at least one character
+    // (the unit suite asserts this), so `exec` always advances `lastIndex`.
   }
 }
 
@@ -322,6 +323,28 @@ export function fillRects(
   return masked;
 }
 
+/** Paint one already-validated rect; returns 1 when it covered pixels. */
+function fillBitmapRect(image: ImageData, rect: BitmapRect, rgb: MaskRgb, alpha: number): number {
+  const { data, width, height } = image;
+  const left = Math.max(0, rect.left);
+  const top = Math.max(0, rect.top);
+  const right = Math.min(width, rect.right);
+  const bottom = Math.min(height, rect.bottom);
+  if (right <= left || bottom <= top) return 0;
+
+  for (let y = top; y < bottom; y += 1) {
+    let index = (y * width + left) * 4;
+    for (let x = left; x < right; x += 1) {
+      data[index] = rgb.r;
+      data[index + 1] = rgb.g;
+      data[index + 2] = rgb.b;
+      data[index + 3] = alpha;
+      index += 4;
+    }
+  }
+  return 1;
+}
+
 /**
  * Paint already-bitmap-space rects into `image` — the viewport-free sibling of
  * `fillRects` for `encodeFinal()`'s T1 re-run. The rects come off the draft
@@ -338,37 +361,11 @@ export function fillBitmapRects(
   rgb: MaskRgb,
   alpha: number,
 ): number {
-  if (rects.length === 0) return 0;
-  const { data, width, height } = image;
   let painted = 0;
-
   for (const rect of rects) {
-    if (
-      !Number.isFinite(rect.left) ||
-      !Number.isFinite(rect.top) ||
-      !Number.isFinite(rect.right) ||
-      !Number.isFinite(rect.bottom)
-    ) {
-      throw new Error('fillBitmapRects: non-finite rect (refusing to guess a mask region)');
-    }
-    const left = Math.max(0, rect.left);
-    const top = Math.max(0, rect.top);
-    const right = Math.min(width, rect.right);
-    const bottom = Math.min(height, rect.bottom);
-    if (right <= left || bottom <= top) continue;
-    painted += 1;
-    for (let y = top; y < bottom; y += 1) {
-      let index = (y * width + left) * 4;
-      for (let x = left; x < right; x += 1) {
-        data[index] = rgb.r;
-        data[index + 1] = rgb.g;
-        data[index + 2] = rgb.b;
-        data[index + 3] = alpha;
-        index += 4;
-      }
-    }
+    assertFiniteRect(rect, 'fillBitmapRects');
+    painted += fillBitmapRect(image, rect, rgb, alpha);
   }
-
   return painted;
 }
 

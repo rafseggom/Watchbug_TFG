@@ -23,22 +23,33 @@ import { resolve } from 'node:path';
 const repoRoot = resolve(__dirname, '../..');
 
 /** Journey describe titles are `J-NN — ` (em dash) so they cannot collide with a row title. */
-const JOURNEY_DESCRIBE = /^test\.describe\('(J-\d\d) — /gm;
+const JOURNEY_DESCRIBE = /^\s*test\.describe(?:\.\w+)*\(\s*(['"`])(J-\d\d)\s+—/gm;
 /** A row declared at column 0 — i.e. outside every journey block. */
-const TOP_LEVEL_ROW = /^test(?:\.only|\.skip|\.fixme)?\(/gm;
+const TOP_LEVEL_ROW = /^test(?:\.(?:only|skip|fixme))?\(\s*['"`]/gm;
 /** A test or describe *titled* with a reserved journey number (comments may mention the range). */
-const RESERVED_JOURNEY = /test(?:\.describe)?\(\s*['"]J-(?:1[5-9]|20)\b/g;
+const RESERVED_JOURNEY = /test(?:\.describe)?(?:\.\w+)*\(\s*['"`]J-(?:1[5-9]|20)\b/g;
 
 function read(relative: string): string {
   return readFileSync(resolve(repoRoot, relative), 'utf8');
 }
 
 function journeysIn(source: string): string[] {
-  return [...source.matchAll(JOURNEY_DESCRIBE)].map((match) => match[1]);
+  return [...source.matchAll(JOURNEY_DESCRIBE)].map((match) => match[2]);
 }
 
 function countsRowDeclarations(source: string): number {
-  return [...source.matchAll(/^\s+test\(/gm)].length;
+  return [...source.matchAll(/^\s+test(?:\.\w+)*\(\s*['"`]/gm)].length;
+}
+
+/** Every spec under `e2e/`, recursively — a subdirectory must not evade the cap. */
+function e2eSpecs(dir = resolve(repoRoot, 'e2e')): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const absolute = resolve(dir, entry.name);
+    if (entry.isDirectory()) out.push(...e2eSpecs(absolute));
+    else if (entry.isFile() && entry.name.endsWith('.spec.ts')) out.push(absolute);
+  }
+  return out;
 }
 
 describe('Packaging: R-19 journey cap is structural', () => {
@@ -109,12 +120,13 @@ describe('Packaging: R-19 journey cap is structural', () => {
   });
 
   it('J-15..J-20 stay reserved for Phases 4–7', () => {
-    const specs = readdirSync(resolve(repoRoot, 'e2e')).filter((entry) => entry.endsWith('.spec.ts'));
+    const specs = e2eSpecs();
     expect(specs.length).toBeGreaterThanOrEqual(3);
 
     for (const spec of specs) {
-      const reserved = [...read(`e2e/${spec}`).matchAll(RESERVED_JOURNEY)].map((match) => match[0]);
-      expect(reserved, `${spec} must not claim a reserved journey`).toEqual([]);
+      const relative = spec.slice(resolve(repoRoot).length + 1).replaceAll('\\', '/');
+      const reserved = [...read(relative).matchAll(RESERVED_JOURNEY)].map((match) => match[0]);
+      expect(reserved, `${relative} must not claim a reserved journey`).toEqual([]);
     }
   });
 });

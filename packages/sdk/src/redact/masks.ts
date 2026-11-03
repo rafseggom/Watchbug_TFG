@@ -31,6 +31,31 @@ export interface MaskPatch {
   readonly pixels: ImageData;
 }
 
+/** The one finiteness gate every destructive primitive shares (S-3). */
+export function assertFiniteRect(rect: BitmapRect, who: string): void {
+  if (
+    !Number.isFinite(rect.left) ||
+    !Number.isFinite(rect.top) ||
+    !Number.isFinite(rect.right) ||
+    !Number.isFinite(rect.bottom)
+  ) {
+    throw new Error(`${who}: non-finite rect (refusing to guess a mask region)`);
+  }
+}
+
+/** Bitmap space requires whole pixels; the same gate `putPatch` uses. */
+function assertIntegralRect(rect: BitmapRect, who: string): void {
+  assertFiniteRect(rect, who);
+  if (
+    !Number.isInteger(rect.left) ||
+    !Number.isInteger(rect.top) ||
+    !Number.isInteger(rect.right) ||
+    !Number.isInteger(rect.bottom)
+  ) {
+    throw new Error(`${who}: non-integral rect (bitmap space requires whole pixels)`);
+  }
+}
+
 /**
  * Replay a baked patch into `target` at its bitmap-space rect: a row-wise
  * replacement (never a compositing draw), with the alpha forced to
@@ -46,22 +71,8 @@ export interface MaskPatch {
  */
 export function putPatch(target: ImageData, patch: MaskPatch): void {
   const { rect, pixels } = patch;
-  if (
-    !Number.isFinite(rect.left) ||
-    !Number.isFinite(rect.top) ||
-    !Number.isFinite(rect.right) ||
-    !Number.isFinite(rect.bottom)
-  ) {
-    throw new Error('putPatch: non-finite patch rect (refusing to guess a mask region)');
-  }
-  if (
-    !Number.isInteger(rect.left) ||
-    !Number.isInteger(rect.top) ||
-    !Number.isInteger(rect.right) ||
-    !Number.isInteger(rect.bottom)
-  ) {
-    throw new Error('putPatch: non-integral patch rect (bitmap space requires whole pixels)');
-  }
+  assertIntegralRect(rect, 'putPatch');
+
   const width = rect.right - rect.left;
   const height = rect.bottom - rect.top;
   if (width < 0 || height < 0) {
@@ -97,14 +108,7 @@ export function putPatch(target: ImageData, patch: MaskPatch): void {
 
 /** Validate a rect for the destructive primitives (S-3, mirrors `putPatch`). */
 function assertPaintRect(rect: BitmapRect, who: string): void {
-  if (
-    !Number.isFinite(rect.left) ||
-    !Number.isFinite(rect.top) ||
-    !Number.isFinite(rect.right) ||
-    !Number.isFinite(rect.bottom)
-  ) {
-    throw new Error(`${who}: non-finite rect (refusing to guess a mask region)`);
-  }
+  assertFiniteRect(rect, who);
 }
 
 /**

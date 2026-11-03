@@ -85,6 +85,13 @@ export function createEditor(options: AnnotatorOpenOptions): Promise<AnnotatorRe
       canvas.style.height = `${Math.max(1, Math.floor(canvas.height * scale))}px`;
     };
     fitCanvas();
+    // Exercise the same contain-fit on every viewport change: without this the
+    // canvas keeps its old CSS size after a resize and the pointer mapping no
+    // longer matches what the user sees.
+    const onResize = (): void => {
+      fitCanvas();
+    };
+    window.addEventListener('resize', onResize);
 
     // ---- committed strokes: vector records only, never pixel snapshots ----
     const strokes: Stroke[] = [];
@@ -319,6 +326,59 @@ export function createEditor(options: AnnotatorOpenOptions): Promise<AnnotatorRe
       shell.maskDialog.show();
     };
 
+    /** A release inside the canvas commits; one over the chrome aborts. */
+    const isInsideCanvas = (event: PointerEvent, box: DOMRect): boolean =>
+      event.clientX >= box.left &&
+      event.clientX <= box.right &&
+      event.clientY >= box.top &&
+      event.clientY <= box.bottom;
+
+    const commitFreehand = (points: number[]): void => {
+      if (points.length < 4) return;
+      pushStroke({
+        tool: 'freehand',
+        points,
+        width: commitStrokeWidth(),
+        ink: options.ink,
+      });
+    };
+
+    const commitShape = (
+      tool: 'arrow' | 'rectangle',
+      from: [number, number],
+      to: [number, number],
+    ): void => {
+      if (from[0] === to[0] && from[1] === to[1]) return;
+      pushStroke({
+        tool,
+        from,
+        to,
+        width: commitStrokeWidth(),
+        ink: options.ink,
+      });
+    };
+
+    const commitMask = (from: [number, number], to: [number, number]): void => {
+      if (from[0] === to[0] && from[1] === to[1]) return;
+      requestMaskCommit(from, to);
+    };
+
+    /** Commit one finished drag by tool; the caller owns the redraw. */
+    const commitDrag = (dragged: PendingDrag): void => {
+      switch (dragged.tool) {
+        case 'freehand':
+          commitFreehand(dragged.points);
+          break;
+        case 'mask':
+          commitMask(dragged.from, dragged.to);
+          break;
+        case 'arrow':
+        case 'rectangle':
+          commitShape(dragged.tool, dragged.from, dragged.to);
+          break;
+      }
+    };
+
     const onPointerUp = (event: PointerEvent): void => {
       if (pending === null) return;
       const dragged = pending;
@@ -329,41 +389,7 @@ export function createEditor(options: AnnotatorOpenOptions): Promise<AnnotatorRe
       // Commit ONLY on `pointerup` inside the canvas: a release over the
       // toolbar or the bar aborts the unfinished stroke (the capture makes
       // the event fire here regardless — this is the plan's own check).
-      const box = canvas.getBoundingClientRect();
-      const inside =
-        event.clientX >= box.left &&
-        event.clientX <= box.right &&
-        event.clientY >= box.top &&
-        event.clientY <= box.bottom;
-      if (inside) {
-        if (dragged.tool === 'freehand' && dragged.points.length >= 4) {
-          pushStroke({
-            tool: 'freehand',
-            points: dragged.points,
-            width: commitStrokeWidth(),
-            ink: options.ink,
-          });
-        } else if (dragged.tool === 'mask') {
-          const moved =
-            dragged.to[0] !== dragged.from[0] || dragged.to[1] !== dragged.from[1];
-          if (moved) requestMaskCommit(dragged.from, dragged.to);
-        } else if (
-          dragged.tool === 'arrow' ||
-          dragged.tool === 'rectangle'
-        ) {
-          const moved =
-            dragged.to[0] !== dragged.from[0] || dragged.to[1] !== dragged.from[1];
-          if (moved) {
-            pushStroke({
-              tool: dragged.tool,
-              from: dragged.from,
-              to: dragged.to,
-              width: commitStrokeWidth(),
-              ink: options.ink,
-            });
-          }
-        }
-      }
+      if (isInsideCanvas(event, canvas.getBoundingClientRect())) commitDrag(dragged);
       // The replay (width resolved once at commit) replaces the incremental
       // preview pixels on either branch — base + strokes + every mask patch,
       // patches LAST — so the canvas always ends a drag in exactly the
@@ -472,6 +498,9 @@ export function createEditor(options: AnnotatorOpenOptions): Promise<AnnotatorRe
       }
       if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'z') {
         if (shell.labelInput.getAttribute('data-shown') === 'true') return; // native text undo
+        // The confirmation dialog owns the interaction while open: undo is
+        // frozen with the rest of the editor (P3-D-09).
+        if (shell.maskDialog.isOpen()) return;
         event.preventDefault();
         undoStroke();
       }
@@ -494,6 +523,7 @@ export function createEditor(options: AnnotatorOpenOptions): Promise<AnnotatorRe
       canvas.removeEventListener('pointerup', onPointerUp);
       canvas.removeEventListener('pointercancel', onPointerCancel);
       document.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('resize', onResize);
       shell.root.remove();
       // C-2/A-04: the SAME instance that came in — mutated in place. The
       // masks array carries every baked patch (destroyed pixels only) back

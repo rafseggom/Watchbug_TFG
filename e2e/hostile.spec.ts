@@ -367,10 +367,13 @@ test.describe('J-14 — Hostile host CSS and render-inert payloads', () => {
   }
 
   test('ING-07 pass 2: stored hostile payloads render as literal text and inject zero elements into the panel DOM', async ({ page, request }) => {
+    // A per-run token keeps the assertion about THIS row, not an older row a
+    // previous run left in the shared local database.
+    const probe = `ing07-${randomUUID().slice(0, 8)}`;
     const titles = [
       '&lt;img src=x onerror=alert(1)&gt;',
       '2 < 3 & 4 > 1',
-      '<b>a</b><i>b</i>',
+      `<b>a</b><i>b</i> ${probe}`,
       'Hello <img src=x onerror=alert(1)> world',
     ];
     for (const title of titles) {
@@ -386,18 +389,41 @@ test.describe('J-14 — Hostile host CSS and render-inert payloads', () => {
     const normalise = (s: string): string => s.replace(/\s+/g, ' ');
     expect(bodyText).toContain(normalise('Hello  world'));
     expect(bodyText).toContain('2 < 3 & 4 > 1');
-    expect(bodyText).toContain('ab');
+    // The `<b>a</b><i>b</i> …` payload is stored with its markup stripped;
+    // assert the row this run created, not a substring of "Watchbug".
+    await expect(page.getByRole('button', { name: new RegExp(`ab ${probe}`) })).toHaveCount(1);
     expect(bodyText).toContain('&lt;img src=x onerror=alert(1)&gt;');
 
     const detailHeading = page.locator('main h2');
     await expect(detailHeading).toHaveCount(1);
     expect((await detailHeading.innerText()).replace(/\s+/g, ' ')).toContain('Hello world');
 
+    // SEC-05 pass 2, complete sink sweep: every inline event handler is a
+    // potential script sink, not only `onerror`; `srcdoc` and any
+    // `javascript:` URL are the other two the old four-selector list missed.
+    const injectedSinks = await page.evaluate(() => {
+      const found: string[] = [];
+      for (const element of document.querySelectorAll('*')) {
+        for (const attribute of element.attributes) {
+          const name = attribute.name.toLowerCase();
+          if (name.startsWith('on') || name === 'srcdoc') {
+            found.push(`${element.tagName.toLowerCase()}[${name}]`);
+          }
+          if (
+            (name === 'href' || name === 'src' || name === 'action') &&
+            /^\s*javascript\s*:/i.test(attribute.value)
+          ) {
+            found.push(`${element.tagName.toLowerCase()}[${name}=javascript:]`);
+          }
+        }
+      }
+      return found;
+    });
+    expect(injectedSinks, 'no on* handler, srcdoc or javascript: URL may reach the DOM').toEqual([]);
+
     await expect(page.locator('img[src="x"]')).toHaveCount(0);
-    await expect(page.locator('[onerror]')).toHaveCount(0);
     await expect(page.locator('script:not([src])')).toHaveCount(0);
     await expect(page.locator('iframe')).toHaveCount(0);
-    await expect(page.locator('a[href^="javascript:"]')).toHaveCount(0);
 
     const shot = page.locator('main img');
     await expect(shot).toHaveCount(1);

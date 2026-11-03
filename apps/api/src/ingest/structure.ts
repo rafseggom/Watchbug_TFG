@@ -40,19 +40,47 @@ export type StructureResult = { ok: true; bytes: Uint8Array } | { ok: false; mes
 
 type Strip = { bytes: Buffer } | { error: string };
 
-/** PNG chunks that survive the walk: everything else is dropped or fatal. */
+/** PNG chunks that survive the walk: everything else is dropped. */
 const PNG_ALLOWED = new Set(['IHDR', 'PLTE', 'IDAT', 'IEND']);
-/** PNG ancillary chunks that carry metadata — dropped, never re-emitted. */
-const PNG_METADATA_CHUNKS = new Set(['tEXt', 'zTXt', 'iTXt', 'eXIf', 'tIME']);
 
 /** WebP chunks that survive; anything else (EXIF/XMP/ICCP/unknown) is dropped. */
 const WEBP_ALLOWED = new Set(['VP8X', 'VP8 ', 'VP8L', 'ALPH']);
-/** WebP metadata chunks — dropped, never re-emitted. */
-const WEBP_METADATA_CHUNKS = new Set(['EXIF', 'XMP ', 'ICCP']);
 /** WebP animation chunks — rejected outright (P1-D-11 accepts still images). */
 const WEBP_ANIMATION = new Set(['ANIM', 'ANMF']);
 
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+
+interface PngChunk {
+  type: string;
+  length: number;
+  dataStart: number;
+  dataEnd: number;
+  crc: number;
+}
+
+/** Read and bound one PNG chunk header, or explain why the file is unusable. */
+function readPngChunk(buf: Buffer, offset: number): { ok: true; chunk: PngChunk } | { ok: false; error: string } {
+  if (offset + 8 > buf.length) return { ok: false, error: 'PNG ends inside a chunk header' };
+  const length = buf.readUInt32BE(offset);
+  const type = buf.toString('latin1', offset + 4, offset + 8);
+  const dataStart = offset + 8;
+  const dataEnd = dataStart + length;
+  if (dataEnd + 4 > buf.length) return { ok: false, error: `PNG chunk ${type} is truncated` };
+  return {
+    ok: true,
+    chunk: { type, length, dataStart, dataEnd, crc: buf.readUInt32BE(dataEnd) },
+  };
+}
+
+/** Re-emit the chunk with its original header, payload and verified CRC. */
+function emitPngChunk(buf: Buffer, chunk: PngChunk): Buffer[] {
+  const header = Buffer.alloc(8);
+  header.writeUInt32BE(chunk.length, 0);
+  header.write(chunk.type, 4, 'latin1');
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(chunk.crc, 0);
+  return [header, buf.subarray(chunk.dataStart, chunk.dataEnd), crc];
+}
 
 function stripPng(buf: Buffer): Strip {
   if (buf.length < 8 || !buf.subarray(0, 8).equals(PNG_SIGNATURE)) {
@@ -65,12 +93,10 @@ function stripPng(buf: Buffer): Strip {
   let sawIEND = false;
 
   while (offset < buf.length) {
-    if (offset + 8 > buf.length) return { error: 'PNG ends inside a chunk header' };
-    const length = buf.readUInt32BE(offset);
-    const type = buf.toString('latin1', offset + 4, offset + 8);
-    const dataStart = offset + 8;
-    const dataEnd = dataStart + length;
-    if (dataEnd + 4 > buf.length) return { error: `PNG chunk ${type} is truncated` };
+    const read = readPngChunk(buf, offset);
+    if (!read.ok) return { error: read.error };
+    const chunk = read.chunk;
+    const { type, length, dataStart, dataEnd, crc } = chunk;
 
     if (offset === 8 && type !== 'IHDR') return { error: 'PNG does not begin with IHDR' };
     if (type === 'IHDR' && sawIHDR) return { error: 'PNG declares IHDR twice' };
@@ -78,22 +104,12 @@ function stripPng(buf: Buffer): Strip {
 
     // CRC covers the chunk type + data; a mismatch means the file is corrupt
     // or tampered with — reject rather than re-emit something we cannot verify.
-    const expectedCrc = buf.readUInt32BE(dataEnd);
     const actualCrc = crc32(buf.subarray(offset + 4, dataEnd)) >>> 0;
-    if (expectedCrc !== actualCrc) return { error: `PNG chunk ${type} fails its CRC check` };
+    if (crc !== actualCrc) return { error: `PNG chunk ${type} fails its CRC check` };
 
-    // Metadata and ancillary chunks are dropped; only IHDR/PLTE/IDAT/IEND are
-    // re-emitted (PNG_METADATA_CHUNKS is an explicit subset of "not allowed").
-    if (!PNG_ALLOWED.has(type) || PNG_METADATA_CHUNKS.has(type)) {
-      // consumed, not carried
-    } else {
-      const header = Buffer.alloc(8);
-      header.writeUInt32BE(length, 0);
-      header.write(type, 4, 'latin1');
-      const crc = Buffer.alloc(4);
-      crc.writeUInt32BE(actualCrc, 0);
-      parts.push(header, buf.subarray(dataStart, dataEnd), crc);
-    }
+    // Only IHDR/PLTE/IDAT/IEND survive: every ancillary chunk (tEXt, zTXt,
+    // iTXt, eXIf, tIME, …) is consumed here and never re-emitted.
+    if (PNG_ALLOWED.has(type)) parts.push(...emitPngChunk(buf, chunk));
 
     if (type === 'IHDR') sawIHDR = true;
     offset = dataEnd + 4;
@@ -108,6 +124,35 @@ function stripPng(buf: Buffer): Strip {
   if (offset !== buf.length) return { error: 'PNG contains trailing data after IEND' };
 
   return { bytes: Buffer.concat(parts) };
+}
+
+interface WebpChunk {
+  type: string;
+  size: number;
+  dataStart: number;
+  dataEnd: number;
+}
+
+/** Read one WebP chunk header, or explain why the file is unusable. */
+function readWebpChunk(buf: Buffer, offset: number): { ok: true; chunk: WebpChunk } | { ok: false; error: string } {
+  if (offset + 8 > buf.length) return { ok: false, error: 'WebP ends inside a chunk header' };
+  const type = buf.toString('latin1', offset, offset + 4);
+  const size = buf.readUInt32LE(offset + 4);
+  const dataStart = offset + 8;
+  const dataEnd = dataStart + size;
+  if (dataEnd > buf.length) return { ok: false, error: `WebP chunk ${type} is truncated` };
+  return { ok: true, chunk: { type, size, dataStart, dataEnd } };
+}
+
+/** Re-emit a kept WebP chunk with its original header and even-byte padding. */
+function emitWebpChunk(buf: Buffer, chunk: WebpChunk): Buffer[] {
+  const header = Buffer.alloc(8);
+  header.write(chunk.type, 0, 'latin1');
+  header.writeUInt32LE(chunk.size, 4);
+  const data = buf.subarray(chunk.dataStart, chunk.dataEnd);
+  // Chunks are padded to an even byte boundary; the pad belongs to the file
+  // but not to the chunk size.
+  return [header, chunk.size % 2 === 1 ? Buffer.concat([data, Buffer.alloc(1)]) : data];
 }
 
 function stripWebp(buf: Buffer): Strip {
@@ -128,25 +173,17 @@ function stripWebp(buf: Buffer): Strip {
   let sawImageChunk = false;
 
   while (offset + 8 <= buf.length) {
-    const type = buf.toString('latin1', offset, offset + 4);
-    const size = buf.readUInt32LE(offset + 4);
-    const dataStart = offset + 8;
-    const dataEnd = dataStart + size;
-    if (dataEnd > buf.length) return { error: `WebP chunk ${type} is truncated` };
+    const read = readWebpChunk(buf, offset);
+    if (!read.ok) return { error: read.error };
+    const chunk = read.chunk;
+    const { type, size, dataEnd } = chunk;
 
     if (WEBP_ANIMATION.has(type)) return { error: `animated WebP (${type}) is not accepted` };
 
-    if (WEBP_METADATA_CHUNKS.has(type)) {
-      // EXIF/XMP/ICCP are consumed, not carried.
-    } else if (WEBP_ALLOWED.has(type)) {
+    // EXIF/XMP/ICCP and unknown chunks are consumed, never carried.
+    if (WEBP_ALLOWED.has(type)) {
       if (type === 'VP8 ' || type === 'VP8L') sawImageChunk = true;
-      const header = Buffer.alloc(8);
-      header.write(type, 0, 'latin1');
-      header.writeUInt32LE(size, 4);
-      const data = buf.subarray(dataStart, dataEnd);
-      // Chunks are padded to an even byte boundary; the pad belongs to the file
-      // but not to the chunk size.
-      parts.push(header, size % 2 === 1 ? Buffer.concat([data, Buffer.alloc(1)]) : data);
+      parts.push(...emitWebpChunk(buf, chunk));
     }
 
     offset = dataEnd + (size % 2);

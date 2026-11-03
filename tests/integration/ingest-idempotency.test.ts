@@ -105,9 +105,11 @@ describe('integration: ING-03 idempotency replay & concurrency', () => {
 
     const created = await postIncident({ key: KEY, idempotencyKey: null, meta: { ...META, title: 'No key probe' }, image: png });
     expect(created.status).toBe(400);
-    expect(typeof created.body.statusCode).toBe('number');
-    expect(typeof created.body.error).toBe('string');
-    expect(typeof created.body.message).toBe('string');
+    expect(created.body).toMatchObject({
+      statusCode: 400,
+      error: 'Bad Request',
+      message: expect.stringContaining('Idempotency-Key'),
+    });
 
     const after = (await getIncidents(KEY)).length;
     expect(after).toBe(before);

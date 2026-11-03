@@ -701,11 +701,11 @@ export function createEditorShell(maskConfirm: MaskConfirmCopy): EditorShell {
 }
 
 /**
- * Module flag: `EDITOR_CSS` is appended ONCE per page (the chunk module
- * evaluates once; a second `open()` reuses the already-appended rules rather
- * than duplicating them into the stylesheet).
+ * Marker on the core stylesheet itself. A module-level boolean would be wrong
+ * as soon as a second shadow root (a nested host fixture) mounts: the flag
+ * would say "already injected" while that root's `<style>` is still empty.
  */
-let cssInjected = false;
+const EDITOR_CSS_MARKER = 'data-wb-editor-css';
 
 /**
  * Append the editor's CSS to the core's single `<style>` element — the one
@@ -716,13 +716,13 @@ let cssInjected = false;
  * the inline load error.
  */
 export function injectEditorCss(mount: HTMLElement): void {
-  if (cssInjected) return;
   const node = mount.getRootNode();
   const scope = node instanceof ShadowRoot || node instanceof Document ? node : null;
   const style = scope?.querySelector('style[data-wb-core]');
   if (style === null || style === undefined) {
     throw new Error('watchbug editor: the core stylesheet is missing its data-wb-core marker');
   }
+  if (style.getAttribute(EDITOR_CSS_MARKER) === 'true') return;
   style.textContent = `${style.textContent ?? ''}\n${EDITOR_CSS}`;
-  cssInjected = true;
+  style.setAttribute(EDITOR_CSS_MARKER, 'true');
 }

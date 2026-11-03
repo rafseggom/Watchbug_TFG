@@ -81,14 +81,32 @@ describe('Packaging: DEP-01 deployment surface through the nginx proxy', () => {
     const response = await fetch(`${BASE}/`);
     expect(response.status).toBe(200);
 
-    // Five directive-level assertions on the document response — not two loose
-    // substrings — so a partial or reordered policy cannot satisfy the row.
+    // Parse the header into directives and assert each value exactly. A
+    // substring check would pass a policy that merely *contains* the expected
+    // text while also carrying `'unsafe-inline'` in `script-src`.
     const csp = response.headers.get('content-security-policy') ?? '';
-    expect(csp).toContain("default-src 'self'");
-    expect(csp).toContain("img-src 'self'");
-    expect(csp).toContain("object-src 'none'");
-    expect(csp).toContain("base-uri 'none'");
-    expect(csp).toContain("frame-ancestors 'none'");
+    const directives = new Map(
+      csp
+        .split(';')
+        .map((part) => part.trim())
+        .filter((part) => part.length > 0)
+        .map((part) => {
+          const [name, ...values] = part.split(/\s+/);
+          return [name, values] as const;
+        }),
+    );
+
+    expect([...directives.get('default-src') ?? []]).toEqual(["'self'"]);
+    expect([...directives.get('img-src') ?? []]).toEqual(["'self'"]);
+    expect([...directives.get('object-src') ?? []]).toEqual(["'none'"]);
+    expect([...directives.get('base-uri') ?? []]).toEqual(["'none'"]);
+    expect([...directives.get('frame-ancestors') ?? []]).toEqual(["'none'"]);
+    // No directive may smuggle an inline/eval escape hatch.
+    for (const name of ['default-src', 'img-src', 'script-src', 'style-src', 'object-src']) {
+      const values = directives.get(name) ?? [];
+      expect(values, `${name} must not allow unsafe-inline/unsafe-eval`).not.toContain("'unsafe-inline'");
+      expect(values, `${name} must not allow unsafe-inline/unsafe-eval`).not.toContain("'unsafe-eval'");
+    }
 
     // nginx add_header inheritance guard: the pair declared at server level is
     // NOT carried into location / once the CSP declares its own add_header —

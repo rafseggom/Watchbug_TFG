@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { and, desc, eq, lt, or } from 'drizzle-orm';
 import { MAX_BODY_BYTES, MAX_ENCODED_IMAGE_BYTES } from '@watchbug/contracts/constants';
-import type { ImageExt } from '@watchbug/contracts/types';
+import type { ImageExt, ReportMeta } from '@watchbug/contracts/types';
 import { PROJECT_KEY_PATTERN, type AppConfig } from '../config';
 import type { AppDb } from '../db/client';
 import { incidents, projects } from '../db/schema';
@@ -90,14 +90,14 @@ export interface RouteDeps {
   storage: Storage;
   /**
    * The composed ING-05 preHandler (`plugins/rate-limit.ts`). It runs as the
-   * route's **first** preHandler �?" before the project-key gate, so a
-   * rejected key still consumes quota (limits ��' key ��' handler).
+   * route's **first** preHandler → before the project-key gate, so a
+   * rejected key still consumes quota (limits → key → handler).
    */
   ingestRateLimit: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
   readRateLimit?: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
   /**
-   * The ING-08 origin allowlist enforcement (`plugins/cors.ts`) �?" second
-   * preHandler: abuse limits ��' CORS ��' key lookup ��' handler.
+   * The ING-08 origin allowlist enforcement (`plugins/cors.ts`) → second
+   * preHandler: abuse limits → CORS → key lookup → handler.
    */
   originGate: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
 }
@@ -138,6 +138,213 @@ function badRequest(reply: FastifyReply, message: string): FastifyReply {
   return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message });
 }
 
+interface MultipartPayload {
+  metaRaw?: string;
+  imageBytes?: Uint8Array;
+  clientFilename?: string;
+}
+
+/**
+ * Stage 1–2: stream the multipart body, counting bytes and surfacing every
+ * parser cap as the structured failure it already is. A reply that was
+ * already sent (the streaming-413 watcher) is never followed by a second one.
+ */
+async function readMultipart(
+  req: FastifyRequest,
+  reply: FastifyReply,
+): Promise<{ ok: true; payload: MultipartPayload } | { ok: false }> {
+  const counter = new BodyByteCounter();
+  const payload: MultipartPayload = {};
+
+  try {
+    for await (const part of req.parts()) {
+      if (part.type === 'field' && part.fieldname === 'meta') {
+        // `@fastify/multipart` JSON-parses any field whose Content-Type
+        // starts with `application/json` — which is exactly what
+        // `curl -F 'meta={...}'` (P1-D-07's onboarding snippet) sends — so
+        // the value can arrive as an object. Re-stringify it here so
+        // `validateMeta` always receives the raw JSON text; the previous
+        // `String(part.value)` turned objects into `"[object Object]"` and
+        // 400'd every JSON-typed meta part (deferred by 01-02, expires with
+        // this plan's onboarding curl).
+        payload.metaRaw = typeof part.value === 'string' ? part.value : JSON.stringify(part.value);
+        counter.add(Buffer.byteLength(payload.metaRaw, 'utf8'));
+      } else if (part.type === 'file' && part.fieldname === 'image') {
+        // Streams to a server-named tmp file while counting the bytes;
+        // the tmp file is unlinked here whatever happens next (ING-06,
+        // Pitfall 2 — a cut-off part is rejected, never stored).
+        const received = await receiveImagePart(part, counter);
+        payload.clientFilename = received.filename;
+        payload.imageBytes = received.bytes;
+      }
+    }
+  } catch (err) {
+    // WR-05 — the streaming-413 watcher owns the cap answer: if it already
+    // replied (its structured 413, socket destroyed 250 ms after the
+    // flush), the in-flight multipart iteration unwinds with a stream
+    // abort in the reply's wake. Return WITHOUT a second send, and never
+    // let such an abort reach the error handler's 500 branch.
+    if (reply.sent) return { ok: false };
+    const mapped = mapMultipartError(err);
+    if (mapped === null) {
+      if (isBodyAbort(err)) {
+        reply
+          .code(413)
+          .send(failure(413, `request body aborted at MAX_BODY_BYTES (${MAX_BODY_BYTES} bytes); nothing was stored`));
+        return { ok: false };
+      }
+      throw err;
+    }
+    if (err instanceof BodyCapExceeded) req.raw.destroy();
+    reply.code(mapped.statusCode).send(mapped);
+    return { ok: false };
+  }
+
+  return { ok: true, payload };
+}
+
+type ImageChainResult =
+  | { ok: true; image: { bytes: Uint8Array; ext: ImageExt } | null }
+  | { ok: false; statusCode: number; message: string };
+
+/**
+ * Stages 3–6 of the image lane, in the order the cheap guards demand:
+ * semantic size cap → magic bytes → container structure → header dimensions →
+ * root re-encode → post-encode size cap. No hostile byte reaches libvips
+ * without the container and dimension checks, and the stored artifact is
+ * re-capped with the same contract constant as the input (WR-02).
+ */
+async function hardenImageChain(imageBytes: Uint8Array | undefined): Promise<ImageChainResult> {
+  if (imageBytes === undefined) return { ok: true, image: null };
+
+  // A-06 semantic cap — checked on the bytes actually read, before any codec
+  // work (the 4 MB multipart limit above it is only the parser guard).
+  if (imageBytes.length > MAX_ENCODED_IMAGE_BYTES) {
+    return {
+      ok: false,
+      statusCode: 413,
+      message: `image is ${imageBytes.length} bytes; the contract allows at most ${MAX_ENCODED_IMAGE_BYTES} (MAX_ENCODED_IMAGE_BYTES)`,
+    };
+  }
+
+  // Stage 2 — magic bytes only, never the client-declared Content-Type.
+  const sniffed = sniffImage(imageBytes);
+  if (sniffed === null) {
+    return {
+      ok: false,
+      statusCode: 400,
+      message: 'image is neither PNG, WebP nor JPEG (magic bytes); SVG, GIF and HTML are never accepted',
+    };
+  }
+
+  // Stage 3 — container structure: chunk allowlists, no animation, no
+  // trailing data; metadata chunks are dropped here (C-3, P1-D-11).
+  const structure = validateStructure(imageBytes, sniffed);
+  if (!structure.ok) return { ok: false, statusCode: 400, message: structure.message };
+
+  // Stage 4 — dimensions from the header, before any pixel work.
+  const guard = assertDecodeSafe(structure.bytes, sniffed);
+  if (!guard.ok) return { ok: false, statusCode: guard.statusCode, message: guard.message };
+
+  // Stage 5 — P1-D-10 root re-encode (sharp): decode → re-encode in the same
+  // format (P1-D-12), metadata stripped, processing-time guarded. The bytes
+  // that reach storage are libvips' output, not the submitted container.
+  const hardened = await hardenImage(structure.bytes);
+  if (!hardened.ok) return { ok: false, statusCode: hardened.statusCode, message: hardened.message };
+
+  // A-06's 2 MB cap is a cap on the STORED artifact, not only on the input:
+  // a low-quality noisy input well under the cap can re-encode to far more
+  // (WR-02), and nothing downstream re-checks it — the blob route would
+  // stream whatever size landed. Re-cap the hardened bytes with the same
+  // contract constant and the same structured 413 body as the input cap.
+  if (hardened.bytes.length > MAX_ENCODED_IMAGE_BYTES) {
+    return {
+      ok: false,
+      statusCode: 413,
+      message: `re-encoded image is ${hardened.bytes.length} bytes; the contract allows at most ${MAX_ENCODED_IMAGE_BYTES} (MAX_ENCODED_IMAGE_BYTES)`,
+    };
+  }
+
+  return { ok: true, image: { bytes: hardened.bytes, ext: hardened.ext } };
+}
+
+interface PersistInput {
+  projectId: string;
+  idempotencyKey: string;
+  meta: ReportMeta;
+  storageKey: string | null;
+  contentType: string | null;
+  now: number;
+  ttlIdentityDays: number;
+  ttlArtifactDays: number;
+}
+
+type PersistResult =
+  | { kind: 'created'; id: string }
+  | { kind: 'replayed'; id: string }
+  | { kind: 'race' };
+
+/**
+ * The idempotent insert, with the blob lifecycle WR-03 requires: the blob is
+ * written before the row, so every conflict or insert failure deletes its own
+ * unreferenced copy. The replay lookup is scoped to `(project_id,
+ * idempotency_key)` — an unscoped lookup could return another project's row
+ * once project CRUD lands (WR-01).
+ */
+async function persistIncident(db: AppDb, storage: Storage, input: PersistInput): Promise<PersistResult> {
+  const { projectId, idempotencyKey, meta, storageKey, contentType, now } = input;
+  const deleteOwnBlob = async (reason: string): Promise<void> => {
+    if (storageKey === null) return;
+    await storage.delete(storageKey).catch((cleanupErr) => {
+      console.error(`[watchbug] ${reason} blob delete failed (WR-03):`, cleanupErr);
+    });
+  };
+
+  let inserted: { id: string }[];
+  try {
+    inserted = await db
+      .insert(incidents)
+      .values({
+        projectId,
+        idempotencyKey,
+        type: meta.type,
+        title: meta.title,
+        note: meta.note ?? null,
+        url: meta.url ?? null,
+        userId: meta.user?.id ?? null,
+        userName: meta.user?.name ?? null,
+        userEmail: meta.user?.email ?? null,
+        identityPurgeAt: new Date(now + input.ttlIdentityDays * DAY_MS),
+        artifactPurgeAt: new Date(now + input.ttlArtifactDays * DAY_MS),
+        storageKey,
+        contentType,
+      })
+      .onConflictDoNothing({ target: [incidents.projectId, incidents.idempotencyKey] })
+      .returning({ id: incidents.id });
+  } catch (err) {
+    await deleteOwnBlob('orphaned');
+    throw err;
+  }
+
+  if (inserted.length > 0) return { kind: 'created', id: inserted[0].id };
+
+  // Replay: the uniqueness index won the race. The blob written for this
+  // attempt (image-bearing submissions only — a meta-only replay wrote
+  // nothing, CAP-03) is unreferenced. Best-effort cleanup (WR-03): a failed
+  // delete must not fail the replay (a 500 + retry would only leak another
+  // blob); it is logged for ops.
+  await deleteOwnBlob('replay');
+  const existing = await db
+    .select({ id: incidents.id })
+    .from(incidents)
+    .where(and(eq(incidents.projectId, projectId), eq(incidents.idempotencyKey, idempotencyKey)))
+    .limit(1);
+  const id = existing[0]?.id;
+  // The winner committed the unique row but vanished before we could read it
+  // (impossible under READ COMMITTED, but never guess an id).
+  return id === undefined ? { kind: 'race' } : { kind: 'replayed', id };
+}
+
 export async function registerIncidentsRoutes(app: FastifyInstance, deps: RouteDeps): Promise<void> {
   const { db, storage, config } = deps;
 
@@ -170,241 +377,85 @@ export async function registerIncidentsRoutes(app: FastifyInstance, deps: RouteD
     '/api/incidents',
     { onRequest: [bodyCaps], preHandler: [deps.ingestRateLimit, deps.originGate, projectKeyGate] },
     async (req, reply) => {
-    const idempotencyKey = req.headers['idempotency-key'];
-    if (typeof idempotencyKey !== 'string' || idempotencyKey.trim() === '') {
-      return badRequest(
-        reply,
-        'Idempotency-Key header is required; retried submissions must reuse the same value (ING-03)',
-      );
-    }
-    if (idempotencyKey.length > MAX_IDEMPOTENCY_KEY_CHARS) {
-      return badRequest(reply, `Idempotency-Key must be at most ${MAX_IDEMPOTENCY_KEY_CHARS} characters`);
-    }
-
-    const counter = new BodyByteCounter();
-    let metaRaw: string | undefined;
-    let imageBytes: Uint8Array | undefined;
-    let clientFilename: string | undefined;
-
-    try {
-      for await (const part of req.parts()) {
-        if (part.type === 'field' && part.fieldname === 'meta') {
-          // `@fastify/multipart` JSON-parses any field whose Content-Type
-          // starts with `application/json` — which is exactly what
-          // `curl -F 'meta={...}'` (P1-D-07's onboarding snippet) sends — so
-          // the value can arrive as an object. Re-stringify it here so
-          // `validateMeta` always receives the raw JSON text; the previous
-          // `String(part.value)` turned objects into `"[object Object]"` and
-          // 400'd every JSON-typed meta part (deferred by 01-02, expires with
-          // this plan's onboarding curl).
-          metaRaw = typeof part.value === 'string' ? part.value : JSON.stringify(part.value);
-          counter.add(Buffer.byteLength(metaRaw, 'utf8'));
-        } else if (part.type === 'file' && part.fieldname === 'image') {
-          // Streams to a server-named tmp file while counting the bytes;
-          // the tmp file is unlinked here whatever happens next (ING-06,
-          // Pitfall 2 — a cut-off part is rejected, never stored).
-          const received = await receiveImagePart(part, counter);
-          clientFilename = received.filename;
-          imageBytes = received.bytes;
-        }
-      }
-    } catch (err) {
-      // WR-05 — the streaming-413 watcher owns the cap answer: if it already
-      // replied (its structured 413, socket destroyed 250 ms after the
-      // flush), the in-flight multipart iteration unwinds with a stream
-      // abort in the reply's wake. Return WITHOUT a second send, and never
-      // let such an abort reach the error handler's 500 branch.
-      if (reply.sent) return;
-      const mapped = mapMultipartError(err);
-      if (mapped === null) {
-        if (isBodyAbort(err)) {
-          return reply
-            .code(413)
-            .send(failure(413, `request body aborted at MAX_BODY_BYTES (${MAX_BODY_BYTES} bytes); nothing was stored`));
-        }
-        throw err;
-      }
-      if (err instanceof BodyCapExceeded) req.raw.destroy();
-      return reply.code(mapped.statusCode).send(mapped);
-    }
-
-    // C-4 — the client filename is metadata only. Names shaped like an attack
-    // are rejected before anything else looks at the payload.
-    if (clientFilename !== undefined) {
-      const filenameFailure = validateClientFilename(clientFilename);
-      if (filenameFailure !== null) {
-        return reply.code(filenameFailure.statusCode).send(filenameFailure);
-      }
-    }
-
-    const meta = validateMeta(metaRaw);
-    if (!meta.ok) {
-      return reply.code(400).send({
-        statusCode: 400,
-        error: 'Bad Request',
-        message: 'meta failed validation',
-        issues: meta.issues,
-      });
-    }
-
-    // ING-04's gate already ran (preHandler): the request carries the
-    // project id it resolved with a parameterised lookup — nothing below
-    // ever re-reads or re-checks the key.
-    const projectId = (req as GatedRequest)[PROJECT_ID]!;
-
-    // CAP-03 — a submission that carried no `image` part is a text-only
-    // report: stages 2-5 (semantic size cap, sniff, structure, guard, harden)
-    // are image-stage work and are skipped entirely. The meta pipeline — Zod
-    // validate (above), sanitise + re-validate (below) — the project-key gate
-    // (a preHandler, already run) and the idempotency conflict handling (the
-    // insert) run exactly as they do for an image-bearing report.
-    let storedImage: { bytes: Uint8Array; ext: ImageExt } | null = null;
-    if (imageBytes !== undefined) {
-      // A-06 semantic cap — checked on the bytes actually read, before any
-      // codec work (the 4 MB multipart limit above it is only the parser guard).
-      if (imageBytes.length > MAX_ENCODED_IMAGE_BYTES) {
-        return reply.code(413).send(
-          failure(
-            413,
-            `image is ${imageBytes.length} bytes; the contract allows at most ${MAX_ENCODED_IMAGE_BYTES} (MAX_ENCODED_IMAGE_BYTES)`,
-          ),
-        );
-      }
-
-      // Stage 2 — magic bytes only, never the client-declared Content-Type.
-      const sniffed = sniffImage(imageBytes);
-      if (sniffed === null) {
+      const idempotencyKey = req.headers['idempotency-key'];
+      if (typeof idempotencyKey !== 'string' || idempotencyKey.trim() === '') {
         return badRequest(
           reply,
-          'image is neither PNG, WebP nor JPEG (magic bytes); SVG, GIF and HTML are never accepted',
+          'Idempotency-Key header is required; retried submissions must reuse the same value (ING-03)',
         );
       }
+      if (idempotencyKey.length > MAX_IDEMPOTENCY_KEY_CHARS) {
+        return badRequest(reply, `Idempotency-Key must be at most ${MAX_IDEMPOTENCY_KEY_CHARS} characters`);
+      }
 
-      // Stage 3 — container structure: chunk allowlists, no animation, no
-      // trailing data; metadata chunks are dropped here (C-3, P1-D-11).
-      const structure = validateStructure(imageBytes, sniffed);
-      if (!structure.ok) return badRequest(reply, structure.message);
+      const parsed = await readMultipart(req, reply);
+      if (!parsed.ok) return;
 
-      // Stage 4 — dimensions from the header, before any pixel work.
-      const guard = assertDecodeSafe(structure.bytes, sniffed);
-      if (!guard.ok) return reply.code(guard.statusCode).send({
-        statusCode: guard.statusCode,
-        error: 'Bad Request',
-        message: guard.message,
+      // C-4 — the client filename is metadata only. Names shaped like an attack
+      // are rejected before anything else looks at the payload.
+      if (parsed.payload.clientFilename !== undefined) {
+        const filenameFailure = validateClientFilename(parsed.payload.clientFilename);
+        if (filenameFailure !== null) {
+          return reply.code(filenameFailure.statusCode).send(filenameFailure);
+        }
+      }
+
+      const meta = validateMeta(parsed.payload.metaRaw);
+      if (!meta.ok) {
+        return reply.code(400).send({
+          statusCode: 400,
+          error: 'Bad Request',
+          message: 'meta failed validation',
+          issues: meta.issues,
+        });
+      }
+
+      // ING-04's gate already ran (preHandler): the request carries the
+      // project id it resolved with a parameterised lookup — nothing below
+      // ever re-reads or re-checks the key.
+      const projectId = (req as GatedRequest)[PROJECT_ID]!;
+
+      // CAP-03 — no `image` part means a text-only report: the image chain
+      // (semantic cap → sniff → structure → guard → harden → re-cap) is
+      // skipped entirely and the row stores NULL storage/content-type.
+      const chain = await hardenImageChain(parsed.payload.imageBytes);
+      if (!chain.ok) {
+        return reply.code(chain.statusCode).send(failure(chain.statusCode, chain.message));
+      }
+
+      // Stage 6 — plain-text sanitization, then re-validate the contract so
+      // whatever reaches storage is guaranteed to validate (ENR-06).
+      const cleanMeta = sanitizeAndValidate(meta.meta);
+      if (cleanMeta === null) {
+        return badRequest(reply, 'meta no longer validates after sanitization (e.g. a markup-only title)');
+      }
+
+      // The blob is written before the insert ONLY when there is an image to
+      // write (CAP-03): a text-only report never touches the Storage seam.
+      const storageKey =
+        chain.image === null ? null : (await storage.put(chain.image.bytes, chain.image.ext, projectId)).key;
+
+      const now = Date.now();
+      const persisted = await persistIncident(db, storage, {
+        projectId,
+        idempotencyKey,
+        meta: cleanMeta,
+        storageKey,
+        contentType: chain.image === null ? null : CONTENT_TYPE_BY_EXT[chain.image.ext],
+        now,
+        ttlIdentityDays: config.ttlIdentityDays,
+        ttlArtifactDays: config.ttlArtifactDays,
       });
 
-      // Stage 5 — P1-D-10 root re-encode (sharp): decode → re-encode in the same
-      // format (P1-D-12), metadata stripped, processing-time guarded. The bytes
-      // that reach storage are libvips' output, not the submitted container.
-      const hardened = await hardenImage(structure.bytes);
-      if (!hardened.ok) {
-        return reply.code(hardened.statusCode).send({
-          statusCode: hardened.statusCode,
-          error: 'Bad Request',
-          message: hardened.message,
-        });
-      }
-
-      // A-06's 2 MB cap is a cap on the STORED artifact, not only on the input:
-      // a low-quality noisy input well under the cap can re-encode to far more
-      // (WR-02), and nothing downstream re-checks it — the blob route would
-      // stream whatever size landed. Re-cap the hardened bytes with the same
-      // contract constant and the same structured 413 body as the input cap.
-      if (hardened.bytes.length > MAX_ENCODED_IMAGE_BYTES) {
-        return reply.code(413).send(
-          failure(
-            413,
-            `re-encoded image is ${hardened.bytes.length} bytes; the contract allows at most ${MAX_ENCODED_IMAGE_BYTES} (MAX_ENCODED_IMAGE_BYTES)`,
-          ),
-        );
-      }
-
-      storedImage = { bytes: hardened.bytes, ext: hardened.ext };
-    }
-
-    // Stage 6 — plain-text sanitization, then re-validate the contract so
-    // whatever reaches storage is guaranteed to validate (ENR-06).
-    const cleanMeta = sanitizeAndValidate(meta.meta);
-    if (cleanMeta === null) {
-      return badRequest(reply, 'meta no longer validates after sanitization (e.g. a markup-only title)');
-    }
-
-    // The blob is written before the insert ONLY when there is an image to
-    // write (CAP-03): a text-only report never touches the Storage seam.
-    const storageKey =
-      storedImage === null ? null : (await storage.put(storedImage.bytes, storedImage.ext, projectId)).key;
-
-    const now = Date.now();
-    // WR-03: the blob is written BEFORE the insert (required for idempotent
-    // conflict handling), so ANY insert failure must delete it — a rowless
-    // blob is invisible to the TTL purge jobs (they purge by row) and would
-    // leak in the attachments volume forever, exactly when the DB is in
-    // trouble and the leak grows fastest.
-    let inserted: { id: string }[];
-    try {
-      inserted = await db
-        .insert(incidents)
-        .values({
-          projectId,
-          idempotencyKey,
-          type: cleanMeta.type,
-          title: cleanMeta.title,
-          note: cleanMeta.note ?? null,
-          url: cleanMeta.url ?? null,
-          userId: cleanMeta.user?.id ?? null,
-          userName: cleanMeta.user?.name ?? null,
-          userEmail: cleanMeta.user?.email ?? null,
-          identityPurgeAt: new Date(now + config.ttlIdentityDays * DAY_MS),
-          artifactPurgeAt: new Date(now + config.ttlArtifactDays * DAY_MS),
-          storageKey,
-          contentType: storedImage === null ? null : CONTENT_TYPE_BY_EXT[storedImage.ext],
-        })
-        .onConflictDoNothing({ target: [incidents.projectId, incidents.idempotencyKey] })
-        .returning({ id: incidents.id });
-    } catch (err) {
-      // WR-03 applies only when this attempt actually wrote a blob — an
-      // imageless insert failure has nothing to clean up (null never reaches
-      // the Storage seam).
-      if (storageKey !== null) {
-        await storage.delete(storageKey).catch((cleanupErr) => {
-          console.error('[watchbug] orphaned blob delete failed after insert error (WR-03):', cleanupErr);
-        });
-      }
-      throw err;
-    }
-
-    if (inserted.length === 0) {
-      // Replay: the uniqueness index won the race. The blob written for this
-      // attempt (image-bearing submissions only — a meta-only replay wrote
-      // nothing, CAP-03) is unreferenced — delete it, then serve the original
-      // id. Best-effort (WR-03): a failed cleanup must not fail the replay (a
-      // 500 + retry would only leak a second blob); it is logged for ops.
-      if (storageKey !== null) {
-        await storage.delete(storageKey).catch((cleanupErr) => {
-          console.error('[watchbug] replay blob delete failed (WR-03):', cleanupErr);
-        });
-      }
-      // WR-01: the conflict is detected on `(project_id, idempotency_key)`,
-      // so the replay lookup MUST be scoped to the same pair — an unscoped
-      // lookup could return a DIFFERENT project's incident with the same
-      // client-chosen key once project CRUD lands (Phase 5): a wrong replay
-      // id and a cross-tenant disclosure.
-      const existing = await db
-        .select({ id: incidents.id })
-        .from(incidents)
-        .where(and(eq(incidents.projectId, projectId), eq(incidents.idempotencyKey, idempotencyKey)))
-        .limit(1);
-      const id = existing[0]?.id;
-      if (id === undefined) {
-        // The winner committed the unique row but vanished before we could
-        // read it (impossible under READ COMMITTED, but never guess an id).
+      if (persisted.kind === 'race') {
         return badRequest(reply, 'idempotent replay raced an in-flight insert; retry with the same key');
       }
-      return reply.code(200).send({ id, replayed: true });
-    }
-
-    return reply.code(201).send({ id: inserted[0].id });
-  });
+      if (persisted.kind === 'replayed') {
+        return reply.code(200).send({ id: persisted.id, replayed: true });
+      }
+      return reply.code(201).send({ id: persisted.id });
+    },
+  );
 
   const decodeCursor = (value: unknown): { id: string; createdAt: number } | null => {
     if (typeof value !== 'string' || value.length === 0) return null;

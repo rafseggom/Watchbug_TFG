@@ -32,7 +32,12 @@ function projectKey(): string {
   return key;
 }
 
-const KEY = projectKey();
+// Resolved inside `beforeAll`, not at module load: without a `.env` the file
+// must fail as a test with a clear message, not disappear from collection.
+let KEY: string;
+test.beforeAll(() => {
+  KEY = projectKey();
+});
 const META = {
   type: 'bug' as const,
   title: 'Checkout button unresponsive on Safari',

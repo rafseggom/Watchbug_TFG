@@ -62,7 +62,7 @@ async function storedRow(
   fetch: typeof globalThis.fetch,
   id: string,
 ): Promise<Record<string, unknown>> {
-  const list = (await (await fetch(`${API_ORIGIN}/api/incidents`, { headers: { 'X-Project-Key': KEY } })).json()) as Array<Record<string, unknown>>;
+  const list = (await (await fetch(`${API_ORIGIN}/api/incidents`)).json()) as Array<Record<string, unknown>>;
   const row = list.find((r) => r.id === id);
   expect(row, `incident ${id} must appear in the list`).toBeDefined();
   return row as Record<string, unknown>;
@@ -198,7 +198,7 @@ describe('R-08/S-5: meta.url is stored path-only — query string and fragment s
     expect(caseA.status).toBe(201);
     const rowA = await storedRow(fetch, caseA.body.id as string);
     expect(rowA.url).toBe('/checkout');
-    const listText = await (await fetch(`${API_ORIGIN}/api/incidents`, { headers: { 'X-Project-Key': KEY } })).text();
+    const listText = await (await fetch(`${API_ORIGIN}/api/incidents`)).text();
     expect(listText).not.toContain(R08_SENTINEL);
     expect(listText).not.toContain('#frag');
 

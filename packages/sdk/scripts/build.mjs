@@ -33,6 +33,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 const dist = join(here, '..', 'dist');
 /** I-1: the test-only bundles are emitted OUTSIDE the deployable directory. */
 const e2eDist = join(dist, 'e2e');
+/** The manifest is the single source of truth for `WATCHBUG_VERSION`. */
+const sdkManifest = JSON.parse(readFileSync(join(here, '..', 'package.json'), 'utf8').replace(/^\uFEFF/, ''));
 
 const shared = {
   bundle: true,
@@ -44,6 +46,9 @@ const shared = {
     // INV-01: production bundles use a closed shadow root. `define` values must
     // be valid JS expressions, hence the quotes.
     SHADOW_MODE: JSON.stringify('closed'),
+    // One identity, emitted from package.json — a hand-written literal in
+    // `index.ts` would be a second source of truth that no gate checks.
+    __WATCHBUG_VERSION__: JSON.stringify(sdkManifest.version),
   },
 };
 
