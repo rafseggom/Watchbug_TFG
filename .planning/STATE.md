@@ -1,38 +1,38 @@
 ---
 gsd_state_version: "1.0"
-current_phase: 03
-current_phase_name: Report Composer & Annotation Editor (lazy)
-status: verifying
-stopped_at: Completed 03-08-PLAN.md
-last_updated: "2026-10-29T17:16:23.286Z"
-last_activity: 2026-10-29
-last_activity_desc: Plan 03-08 completed — six-type test taxonomy, R-19 policy convergence
-state_head: a7abdfb5d901912bb12619cf686a13e9d0deb463
+current_phase: 4
+current_phase_name: Report Payload & Enrichment
+status: planning
+stopped_at: Phase 3 complete, ready to plan Phase 4
+last_updated: "2026-11-03T18:52:59.706Z"
+last_activity: 2026-11-03
+last_activity_desc: Phase 3 complete, transitioned to Phase 4
+state_head: 7dc8feab4cc85dbd4dcadb4df6977e48356d48c5
 progress:
   total_phases: 7
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 17
   completed_plans: 17
-  percent: 29
+  percent: 43
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-10-13)
+See: .planning/PROJECT.md (updated 2026-11-03)
 
 **Core value:** When a bug report lands, the developer can reproduce the bug from it — and neither the report nor its screenshot ever leaves the developer's own infrastructure.
-**Current focus:** Phase 03 — Report Composer & Annotation Editor (lazy)
+**Current focus:** Phase 04 — Report Payload & Enrichment
 
 ## Current Position
 
-Phase: 03 (Report Composer & Annotation Editor (lazy)) — EXECUTING
-Plan: 8 of 8
-Status: Phase complete — ready for verification
-Last activity: 2026-11-03 - Completed quick task 261102-u4f: Crear documentation/ entorno-trabajo.md: informe del entorno de trabajo instalado (MCP, skills custom no-GSD, herramientas) con instrucciones breves de instalacion para replicarlo
+Phase: 4 — Report Payload & Enrichment
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-11-03 — Phase 3 complete, transitioned to Phase 4
 
-Progress: [███░░░░░░░] 29%
+Progress: [████░░░░░░] 43%
 
 ## Performance Metrics
 
@@ -47,7 +47,7 @@ Progress: [███░░░░░░░] 29%
 |-------|-------|-------|----------|
 | 01 | 4 | - | - |
 | 02 | 5 | - | - |
-| 03 | 8 | - | - |
+| 3 | 8 | - | - |
 
 **Recent Trend:**
 - Last 5 plans: none yet
@@ -162,6 +162,9 @@ Recent decisions affecting current work:
 - [Phase 03]: The contract test walks the committed JSON artifact with a 60-line draft-2020-12 subset interpreter instead of adding ajv, and fails loudly on any keyword it cannot interpret
 - [Phase 03]: Doc consistency is a test, not a remembered grep (tests/packaging/doc-policy-consistency.test.ts); historical artifacts keep their text and gain a supersession banner
 - [Phase 03]: Ledger reconciliation: 153 row ids carry 148 distinct dispositions because Task-1 tracer rows 1-5 are re-listed by Batch 2a/2b
+- [Phase 03 · cierre 2026-11-03]: manual UAT 7/7 on the REAL display picker. The only defect found was in the harness, not the product: a headed browser launched with an emulated viewport (1280x860) while the real tab surface was 1920x952 made `transformFor()` scale every T1 rect (x1.5 / x1.107) into a frame it did not match, so masks landed off-target. Rule + evidence in `documentation/continuity-pack.md` §11 / dead-end D-11: `viewport: null` + `--force-device-scale-factor` for DPR, and assert `blob.width === innerWidth * devicePixelRatio` before judging redaction.
+- [Phase 03 · cierre 2026-11-03]: verification was STALE (the 03-08 suite refactor changed covered files after the 2026-10-29 report); the verifier regenerated `03-VERIFICATION.md` at 74/74 must-haves with a fresh digest. The three former coincidental-reliance findings are retired because their hardens shipped and the UAT exercised them: CR-01 (generation guard), HG-01 (bake-to-base at UNDO_LIMIT), HG-02 (pixelation floor in bitmap space).
+- [Phase 03 · cierre 2026-11-03]: open hardening candidate, NOT implemented - the SDK assumes `frame = viewport x DPR` with no mismatch guard, so a registration break misplaces masks silently instead of failing closed (SEC-02). Candidate: compare frame/viewport aspect ratios in `runCaptureStage()` and refuse the capture beyond ~1 % drift. Decide at Phase 4/7 planning.
 
 ### Pending Todos
 
@@ -207,6 +210,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-29T17:15:23.540Z
-Stopped at: Completed 03-08-PLAN.md
+Last session: 2026-11-03T18:55:00.000Z
+Stopped at: Phase 3 complete, ready to plan Phase 4
 Resume file: None

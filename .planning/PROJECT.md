@@ -18,19 +18,23 @@ Every prioritisation trade-off resolves against this sentence. Capture fidelity 
 
 - ✓ A developer can self-host the entire stack with a single `docker compose up` (RF-08, INV-03) — Phase 1
   (cold `docker compose up -d --build` observed db → healthy → api ordering; exactly three services; `npm run verify` 132/132 green)
+- ✓ An end user can annotate a capture with drawing, arrows, text and a masking tool before sending (RF-03) — Phase 3
+  (ANN-01…06: lazy editor fetched on gesture, freehand/arrow/rectangle/text, stroke-bounded undo, destructive masks; 14 e2e journeys + editor unit/integration rows; real-picker UAT item 4)
+- ✓ Sensitive data is masked **automatically and irreversibly** before anything leaves the browser (RF-04, SEC-01, SEC-02, R-13) — Phase 3
+  (T1 auto-redaction from Phase 2 + T2/T3 editor masks; artifact-level proof in `03-UAT.md` item 2: fill region = 100 % `rgb(0,0,0)` α255 over 84 000 px, opt-in pixelation = uniform 30 px blocks with 58× less edge detail than untouched text)
+- ✓ Widget and panel are available in English and Spanish (RNF-03) — Phase 3
+  (WDG-06: locale resolver, whole core surface + editor chrome in EN/ES, session-scoped manual override with no host storage)
+- ✓ The client respects the tiered size budget and never blocks the main thread (RNF-01, CA-03, R-01) — Phase 3
+  (lazy editor lane + runtime tier closed on emitted artifacts: core 17.2/45, lazy 6.8/25 with a 2 KB floor, runtime 24.4/80 KB gz; async script tag)
 
 ### Active
 
 - [ ] A developer can add Watchbug to any web app with one script tag and get a working floating widget (RF-01, RNF-01, RNF-02)
 - [ ] An end user can file a bug report carrying an annotated screenshot, console logs and environment metadata (RF-01, RF-03)
 - [ ] An end user can file plain feedback without being forced to attach console logs (RF-02)
-- [ ] Sensitive data is masked **automatically and irreversibly** before anything leaves the browser (RF-04, SEC-01, SEC-02, R-13)
-- [ ] An end user can annotate a capture with drawing, arrows, text and a masking tool before sending (RF-03)
 - [ ] The report (image + JSON metadata) is transmitted over HTTP and persisted by the backend (RF-05, CA-01)
 - [ ] A developer can authenticate to the panel and triage reports: list, filter by bug/feedback, change state (Pending / In Progress / Resolved), inspect collected metadata (RF-06, RF-07, SEC-06)
 - [ ] The widget is immune to hostile host CSS and never contaminates the host page's styles or globals (RNF-02, INV-01, INV-02, CA-04)
-- [ ] Widget and panel are available in English and Spanish (RNF-03)
-- [ ] The client respects the tiered size budget and never blocks the main thread (RNF-01, CA-03, R-01)
 - [ ] Unauthenticated requests to panel API routes return `401 Unauthorized` (CA-05)
 - [ ] A deployment can hold multiple projects, each with its own public write-only key (R-06)
 
@@ -58,6 +62,7 @@ Every prioritisation trade-off resolves against this sentence. Capture fidelity 
 - **Gaussian blur is not a masking primitive** (D-06) — it is linear and partially invertible by deconvolution. Only solid fill or block pixelation ≥8 px satisfy SEC-02's "irreversible".
 - **Open items to resolve during requirements/roadmap:** Q-02 console-log payload caps (DoS surface past per-IP rate limiting); Q-03 retention *N* and panel configurability; Q-04 key-rotation scope; Q-05 university IP policy before the repo is public; Q-06 default `CaptureSource` adapter.
 - **Phase 1 shipped (2026-10-13).** Contracts + ingest slice is complete and verified: `packages/contracts` (Zod 4, JSON Schema emit), `apps/api` (Fastify 5 ingest with layered hostile-submission hardening), Postgres via Drizzle, and a minimal panel behind nginx — all three compose services, cold-start verified. Ingest requires a `WATCHBUG_PROJECT_KEY`; the admin surface and auth arrive in Phase 5. Deferred: dev-only `npm audit` advisories in `drizzle-kit`'s esbuild chain (see `.planning/phases/01-contracts-ingest-slice/deferred-items.md`).
+- **Phase 3 shipped (2026-11-03).** The reporter experience is complete: composer (capture / attach / text-only degraded state), lazy annotation editor (freehand, arrow, rectangle, text, destructive mask with Fill default and opt-in Pixelate), review-before-send showing the exact outgoing blob, and EN/ES across core + editor. Verification regenerated at `74/74` must-haves after the 03-08 six-type suite refactor; UAT `7/7` on the real display-picker path (`.planning/phases/03-report-composer-annotation-editor-lazy/03-UAT.md`). Console logs, environment metadata and identity privacy arrive in Phase 4.
 
 ## Constraints
 
@@ -118,4 +123,4 @@ This document evolves at phase transitions and milestone boundaries.
 **Cross-cutting:** dead-ends discovered during execution go to `documentation/continuity-pack.md` §4 (ASE *Anti-Amnesia*), and any decision that touches a `mission-brief.md` §3 restricted item requires a Consultation Request Pack first.
 
 ---
-*Last updated: 2026-10-13 after Phase 1 (Contracts & Ingest Slice)*
+*Last updated: 2026-11-03 after Phase 3 (Report Composer & Annotation Editor)*

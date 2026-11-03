@@ -26,7 +26,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Contracts & Ingest Slice** - Monorepo, official schema + constant set, 3-service compose, and a hardened ingest endpoint that stores a synthetic report and renders it in a minimal panel (completed 2026-10-13)
 - [x] **Phase 2: SDK Tracer Bullet: Widget, Capture & Auto-Redaction** - One script tag, isolated widget, tab capture with destructive auto-redaction (T1), first real report in the panel (completed 2026-10-25)
-- [ ] **Phase 3: Report Composer & Annotation Editor (lazy)** - Report form, capture fallback chain, pen/arrow/rect/text/mask editor with irreversible masking (T2/T3), review-before-send, en/es
+- [x] **Phase 3: Report Composer & Annotation Editor (lazy)** - Report form, capture fallback chain, pen/arrow/rect/text/mask editor with irreversible masking (T2/T3), review-before-send, en/es (completed 2026-11-03)
 - [ ] **Phase 4: Report Payload & Enrichment** - Console ring buffer, env metadata, host context and identity privacy completing the RF-01/RF-02 payload
 - [ ] **Phase 5: Secure Admin Access & Projects** - Single-admin JWT auth, 401 enforcement, project CRUD + key rotation, authenticated blob serving
 - [ ] **Phase 6: Triage & Data Lifecycle** - List/filter/inspect/state transitions/comments/delete/erase plus TTL purge jobs with `purge_runs`
@@ -110,7 +110,7 @@ Plans:
   4. An end user can mask a region with an opaque fill that is destroyed at the pixel level and is unrecoverable from the encoded image — undecipherable even by later annotation strokes — while undo removes annotation strokes only (masks are deliberately irreversible).
   5. An end user reviews and edits the capture before sending and uses the whole widget form and editor in English or Spanish (auto-matched to browser language, manual override), while the lazy editor chunk stays ≤ 25 KB gzipped and the total runtime payload ≤ 80 KB.
 
-**Plans:** 8 plans (8 executed)
+**Plans:** 8/8 plans complete (8 executed)
 **UI hint**: yes
 
 Plans:
@@ -232,7 +232,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 |-------|----------------|--------|-----------|
 | 1. Contracts & Ingest Slice | 4/4 | Complete    | 2026-10-13 |
 | 2. SDK Tracer Bullet: Widget, Capture & Auto-Redaction | 5/5 | Complete    | 2026-10-25 |
-| 3. Report Composer & Annotation Editor (lazy) | 7/8 | In Progress | - |
+| 3. Report Composer & Annotation Editor (lazy) | 8/8 | Complete    | 2026-11-03 |
 | 4. Report Payload & Enrichment | 0/TBD | Not started | - |
 | 5. Secure Admin Access & Projects | 0/TBD | Not started | - |
 | 6. Triage & Data Lifecycle | 0/TBD | Not started | - |
