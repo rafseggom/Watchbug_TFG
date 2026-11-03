@@ -470,7 +470,7 @@ git diff origin/develop...HEAD -- package-lock.json | Select-String -Pattern "ha
 
 | ID | Cambio | Ficheros |
 |---|---|---|
-| S-2 | Job `suites` (unit + contract) en CI; integración, packaging y VRT dentro del job que ya levanta el compose; cabecera del workflow reescrita para R-19 | `.github/workflows/ci.yml` |
+| S-2 | Job `suites` (unit + contrato hermético) en CI; el contrato completo, integración, packaging y VRT dentro del job que ya levanta el compose; cabecera del workflow reescrita para R-19 | `.github/workflows/ci.yml` |
 | S-3 | El gate de la CSP parsea la cabecera en directivas y exige valores exactos, además de prohibir `unsafe-inline`/`unsafe-eval` en `default-src`/`img-src`/`script-src`/`style-src`/`object-src` | `tests/packaging/deploy-contract.test.ts` |
 | S-4.1 | `sinks === 0` pasa a FAIL y `STRICT = true`: un SKIP ya no puede dar verde | `scripts/gate.mjs` |
 | S-4.2 | Marcador de política por sección en documentos rectores; `.planning/` histórico conserva el banner de fichero; se escanean `.github/`, `README.md`, `package.json` y extensiones `.ts`/`.yml`/`.json` | `tests/packaging/doc-policy-consistency.test.ts`, `AGENTS.md` |

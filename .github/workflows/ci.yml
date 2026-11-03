@@ -116,7 +116,7 @@ jobs:
         run: npm run check:compose
 
   suites:
-    name: Unit + contract suites (R-19 types 1 & 5)
+    name: Unit + hermetic contract (R-19 types 1 & 5)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -131,14 +131,17 @@ jobs:
       - name: Install
         run: npm ci
 
-      # The contract suite re-emits the published artifact from Zod and the
-      # unit lane exercises pure production helpers; neither needs a browser
-      # or the compose stack.
+      # The contract suite re-emits the published artifact from Zod; the unit
+      # lane exercises pure production helpers. Neither needs a browser.
       - name: Unit suite
         run: npm run test:unit
 
-      - name: Contract suite (CA-01)
-        run: npm run test:contract
+      # `tests/contract/hostile-payload-control.test.ts` targets the live API
+      # (it is a security/behaviour row, not a schema-drift row), so the full
+      # `test:contract` runs in the compose job. This job keeps the hermetic
+      # schema-agreement half, which needs no stack.
+      - name: Hermetic contract suite (CA-01)
+        run: npm run test:contract:hermetic
 
   sdk-deps:
     name: SDK runtime dependencies (RNF-01 zero-deps)
@@ -234,6 +237,11 @@ jobs:
           docker compose ps
           docker compose logs --tail=200
           exit 1
+
+      # R-19 type 5: the full contract suite, including the hostile-payload
+      # rows that target the live API; it needs the stack this job starts.
+      - name: Contract suite (CA-01 + hostile payloads)
+        run: npm run test:contract
 
       # R-19 type 2: API routes against the REAL stack (ingest, auth, rate
       # limits, sanitisation, idempotency) — no browser.
