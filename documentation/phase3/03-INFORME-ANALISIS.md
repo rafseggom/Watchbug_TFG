@@ -248,7 +248,7 @@ Ocho gates comparten el mismo modo de fallo: el sujeto cambia o desaparece y el 
 | # | Control | Evidencia | Qué se pierde |
 |---|---|---|---|
 | 1 | Gate del sumidero único | `scripts/gate.mjs:152-156` devuelve `skip` cuando `sinks === 0`, y `STRICT = false` (`:34`) hace que un SKIP no cuente como fallo | Un `encodeFinal` borrado o movido deja de estar gateado; la invariante C-2/SEC-02 ("máscaras re-aplicadas antes del único encode") pierde su comprobación estática. Es el hallazgo **IN-02** de la propia fase. |
-| 2 | Gate de política documental | `tests/packaging/doc-policy-consistency.test.ts:100,115` acepta un marcador **en cualquier línea anterior del fichero**, `SCAN_ROOTS:53` solo recorre `AGENTS.md`, `documentation`, `scripts` y `.planning`, y `:54` limita las extensiones a `.md`/`.mjs` | `AGENTS.md:250` sigue afirmando "No unit-test suites, no coverage thresholds" y pasa; `.github/workflows/ci.yml` (fuera de los roots) contiene la misma contradicción y el gate no puede verla. |
+| 2 | Gate de política documental | `tests/packaging/doc-policy-consistency.test.ts:100,115` acepta un marcador **en cualquier línea anterior del fichero**, `SCAN_ROOTS:53` solo recorre `AGENTS.md`, `documentation`, `scripts` y `.planning`, y `:54` limita las extensiones a `.md`/`.mjs` | `AGENTS.md:250` sigue afirmando "No unit-test suites, no coverage thresholds" y pasa; `.github/workflows/ci.yml` (fuera de los roots) contiene la misma contradicción y el gate no puede verla (R-19 amends R-12; corregido en §9). |
 | 3 | Gate de sumideros HTML del panel | `tests/packaging/no-dangerouslySetInnerHTML.test.ts:16-17` busca solo `dangerouslySetInnerHTML` e `innerHTML` | `outerHTML`, `insertAdjacentHTML`, `document.write`, `srcdoc` o un `href` con `javascript:` no se detectan — el gate del SDK (`scripts/gate.mjs:173-178`) sí cubre cuatro sumideros, el del panel dos. |
 | 4 | Snapshot de superficie global | `e2e/helpers/host-fixtures.ts:129` compara solo `Object`, `Element`, `HTMLElement` y `EventTarget` | Un parche en `Node.prototype`, `Document.prototype`, `Navigator.prototype` o `CanvasRenderingContext2D.prototype` pasa la fila, aunque INV-02 prohíbe "any native prototype patching". Es el hallazgo **FIX-01** del análisis delegado. |
 | 5 | Tope de jornadas e2e | `tests/packaging/journey-cap.test.ts:26,30,112` reconoce solo `test.describe('J-NN — …`, no `test.describe.serial`, `.skip`/`.fixme` ni títulos con backticks, y `readdirSync(e2e)` no es recursivo | Un 15.º journey declarado con un modificador o en un subdirectorio evade el tope R-19 con la suite en verde. |
@@ -437,22 +437,114 @@ git diff origin/develop...HEAD -- package-lock.json | Select-String -Pattern "ha
 
 ---
 
-## 8. Estado de remediación (2026-11-03, HEAD `0d17ab8`)
+## 8. Estado de remediación (2026-11-03, tras la revisión)
 
-> Estado: **pendiente / no aplica (análisis inicial)**. Esta es la primera pasada de análisis sobre la fase 3: no se ha corregido ninguno de los hallazgos de §4.1 ni aplicado el plan de §5. §2-§5 describen el árbol tal y como está en `0d17ab8`.
+> Estado: **remediado en el árbol de trabajo**. §2-§5 describen el árbol original en `0d17ab8`; §9 registra los cambios aplicados y la evidencia de verificación. Los hallazgos que no se han cerrado se marcan explícitamente.
 
 | ID | Hallazgo | Estado |
 |---|---|---|
-| S-1 | Lecturas sin autenticación (HIGH, heredado) | ⏸ pendiente — Fase 5 (`AuthProvider`) |
-| S-2 | CI no ejecuta las suites R-19 (MEDIUM) | ⏸ pendiente |
-| S-3 | El gate de la CSP compara subcadenas (MEDIUM) | ⏸ pendiente |
-| S-4 | Ocho gates que pueden dar verde en vacío (LOW) | ⏸ pendiente |
-| S-5 | Topes de adjunto tras el decode (LOW) | ⏸ pendiente |
-| S-6 | `beforeRead` opcional (LOW) | ⏸ pendiente |
-| S-7 | Detalle del codec en el 400 (LOW) | ⏸ pendiente |
-| S-8 | Modelos de test que no son los de producción (LOW) | ⏸ pendiente |
-| S-9 | Huecos de cobertura e2e (LOW) | ⏸ pendiente |
-| S-10 | IN-01: Ctrl+Z con el diálogo abierto (INFO) | ⏸ pendiente — abierto por decisión del propietario |
-| L-2 | 28 observaciones de slop (§2.1) | ⏸ pendiente |
+| S-1 | Lecturas sin autenticación (HIGH, heredado) | ⏸ pendiente — Fase 5 (`AuthProvider`); mitigación loopback verificada (§4.2-1) |
+| S-2 | CI no ejecuta las suites R-19 (MEDIUM) | ✅ corregido — job `suites` + integración/packaging/VRT en el job de compose |
+| S-3 | El gate de la CSP compara subcadenas (MEDIUM) | ✅ corregido — parser de directivas y ausencia de `unsafe-*` |
+| S-4 | Ocho gates que pueden dar verde en vacío (LOW) | ✅ corregido — los ocho |
+| S-5 | Topes de adjunto tras el decode (LOW) | ✅ corregido — dimensiones de cabecera antes de `createImageBitmap` |
+| S-6 | `beforeRead` opcional (LOW) | ✅ corregido — fail-closed si `measured.rects === null` |
+| S-7 | Detalle del codec en el 400 (LOW) | ✅ corregido — categorías fijas, detalle solo en el log |
+| S-8 | Modelos de test que no son los de producción (LOW) | 🟠 parcial — 4 de 5; falta el teardown de filas/blob en e2e |
+| S-9 | Huecos de cobertura e2e (LOW) | ✅ corregido — fila WebKit de producción, barrido `on*`/`srcdoc`, sonda anclada al origen |
+| S-10 | IN-01: Ctrl+Z con el diálogo abierto (INFO) | ✅ corregido |
+| L-2 | 28 observaciones de slop (§2.1) | ✅ corregido — las 28 |
+| C-1 | `POST /api/incidents` CC 33 / 236 LOC | ✅ extraído en `readMultipart`, `hardenImageChain`, `persistIncident` |
+| C-2 | `stripPng` 20 / `stripWebp` 16 | ✅ extraídos por chunk |
+| C-3 | `sniffClientImage` / `putPatch` / `readJpegDimensions` / `onPointerUp` | ✅ tabla de firmas, `assertFiniteRect`, predicados de marcador, commit por herramienta |
 
 *Análisis generado el 2026-11-03 sobre `0d17ab8`. Único fichero creado por este análisis: `documentation/phase3/03-INFORME-ANALISIS.md`. Scratch de trabajo (fuera del repo, no se commitea): `%LOCALAPPDATA%\Temp\opencode\informe-analisis-phase3\` — un `.md` por cada uno de los 72 ficheros de código/infra analizados más `ledger.md`.*
+
+---
+
+## 9. Remediación aplicada (2026-11-03)
+
+> Alcance: árbol de trabajo posterior a `0d17ab8`. No se modificó el contrato CA-01, ni el esquema de BD, ni la interfaz pública `Watchbug.init()`, ni el aislamiento Shadow DOM. No se añadió ninguna dependencia.
+
+### 9.1 Seguridad
+
+| ID | Cambio | Ficheros |
+|---|---|---|
+| S-2 | Job `suites` (unit + contract) en CI; integración, packaging y VRT dentro del job que ya levanta el compose; cabecera del workflow reescrita para R-19 | `.github/workflows/ci.yml` |
+| S-3 | El gate de la CSP parsea la cabecera en directivas y exige valores exactos, además de prohibir `unsafe-inline`/`unsafe-eval` en `default-src`/`img-src`/`script-src`/`style-src`/`object-src` | `tests/packaging/deploy-contract.test.ts` |
+| S-4.1 | `sinks === 0` pasa a FAIL y `STRICT = true`: un SKIP ya no puede dar verde | `scripts/gate.mjs` |
+| S-4.2 | Marcador de política por sección en documentos rectores; `.planning/` histórico conserva el banner de fichero; se escanean `.github/`, `README.md`, `package.json` y extensiones `.ts`/`.yml`/`.json` | `tests/packaging/doc-policy-consistency.test.ts`, `AGENTS.md` |
+| S-4.3 | Lista única de siete sumideros HTML para el panel (`innerHTML`, `outerHTML`, `insertAdjacentHTML`, `document.write`, `srcdoc`/`srcDoc`, `javascript:`) | `tests/packaging/no-dangerouslySetInnerHTML.test.ts` |
+| S-4.4 | El snapshot de superficie global cubre `Node`, `Document`, `Navigator`, `HTMLInputElement`, `CanvasRenderingContext2D` y `CSSStyleDeclaration` | `e2e/helpers/host-fixtures.ts` |
+| S-4.5 | El tope de jornadas reconoce modificadores de `describe`, títulos con backticks y recorre `e2e/` recursivamente | `tests/packaging/journey-cap.test.ts` |
+| S-4.6 | El rate limit de lectura exige exactamente `1..N → 200` y `N+1 → 429` con `Retry-After` | `tests/integration/read-surface-rate-limit.test.ts` |
+| S-4.7 | La fila del proxy exige una respuesta 4xx de Fastify con `statusCode` en el cuerpo, no solo “no 429” | `tests/integration/hostile-auth-rate-limit.test.ts` |
+| S-4.8 | La fila de `client_max_body_size` exige el `text/html` de nginx y ausencia de cuerpo JSON de Fastify | `tests/integration/hostile-size-caps.test.ts` |
+| S-5 | `readClientImageDimensions` lee PNG/WebP/JPEG de la cabecera antes de `createImageBitmap`; un fichero que declara más de `MAX_IMAGE_PIXELS`/`MAX_IMAGE_DIM` se rechaza sin decodificar | `packages/sdk/src/capture/manual-file.ts`, `tests/unit/manual-file-header.test.ts` |
+| S-6 | `runCaptureStage` falla cerrado (`denied`) si `beforeRead` no dejó `measured.rects` | `packages/sdk/src/capture/pipeline.ts` |
+| S-7 | El 400 devuelve solo `decode`/`timeout`/`unsupported`; el texto del codec se queda en el log del servidor | `apps/api/src/ingest/harden.ts` |
+| S-8 | Mock de ingesta con 401 sin `X-Project-Key`; clave e2e resuelta en `beforeAll`; retirado el header inútil de los GET; `url-path.test.ts` importa la función de producción; una fila por familia `*-in-input` | `e2e/sdk.spec.ts`, `e2e/ingest.spec.ts`, `tests/integration/*`, `tests/unit/url-path.test.ts`, `tests/unit/redaction-patterns.test.ts` |
+| S-9 | Fila WebKit sin costura que ejerce el adaptador de producción (`no-api`); barrido completo de `on*`/`srcdoc`/`javascript:`; sonda `/api/health` anclada al origen del fixture | `e2e/sdk.spec.ts`, `e2e/hostile.spec.ts` |
+| S-10 | Ctrl/Cmd+Z no hace undo mientras el diálogo de máscara está abierto | `packages/sdk/src/annotator/canvas-layer.ts` |
+
+**S-1 se mantiene abierto por diseño:** la superficie de lectura sigue sin `AuthProvider`; la única barrera es el bind a `127.0.0.1` del compose. Cerrarlo exige la Fase 5. La comprobación de §4.2-1 se ejecutó contra el stack local (puertos publicados solo en loopback) y sigue siendo obligatoria antes de exponer la instancia.
+
+### 9.2 Slop (§2.1, 28/28)
+
+- **Codificación:** corregidos los 12 bytes U+FFFD de `incidents.ts`.
+- **Ramas muertas:** eliminado el disyunto inalcanzable de PNG, la rama vacía, la guarda de longitud cero de `textMatchesFamily`, el flag de módulo `cssInjected` (sustituido por un marcador en el `<style>`) y el objeto `mounted` no consumido.
+- **Contradicciones:** corregido el comentario del color de acento y añadido el clamp de `note` en `reviewButton`.
+- **Duplicaciones:** versión del bundle inyectada desde `package.json`; validaciones de rect unificadas en `assertFiniteRect`/`assertIntegralRect`; `fetchIncidents` acepta un solo contrato de respuesta; `make-fixtures.mjs` usa un único helper de canvas/base64.
+- **e2e/tests:** esperas fijas sustituidas por `networkidle`; clic y hit-test del lanzador usan el centro real del botón; `expectMaskConfirmation` espera y lee en una sola llamada; el `onload` del loader se elimina con una regex acotada; `toContain('ab')` sustituido por una fila exacta; `journey-cap` reconoce modificadores; filas condicionales/`typeof`/primer-error corregidas; constantes de tamaño importadas del contrato.
+- **Proceso:** `stopthatslop` sigue sin estar conectado a CI (decisión abierta L-1, fuera de esta remediación).
+
+### 9.3 Complejidad
+
+- `POST /api/incidents` se dividió en `readMultipart`, `hardenImageChain` y `persistIncident` (con la limpieza WR-03 dentro del insert).
+- `stripPng`/`stripWebp` se dividieron en lectura de chunk, emisión y walk.
+- `sniffImage` y `sniffClientImage` usan una tabla de firmas; `readJpegDimensions` usa predicados de marcador; `putPatch` comparte las guardas de rect; `onPointerUp` delega en `commitDrag`/`commitFreehand`/`commitShape`/`commitMask`.
+- No se re-midió el CC con el script del informe; la afirmación es estructural (las funciones extraídas existen y el comportamiento se conserva), no una cifra nueva.
+
+### 9.4 Evidencia de verificación
+
+| Comprobación | Resultado |
+|---|---|
+| `npm run lint` (4 workspaces) | ✅ sin errores |
+| `node scripts/gate.mjs` | ✅ 5/5 PASS, 0 SKIP |
+| `npm run test:unit` | ✅ 65/65 |
+| `npm run test:contract` | ✅ 26/26 |
+| `npm run test:packaging` | ✅ 18/18 + `check:size` + `check:compose` |
+| `npm run test:integration` | ✅ 65/65 (incluye rate limit exacto, proxy y atribución nginx) |
+| `npm run test:vrt` | ✅ 2/2 (chromium) |
+| `npm run verify` | ✅ chromium 93 + 1 skip · firefox 93 + 1 skip · webkit 94 (total 280/282; los 2 skip son la fila WebKit-only en los otros motores) |
+| Tamaños | core 17,8 KB gz / 45 · lazy 6,9 / 25 · adapter 0,3 / 14 · runtime 25,0 / 80 |
+
+> La suite e2e se ejecutó contra el stack real de tres contenedores. El resultado por motor se registra en §9.5.
+
+### 9.5 Notas de la ejecución e2e
+
+- Chromium: 93 passed, 1 skipped (la fila nueva es WebKit-only).
+- Firefox: 93 passed, 1 skipped (misma fila).
+- WebKit: 94 passed, 0 skipped — la fila nueva (`WebKit production adapter: missing getDisplayMedia is classified as no-api`) ejerció el adaptador de producción.
+- No hubo fallos de aislamiento, captura, redacción, máscaras, editor, transporte, i18n ni VRT.
+
+### 9.6 UAT manual en un comando
+
+Se añadió `npm run uat` (`scripts/manual-uat.mjs`). El comando valida la clave, reconstruye el SDK si hay fuentes más nuevas, arranca `docker compose` si el health no responde y abre un Chromium visible con la página host y una pestaña del panel. La guía está en `documentation/uat.md`.
+
+```bash
+npm run uat
+npm run uat -- --dpr=2
+npm run uat -- --width=760
+npm run uat -- --dry-run   # preflight only
+```
+
+### 9.7 Residual
+
+| ID | Pendiente | Por qué |
+|---|---|---|
+| S-1 | `AuthProvider` y autorización de lectura | Fase 5; cambio de contrato/arquitectura, fuera de una revisión de fase 3 |
+| S-8 | Teardown de filas y blobs creados por `e2e/ingest.spec.ts` | Requiere un borrado por id o un stack efímero; el volumen Docker no es accesible desde el host |
+| L-1 | Conectar `stopthatslop` a CI | Decisión abierta sobre dónde vive el motor; no es un hallazgo de código |
+
+*Remediación registrada el 2026-11-03 sobre el árbol de trabajo posterior a `0d17ab8`.*

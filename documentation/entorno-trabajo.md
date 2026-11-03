@@ -37,8 +37,6 @@ Siete paquetes instalados globalmente con `npm i -g`:
 | `@opencode/cli` | 2.2.4 | `npm i -g @opencode/cli@2.2.4` |
 | `context-mode` | 1.0.169 | `npm i -g context-mode@1.0.169` |
 | `agent-browser` | 0.39.1 | `npm i -g agent-browser@0.39.1` |
-| `@google/gemini-cli` | 0.41.2 | `npm i -g @google/gemini-cli@0.41.2` |
-| `firebase-tools` | 15.34.0 | `npm i -g firebase-tools@15.34.0` |
 | `create-react-app` | 5.0.1 | `npm i -g create-react-app@5.0.1` |
 | `nodemon` | 3.0.1 | `npm i -g nodemon@3.0.1` |
 
