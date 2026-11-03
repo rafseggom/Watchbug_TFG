@@ -246,7 +246,11 @@ describe('ING-06: size caps — hostile submission layer enforcement', () => {
   });
 
   it('layer 2b: a chunked body with NO Content-Length over MAX_BODY_BYTES is aborted by the streaming counter → 413', { timeout: 120_000 }, async () => {
-    const text = await postChunkedWithoutContentLength();
+    // The server-side close still races the client's read on a slow runner
+    // (the accepted residual recorded in D-10): retry the transport once
+    // rather than weakening the assertion.
+    let text = await postChunkedWithoutContentLength();
+    if (text === '') text = await postChunkedWithoutContentLength();
     expect(text).toMatch(/^HTTP\/1\.[01] 413/);
     expect(text).toContain('MAX_BODY_BYTES');
     expect(text).toContain('application/json');

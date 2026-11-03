@@ -14,6 +14,10 @@ export default defineConfig({
     hookTimeout: 10000,
     pool: 'forks',
     singleFork: true,
+    // The integration suites share one live stack and assert row counts around
+    // writes; running files concurrently makes those counts race. Keep the
+    // shared resource deterministic.
+    fileParallelism: false,
     reporters: ['verbose'],
     coverage: {
       enabled: false,
