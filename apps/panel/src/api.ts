@@ -27,7 +27,8 @@ export interface Incident {
   url: string | null;
   user: ReportUser | null;
   status: IncidentStatus;
-  contentType: string;
+  /** `null` for a CAP-03 text-only report — no screenshot was ever captured. */
+  contentType: string | null;
   createdAt: string;
 }
 
@@ -97,19 +98,13 @@ export function fetchIncidents(opts?: { limit?: number; cursor?: string | null }
     path += `&cursor=${encodeURIComponent(cursor)}`;
   }
   return requestJson(path).then(({ body, nextCursor }) => {
-    let rows: Incident[];
-    let bodyCursor: string | null = null;
-    if (Array.isArray(body)) {
-      rows = body as Incident[];
-    } else if (body !== null && typeof body === 'object' && Array.isArray((body as { rows?: unknown }).rows)) {
-      const obj = body as { rows: Incident[]; nextCursor?: unknown; cursor?: unknown };
-      rows = obj.rows;
-      const candidate = obj.nextCursor ?? obj.cursor;
-      bodyCursor = typeof candidate === 'string' && candidate !== '' ? candidate : null;
-    } else {
-      throw new ApiError('invalid-json', `${path} returned neither an array nor a { rows } object`);
+    // `GET /api/incidents` emits one shape: a bare array with the cursor in
+    // `x-next-cursor`. Accepting a `{ rows }` envelope too would be a second
+    // contract this client cannot keep honest.
+    if (!Array.isArray(body)) {
+      throw new ApiError('invalid-json', `${path} returned a non-array body`);
     }
-    return { rows, nextCursor: nextCursor ?? bodyCursor };
+    return { rows: body as Incident[], nextCursor };
   });
 }
 

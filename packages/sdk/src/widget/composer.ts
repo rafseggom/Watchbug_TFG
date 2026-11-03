@@ -1,0 +1,1050 @@
+/**
+ * The report composer — the composition surface of the state machine
+ * (P3-D-01/02/03/04, PRV-07, UI-SPEC § Composer).
+ *
+ * One launcher gesture captures immediately and opens THIS large overlay with
+ * the image in it: header (heading + EN/ES pair), the bug/feedback segmented
+ * control, the editable prefilled title, the optional note with its code-point
+ * counter, the image zone, and the footer (Review report / Attach / Discard).
+ * The 320 px status panel is left for in-flight and terminal send states
+ * (P3-D-04); while the composer is open the panel reports itself hidden and
+ * exactly one surface is visible.
+ *
+ * The module follows the `status-panel.ts` skeleton exactly: one `COMPOSER_CSS`
+ * template literal using only `--wb-*` tokens and px units, a `create*`
+ * factory returning `{ element, render, destroy }`, an `el()` helper, every
+ * string via `t()`, and ONE document-level `Escape` listener installed when
+ * the surface opens and removed when it closes (research Pitfall 11).
+ *
+ * No HTML sink (T-02-01 / SEC-05 / T-03-14): every visible string — copy,
+ * the host-controlled `document.title` prefill — is written with
+ * `textContent`, `value` or `setAttribute`. The preview draws the draft's
+ * `ImageData` with `putImageData`; it never encodes (the encode happens once,
+ * at Review entry).
+ *
+ * Later plans mount into this frame: `Annotate image` is wired here (03-05 —
+ * the loading/error states, the memoised chunk fetch through `widget/loader.ts`
+ * and the editor layer inside `.wrap`); the file lane (CAP-02, this plan)
+ * wires `Attach image` / `Replace image` to `ManualFileCapture` behind a
+ * hidden `input[type=file]` that lives INSIDE the shadow root (INV-01), shows
+ * the refusal copy on any rejection (PATTERNS §13 — the `accept` attribute is
+ * a hint, magic bytes are the gate), and turns `Continue with text only` into
+ * the text-only state (CAP-03, P3-D-13).
+ */
+import { MAX_NOTE_CHARS, MAX_TITLE_CHARS } from '@watchbug/contracts/constants';
+import type { Draft } from '../capture/pipeline.ts';
+import { createManualFileCapture } from '../capture/manual-file.ts';
+import { locale, t } from '../strings.ts';
+import { loadAnnotator } from './loader.ts';
+
+/** The counter surfaces from this many CODE POINTS up (UI-SPEC overflow). */
+export const NOTE_COUNTER_VISIBLE_FROM = 4_000;
+
+/** The composer's DOM contract ids; the error is wired to the title field. */
+const TITLE_ERROR_ID = 'wb-composer-title-error';
+/** The attachment refusal's ids — error copy + its solution hint (CAP-02). */
+const ATTACH_ERROR_ID = 'wb-composer-attach-error';
+const ATTACH_HINT_ID = 'wb-composer-attach-error-hint';
+
+/** The ids of the editor-load refusal (OQ-4 copy, the attach-error pattern). */
+const EDITOR_ERROR_ID = 'wb-composer-editor-load-error';
+const EDITOR_HINT_ID = 'wb-composer-editor-load-error-hint';
+
+/** The formats the hidden picker hints at — decoration only, never validation. */
+const ATTACH_ACCEPT_HINT = 'image/png,image/webp,image/jpeg';
+
+/** The locale codes the EN/ES pair switches between (03-03 Task 3 wires it). */
+export type LocaleCode = 'en' | 'es';
+
+export interface ComposerHandlers {
+  /** Validation passed: encode + show the review (router owns the encode). */
+  onReview: (draft: Draft) => void;
+  /** `✕` / `Escape`: discard the draft, no confirmation (UI-SPEC A-4). */
+  onDiscard: (draft: Draft) => void;
+  /** The file lane (03-04). */
+  onReplace?: (draft: Draft) => void;
+  onAttach?: (draft: Draft) => void;
+  onContinueTextOnly?: (draft: Draft) => void;
+  /** A locale change is a re-render, never a re-lookup. */
+  onLocaleChange?: (locale: LocaleCode) => void;
+  /**
+   * A background lane (the file attach) mutated the draft the router is
+   * showing. The composer never re-shows itself directly: the router re-renders
+   * the CURRENT screen, so a surface that does not own the screen can never
+   * come back underneath another one (WR-01). Required, not optional: a
+   * mutation with no re-render would leave a stale preview on screen.
+   */
+  onDraftMutated: (draft: Draft) => void;
+  /** Router transitions for the editor screen (03-05): the editor lives
+   * between the composer opens and closes; `data-wb-screen` follows. */
+  onEditorOpen?: (draft: Draft) => void;
+  onEditorClosed?: (draft: Draft) => void;
+}
+
+/**
+ * The editor lane's dependencies (03-05), supplied by `index.ts` where the
+ * shadow host exists: the chunk resolves ONLY from the core bundle's own URL
+ * (T-03-20) and mounts ONLY inside `.wrap` (INV-01).
+ */
+export interface ComposerEditorDeps {
+  /** The core bundle's own URL — `LOADING_SCRIPT_URL` (IIFE) or
+   * `import.meta.url` (ESM). An unresolvable base rejects visibly. */
+  coreUrl: () => string | undefined;
+  /** `.wrap` — the container the editor layer mounts into. */
+  wrap: HTMLElement;
+}
+
+export interface Composer {
+  readonly element: HTMLElement;
+  /** Show and fill for one draft; `null` hides and releases the Escape key. */
+  render(draft: Draft | null): void;
+  destroy(): void;
+}
+
+/**
+ * Composer styles — `--wb-*` tokens and px only (H-2/H-3), the 720 px overlay
+ * centred near-fullscreen per UI-SPEC § Widget Geometry. The entrance reuses
+ * the `wb-panel-in` keyframes the panel declares (one shadow stylesheet).
+ */
+export const COMPOSER_CSS = `
+.composer {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  box-sizing: border-box;
+  width: min(720px, calc(100vw - 32px));
+  max-height: min(90vh, calc(100vh - 32px));
+  overflow-y: auto;
+  margin: 0;
+  padding: 16px;
+  border: 1px solid var(--wb-color-border);
+  border-radius: 8px;
+  background: var(--wb-color-surface);
+  box-shadow: 0 8px 24px rgba(27, 31, 38, 0.18);
+  color: var(--wb-color-ink);
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.5;
+  text-align: left;
+  pointer-events: auto;
+  animation: wb-panel-in 120ms ease-out;
+}
+.composer[data-hidden='true'] { display: none; }
+.composer-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.composer-heading {
+  margin: 0;
+  min-width: 0;
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--wb-color-ink);
+  overflow-wrap: anywhere;
+}
+.locale-pair { display: flex; flex: none; gap: 4px; }
+.locale-toggle {
+  height: 28px;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0 8px;
+  border: 1px solid var(--wb-color-border);
+  border-radius: 6px;
+  background: var(--wb-color-surface-alt);
+  color: var(--wb-color-ink);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+}
+.locale-toggle[aria-pressed='true'] {
+  border-color: var(--wb-color-accent);
+  color: var(--wb-color-accent);
+}
+.locale-toggle:focus-visible {
+  outline: 2px solid var(--wb-color-accent);
+  outline-offset: 2px;
+}
+.composer-field { margin-bottom: 16px; }
+.field-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--wb-color-ink);
+}
+.segment-group {
+  display: flex;
+  width: 100%;
+  height: 36px;
+  box-sizing: border-box;
+  border: 1px solid var(--wb-color-border);
+  border-radius: 6px;
+  background: var(--wb-color-surface-alt);
+  overflow: hidden;
+}
+.segment {
+  flex: 1 1 0;
+  height: 36px;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0 16px;
+  border: 0;
+  background: transparent;
+  color: var(--wb-color-ink);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+}
+.segment[aria-pressed='true'] {
+  background: var(--wb-color-accent);
+  color: var(--wb-color-on-accent);
+}
+.composer-title {
+  display: block;
+  width: 100%;
+  height: 36px;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0 8px;
+  border: 1px solid var(--wb-color-border);
+  border-radius: 6px;
+  background: var(--wb-color-surface-alt);
+  color: var(--wb-color-ink);
+  font-size: 15px;
+  line-height: 1.5;
+}
+.composer-note {
+  display: block;
+  width: 100%;
+  min-height: 88px;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 8px;
+  border: 1px solid var(--wb-color-border);
+  border-radius: 6px;
+  background: var(--wb-color-surface-alt);
+  color: var(--wb-color-ink);
+  font-size: 15px;
+  line-height: 1.5;
+  resize: vertical;
+}
+.composer-title:focus-visible, .composer-note:focus-visible {
+  outline: 2px solid var(--wb-color-accent);
+  outline-offset: 2px;
+}
+.composer-title[aria-invalid='true'] { border-color: var(--wb-color-danger); }
+.field-error {
+  display: none;
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--wb-color-danger);
+  overflow-wrap: anywhere;
+}
+.field-error[data-shown='true'] { display: block; }
+.composer-file {
+  /* Visually hidden, NOT display:none — the standard hidden-picker shape.
+     The file lane is driven programmatically in e2e (setInputFiles), so this
+     only governs the real-browser picker affordance. */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.attach-error { margin-top: 0; }
+.attach-error-hint {
+  margin: 2px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--wb-color-muted);
+  overflow-wrap: anywhere;
+}
+.attach-error-hint[data-shown='true'] { display: block; }
+.composer-counter {
+  display: none;
+  margin: 4px 0 0;
+  text-align: right;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--wb-color-muted);
+}
+.composer-counter[data-shown='true'] { display: block; }
+.image-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  margin-bottom: 16px;
+  padding: 8px;
+  border: 1px solid var(--wb-color-border);
+  border-radius: 6px;
+  background: var(--wb-color-surface-alt);
+}
+.composer-preview {
+  display: block;
+  box-sizing: border-box;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: 320px;
+  border: 1px solid var(--wb-color-border);
+  background: var(--wb-color-surface);
+}
+.zone-notice { display: none; }
+.composer-annotate[data-wb-loading='true'] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.composer-annotate[data-wb-loading='true'] .spinner {
+  flex: none;
+}
+.image-zone[data-wb-zone='none'] .composer-preview,
+.image-zone[data-wb-zone='none'] .composer-annotate,
+.image-zone[data-wb-zone='none'] .composer-replace { display: none; }
+.image-zone[data-wb-zone='none'] .zone-notice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.zone-notice-heading {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--wb-color-muted);
+  text-align: center;
+}
+.zone-notice-hint {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--wb-color-muted);
+  text-align: center;
+}
+.button {
+  height: 36px;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0 16px;
+  border: 1px solid var(--wb-color-border);
+  border-radius: 6px;
+  background: var(--wb-color-surface-alt);
+  color: var(--wb-color-ink);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+}
+.button:focus-visible {
+  outline: 2px solid var(--wb-color-accent);
+  outline-offset: 2px;
+}
+.button--primary {
+  border-color: var(--wb-color-accent);
+  background: var(--wb-color-accent);
+  color: var(--wb-color-on-accent);
+}
+.button--primary:hover { background: var(--wb-color-accent-hover); }
+.button--primary:active { background: var(--wb-color-accent-active); }
+.composer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.composer-attach { margin-right: auto; }
+/* Degraded: the notice carries both actions, so the footer attach steps back
+   — at most one visible .composer-attach at any time (P3-D-13). */
+.composer[data-wb-state='degraded'] .composer-footer .composer-attach { display: none; }
+/* Text-only (A-3): the same composer minus the image zone; the footer keeps
+   its secondary Attach image as the escape hatch back to a picture. */
+.composer[data-wb-state='text-only'] .image-zone { display: none; }
+.composer-discard {
+  width: 36px;
+  padding: 0;
+  font-size: 15px;
+  color: var(--wb-color-muted);
+}
+.composer-discard:hover {
+  color: var(--wb-color-danger);
+  border-color: var(--wb-color-danger);
+}
+@media (prefers-reduced-motion: reduce) {
+  .composer { animation: none; }
+}
+`;
+
+function el<K extends keyof HTMLElementTagNameMap>(
+  tag: K,
+  className: string,
+): HTMLElementTagNameMap[K] {
+  const node = document.createElement(tag);
+  if (className.length > 0) node.className = className;
+  return node;
+}
+
+/**
+ * Count Unicode CODE POINTS, not UTF-16 units — the same semantics the
+ * server's Zod `.max()` applies (Phase 1 decision 01-04). `maxlength` counts
+ * units, so it stays a hint (or absent) and this clamp is the authority
+ * (research Pitfall 13).
+ *
+ * Exported (03-08 Batch 3a) so `tests/unit/composer-text-clamp.test.ts` can
+ * pin the code-point arithmetic against the real function instead of a copy.
+ */
+export function codePoints(value: string): number {
+  return [...value].length;
+}
+
+/** Clamp to `max` code points without ever splitting a surrogate pair. */
+export function clampCodePoints(value: string, max: number): string {
+  const units = [...value];
+  return units.length > max ? units.slice(0, max).join('') : value;
+}
+
+export function createComposer(
+  handlers: ComposerHandlers,
+  editorDeps: ComposerEditorDeps,
+): Composer {
+  const composer = el('section', 'composer');
+  composer.setAttribute('data-hidden', 'true');
+  composer.setAttribute('data-wb-state', 'image');
+
+  // Header: heading + the A-7 EN/ES pair (task 3 wires the switch).
+  const header = el('div', 'composer-header');
+  const heading = el('h2', 'composer-heading');
+  const localePair = el('div', 'locale-pair');
+  localePair.setAttribute('role', 'group');
+  const enButton = el('button', 'locale-toggle');
+  const esButton = el('button', 'locale-toggle');
+  for (const [button, code] of [
+    [enButton, 'en'],
+    [esButton, 'es'],
+  ] as const) {
+    button.setAttribute('type', 'button');
+    button.setAttribute('data-wb-locale', code);
+    button.textContent = code === 'en' ? t('i18n.en') : t('i18n.es');
+    button.setAttribute('aria-pressed', String(code === locale()));
+  }
+  localePair.appendChild(enButton);
+  localePair.appendChild(esButton);
+  header.appendChild(heading);
+  header.appendChild(localePair);
+
+  // Type: segmented bug/feedback control, `bug` is the default (P3-D-03).
+  const typeField = el('div', 'composer-field composer-type');
+  const typeLabel = el('p', 'field-label');
+  const segmentGroup = el('div', 'segment-group');
+  const bugSegment = el('button', 'segment');
+  const feedbackSegment = el('button', 'segment');
+  for (const [button, value] of [
+    [bugSegment, 'bug'],
+    [feedbackSegment, 'feedback'],
+  ] as const) {
+    button.setAttribute('type', 'button');
+    button.setAttribute('data-wb-type', value);
+    button.setAttribute('aria-pressed', String(value === 'bug'));
+  }
+  segmentGroup.appendChild(bugSegment);
+  segmentGroup.appendChild(feedbackSegment);
+  typeField.appendChild(typeLabel);
+  typeField.appendChild(segmentGroup);
+
+  // Title: prefilled, editable; review is blocked only when emptied (P3-D-02).
+  const titleField = el('div', 'composer-field');
+  const titleLabel = el('label', 'field-label');
+  titleLabel.setAttribute('for', 'wb-composer-title');
+  const titleInput = el('input', 'composer-title');
+  titleInput.id = 'wb-composer-title';
+  titleInput.setAttribute('type', 'text');
+  titleInput.setAttribute('autocomplete', 'off');
+  const titleError = el('span', 'field-error');
+  titleError.id = TITLE_ERROR_ID;
+  titleError.setAttribute('data-wb-error', 'title');
+  titleError.setAttribute('role', 'alert');
+  titleError.setAttribute('data-shown', 'false');
+  titleField.appendChild(titleLabel);
+  titleField.appendChild(titleInput);
+  titleField.appendChild(titleError);
+
+  // Note: optional, code-point clamped, counter from 4,000 up.
+  const noteField = el('div', 'composer-field');
+  const noteLabel = el('label', 'field-label');
+  noteLabel.setAttribute('for', 'wb-composer-note');
+  const noteInput = el('textarea', 'composer-note');
+  noteInput.id = 'wb-composer-note';
+  const noteCounter = el('span', 'composer-counter');
+  noteCounter.setAttribute('data-shown', 'false');
+  noteCounter.setAttribute('aria-live', 'polite');
+  noteField.appendChild(noteLabel);
+  noteField.appendChild(noteInput);
+  noteField.appendChild(noteCounter);
+
+  // Image zone: preview + annotate/replace (image) or notice (degraded).
+  const imageZone = el('div', 'image-zone');
+  imageZone.setAttribute('data-wb-zone', 'image');
+  const preview = el('canvas', 'composer-preview');
+  preview.setAttribute('role', 'img');
+  const annotateButton = el('button', 'button composer-annotate');
+  const replaceButton = el('button', 'button composer-replace');
+  const notice = el('div', 'zone-notice');
+  const noticeHeading = el('p', 'zone-notice-heading');
+  const noticeHint = el('p', 'zone-notice-hint');
+  // Two inline actions in the degraded notice (P3-D-13): the picker opener
+  // and the text-only exit. The footer keeps its own `Attach image` for the
+  // image/text-only states; the degraded state hides it (CSS), so at most
+  // one `.composer-attach` is ever visible.
+  const noticeAttachButton = el('button', 'button composer-attach composer-notice-attach');
+  const continueButton = el('button', 'button composer-continue-text');
+  notice.appendChild(noticeHeading);
+  notice.appendChild(noticeHint);
+  notice.appendChild(noticeAttachButton);
+  notice.appendChild(continueButton);
+  imageZone.appendChild(preview);
+  imageZone.appendChild(annotateButton);
+  imageZone.appendChild(replaceButton);
+  imageZone.appendChild(notice);
+
+  // The attachment refusal (CAP-02): inline error + solution hint, both
+  // referenced from the visible attach action via `aria-describedby`.
+  const attachError = el('span', 'field-error attach-error');
+  attachError.id = ATTACH_ERROR_ID;
+  attachError.setAttribute('data-wb-error', 'attach');
+  attachError.setAttribute('role', 'alert');
+  attachError.setAttribute('data-shown', 'false');
+  const attachHint = el('span', 'field-error attach-error-hint');
+  attachHint.id = ATTACH_HINT_ID;
+  attachHint.setAttribute('data-wb-error', 'attach-hint');
+  attachHint.setAttribute('data-shown', 'false');
+
+  // The editor-load refusal (03-05 / OQ-4): the same inline shape as the
+  // attach refusal — error + solution hint, wired from the annotate action.
+  const editorError = el('span', 'field-error attach-error');
+  editorError.id = EDITOR_ERROR_ID;
+  editorError.setAttribute('data-wb-error', 'editor');
+  editorError.setAttribute('role', 'alert');
+  editorError.setAttribute('data-shown', 'false');
+  const editorHint = el('span', 'field-error attach-error-hint');
+  editorHint.id = EDITOR_HINT_ID;
+  editorHint.setAttribute('data-wb-error', 'editor-hint');
+  editorHint.setAttribute('data-shown', 'false');
+
+  // The hidden picker inside the shadow root (INV-01): a hostile host page
+  // cannot reach this input, so the synthetic-selection surface is exactly
+  // the research A4 analysis (user-picked bytes, magic-gated).
+  const fileInput = el('input', 'composer-file');
+  fileInput.setAttribute('type', 'file');
+  fileInput.setAttribute('accept', ATTACH_ACCEPT_HINT);
+  fileInput.setAttribute('aria-hidden', 'true');
+  fileInput.setAttribute('tabindex', '-1');
+
+  // Footer: the one accent CTA, the secondary attach, the discard.
+  const footer = el('div', 'composer-footer');
+  const attachButton = el('button', 'button composer-attach');
+  const reviewButton = el('button', 'button button--primary composer-review');
+  const discardButton = el('button', 'button composer-discard');
+  discardButton.textContent = '✕';
+  for (const button of [
+    annotateButton,
+    replaceButton,
+    attachButton,
+    noticeAttachButton,
+    continueButton,
+    reviewButton,
+    discardButton,
+  ]) {
+    button.setAttribute('type', 'button');
+  }
+  footer.appendChild(attachButton);
+  footer.appendChild(reviewButton);
+  footer.appendChild(discardButton);
+
+  composer.appendChild(header);
+  composer.appendChild(typeField);
+  composer.appendChild(titleField);
+  composer.appendChild(noteField);
+  composer.appendChild(imageZone);
+  composer.appendChild(attachError);
+  composer.appendChild(attachHint);
+  composer.appendChild(editorError);
+  composer.appendChild(editorHint);
+  composer.appendChild(fileInput);
+  composer.appendChild(footer);
+
+  let draft: Draft | null = null;
+  let open = false;
+  let escapeListening = false;
+
+  /** The preview canvas's drawing context; created once, sized on draw. */
+  const previewContext = preview.getContext('2d');
+
+  const onKeyDown = (event: KeyboardEvent): void => {
+    if (event.key !== 'Escape') return;
+    if (!open || draft === null) return;
+    event.preventDefault();
+    handlers.onDiscard(draft);
+  };
+
+  const setEscapeListening = (listening: boolean): void => {
+    if (listening === escapeListening) return;
+    escapeListening = listening;
+    if (listening) document.addEventListener('keydown', onKeyDown);
+    else document.removeEventListener('keydown', onKeyDown);
+  };
+
+  /** Paint the draft's already-redacted frame into the preview. No encode. */
+  const drawPreview = (image: ImageData): void => {
+    preview.width = image.width;
+    preview.height = image.height;
+    if (previewContext === null) return;
+    previewContext.putImageData(image, 0, 0);
+  };
+
+  /**
+   * The file lane (CAP-02): one adapter, one picker. The decode is async, so
+   * every attach action is disabled while it runs (`data-wb-attaching` is the
+   * settle signal the e2e harness waits on) and a rejection keeps the
+   * previous draft state intact — never a partial mutation, never a request.
+   */
+  const manualCapture = createManualFileCapture();
+  let attaching = false;
+  /** The editor chunk fetch in flight (declared here so the busy matrix owns
+   * both lanes — one place decides which action may start). */
+  let annotating = false;
+
+  const setAttaching = (busy: boolean): void => {
+    attaching = busy;
+    composer.setAttribute('data-wb-attaching', busy ? 'true' : 'false');
+    updateBusyButtons();
+  };
+
+  /**
+   * ONE authority for the busy-lane disable matrix (WR-01). The attach decode
+   * and the annotate chunk fetch are both async and both rewrite
+   * `draft.image`, so no second lane may start while either runs — that
+   * includes `Review report`, whose encode would otherwise resolve into the
+   * review while a late attach re-showed the composer underneath it, leaving
+   * `Send report` to throw out of `pendingFor`.
+   */
+  const updateBusyButtons = (): void => {
+    const busy = attaching || annotating;
+    for (const button of [
+      attachButton,
+      noticeAttachButton,
+      replaceButton,
+      annotateButton,
+      reviewButton,
+    ]) {
+      button.disabled = busy;
+    }
+  };
+
+  const clearAttachError = (): void => {
+    attachError.setAttribute('data-shown', 'false');
+    attachHint.setAttribute('data-shown', 'false');
+    for (const button of [attachButton, noticeAttachButton]) {
+      button.removeAttribute('aria-describedby');
+    }
+  };
+
+  const showAttachError = (): void => {
+    attachError.setAttribute('data-shown', 'true');
+    attachHint.setAttribute('data-shown', 'true');
+    for (const button of [attachButton, noticeAttachButton]) {
+      button.setAttribute('aria-describedby', `${ATTACH_ERROR_ID} ${ATTACH_HINT_ID}`);
+    }
+  };
+
+  /**
+   * The editor lane (03-05 / PRF-02 / UI-SPEC A-2): `Annotate image` fetches
+   * the lazy chunk ONLY on this click (zero editor bytes before it), shows the
+   * 12 px spinner + `editor.loading` on the disabled button while it fetches,
+   * mounts `div.editor-layer` inside `.wrap` — the same closed shadow root,
+   * never `document.body` (INV-01) — and returns to the composer with the
+   * draft's own `ImageData` mutated in place (C-2: one flattened working
+   * bitmap). A failure re-enables the button with the inline refusal copy
+   * (T-03-21: never a dead button; the loader cleared its memo, so a retry
+   * can succeed).
+   */
+  const setAnnotateLoading = (busy: boolean): void => {
+    annotating = busy;
+    updateBusyButtons();
+    if (busy) {
+      annotateButton.setAttribute('data-wb-loading', 'true');
+      annotateButton.textContent = '';
+      const spinner = el('span', 'spinner');
+      spinner.setAttribute('aria-hidden', 'true');
+      const label = el('span', 'annotate-loading-label');
+      label.textContent = t('editor.loading');
+      annotateButton.appendChild(spinner);
+      annotateButton.appendChild(label);
+    } else {
+      annotateButton.removeAttribute('data-wb-loading');
+      annotateButton.textContent = t('composer.annotate');
+    }
+  };
+
+  const clearEditorError = (): void => {
+    editorError.setAttribute('data-shown', 'false');
+    editorHint.setAttribute('data-shown', 'false');
+    annotateButton.removeAttribute('aria-describedby');
+  };
+
+  const showEditorError = (): void => {
+    editorError.setAttribute('data-shown', 'true');
+    editorHint.setAttribute('data-shown', 'true');
+    annotateButton.setAttribute('aria-describedby', `${EDITOR_ERROR_ID} ${EDITOR_HINT_ID}`);
+  };
+
+  /** The single accent authority: the custom property's COMPUTED value with
+   * the design-token literal as a fallback only when the property is absent
+   * (P3-D-07 — `--wb-color-accent` stays the one definition). */
+  const resolveInk = (): string => {
+    const value = getComputedStyle(editorDeps.wrap).getPropertyValue('--wb-color-accent').trim();
+    return value.length > 0 ? value : '#2f6feb';
+  };
+
+  const runAnnotate = (): void => {
+    const current = draft;
+    // One lane at a time (WR-01): an in-flight attach owns `draft.image`, and
+    // the editor must not open over a frame that is about to be replaced.
+    if (current === null || annotating || attaching || current.image === null) return;
+    const base = current.image;
+    setAnnotateLoading(true);
+    clearEditorError();
+    void (async (): Promise<void> => {
+      let layer: HTMLDivElement | null = null;
+      let opened = false;
+      try {
+        const module = await loadAnnotator(editorDeps.coreUrl());
+        // The draft was discarded or its frame replaced while the chunk
+        // fetched: abandon silently — a late editor must never mount over a
+        // dead draft nor resurrect an old frame onto the wire.
+        if (!open || draft !== current || current.image !== base) return;
+        layer = el('div', 'editor-layer');
+        editorDeps.wrap.appendChild(layer);
+        handlers.onEditorOpen?.(current);
+        opened = true;
+        const result = await module.open({
+          base,
+          locale: locale(),
+          masks: current.masks,
+          mount: layer,
+          ink: resolveInk(),
+          // The frame's own bitmap-per-CSS-px scale: the pixelation floor is a
+          // bitmap-space property (R-13 / HG-02).
+          bitmapPerCssPx: current.bitmapPerCssPx,
+          maskConfirm: {
+            title: t('mask.confirm.title'),
+            body: t('mask.confirm.body'),
+            action: t('mask.confirm.action'),
+            cancel: t('mask.confirm.cancel'),
+          },
+        });
+        // The editor mutates `base` in place and resolves with THAT same
+        // instance (C-2/A-04); the assignment re-asserts the draft's contract
+        // for the lanes that swap the buffer (03-06's bake included).
+        current.image = result.img;
+        if (result.masks !== current.masks) current.masks = Array.from(result.masks);
+        handlers.onEditorClosed?.(current);
+      } catch {
+        // Every rejection class (unresolvable base, 404, missing 2D context)
+        // is the same visible refusal — never silent, never a dead button.
+        if (opened) handlers.onEditorClosed?.(current);
+        showEditorError();
+      } finally {
+        if (layer !== null) layer.remove();
+        setAnnotateLoading(false);
+      }
+    })();
+  };
+
+  const openPicker = (): void => {
+    // The mirror of `runAnnotate`'s guard: no picker while the editor chunk is
+    // fetching, and none while another decode is already running (WR-01).
+    if (attaching || annotating || draft === null) return;
+    fileInput.click();
+  };
+
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files === null ? undefined : fileInput.files[0];
+    // Reset the picker value up front so selecting the SAME file again still
+    // fires a change event (replace-after-rejection is a real walk).
+    fileInput.value = '';
+    // The generation this decode belongs to (WR-01): the composer may be
+    // discarded, replaced or closed while `createImageBitmap` runs, and a late
+    // resolution must never write this file's bytes onto another draft.
+    const target = draft;
+    if (target === null || file === undefined) return;
+    if (attaching) return;
+    const imageAtStart = target.image;
+    setAttaching(true);
+    clearAttachError();
+    // A-05/P3-D-15: the attachment enters as pixels through the same seam the
+    // display adapter uses. `beforeRead` is a no-op here (a file has no
+    // DOM-to-bitmap registration to assert) but its throw still aborts. The
+    // blank probe NEVER runs on an attachment — a legitimately uniform photo
+    // is a valid report (research F6). T1 does not apply, masks belonged to
+    // the old frame, and `encoded` was composed from the old frame.
+    void manualCapture
+      .capture({ beforeRead: () => undefined, file })
+      .then((image) => {
+        // Discarded (`draft === null`, composer closed) or replaced draft, or a
+        // frame swapped by the editor while the decode ran: abandon silently.
+        // `open` is false whenever another surface owns the screen (the
+        // router's `showScreen` renders the composer with `null`), so a
+        // background attach can never re-show the composer under the review.
+        if (!open || draft !== target || target.image !== imageAtStart) return;
+        target.image = image;
+        target.t1 = [];
+        target.masks = [];
+        // A picked file's pixel grid has nothing to do with the display, so the
+        // captured frame's scale no longer describes it: the neutral `1` keeps
+        // the pixelation floor measured in the attachment's own pixels (CAP-02).
+        target.bitmapPerCssPx = 1;
+        target.encoded = null;
+        target.captureNote = null;
+        // Through the router, never `render()`: the composer re-renders only if
+        // it still owns the screen (WR-01).
+        handlers.onDraftMutated(target);
+      })
+      .catch(() => {
+        // Every rejection class (format/size/decode, and anything else the
+        // engine raises) is the same visible refusal (M-6: never silent) — but
+        // only while this decode still belongs to the shown draft.
+        if (!open || draft !== target || target.image !== imageAtStart) return;
+        showAttachError();
+      })
+      .finally(() => {
+        setAttaching(false);
+      });
+  });
+
+  const clearTitleError = (): void => {
+    titleError.textContent = '';
+    titleError.setAttribute('data-shown', 'false');
+    titleInput.removeAttribute('aria-invalid');
+    titleInput.removeAttribute('aria-describedby');
+  };
+
+  const showTitleError = (): void => {
+    titleError.textContent = t('composer.title.error');
+    titleError.setAttribute('data-shown', 'true');
+    titleInput.setAttribute('aria-invalid', 'true');
+    titleInput.setAttribute('aria-describedby', TITLE_ERROR_ID);
+  };
+
+  const updateCounter = (): void => {
+    if (draft === null) return;
+    const used = codePoints(draft.note);
+    if (used >= NOTE_COUNTER_VISIBLE_FROM) {
+      noteCounter.textContent = t('composer.note.counter', { used, max: MAX_NOTE_CHARS });
+      noteCounter.setAttribute('data-shown', 'true');
+    } else {
+      noteCounter.textContent = '';
+      noteCounter.setAttribute('data-shown', 'false');
+    }
+  };
+
+  const selectType = (type: Draft['type']): void => {
+    if (draft === null) return;
+    draft.type = type;
+    bugSegment.setAttribute('aria-pressed', String(type === 'bug'));
+    feedbackSegment.setAttribute('aria-pressed', String(type === 'feedback'));
+    heading.textContent = t(type === 'bug' ? 'composer.heading.bug' : 'composer.heading.feedback');
+  };
+
+  // Field edits write straight through to the draft: the composer owns the
+  // final values (P3-D-02/03), the router reads the draft on Review/Send.
+  titleInput.addEventListener('input', () => {
+    if (draft === null) return;
+    draft.title = titleInput.value;
+    if (titleInput.value.trim().length > 0) clearTitleError();
+  });
+  noteInput.addEventListener('input', () => {
+    if (draft === null) return;
+    // Clamp on input at the contract cap, never splitting a surrogate pair
+    // (Pitfall 13; `maxlength` counts UTF-16 units so it is not the clamp).
+    const clamped = clampCodePoints(noteInput.value, MAX_NOTE_CHARS);
+    if (clamped !== noteInput.value) noteInput.value = clamped;
+    draft.note = noteInput.value;
+    updateCounter();
+  });
+  bugSegment.addEventListener('click', () => selectType('bug'));
+  feedbackSegment.addEventListener('click', () => selectType('feedback'));
+  enButton.addEventListener('click', () => handlers.onLocaleChange?.('en'));
+  esButton.addEventListener('click', () => handlers.onLocaleChange?.('es'));
+  annotateButton.addEventListener('click', runAnnotate);
+  // `Attach image` (footer + degraded notice) and `Replace image` all open
+  // the same hidden picker (CAP-02); the composer owns the file lane.
+  const openAttachPicker = (): void => {
+    if (draft === null) return;
+    handlers.onAttach?.(draft);
+    openPicker();
+  };
+  attachButton.addEventListener('click', openAttachPicker);
+  noticeAttachButton.addEventListener('click', openAttachPicker);
+  replaceButton.addEventListener('click', () => {
+    if (draft !== null) handlers.onReplace?.(draft);
+    openPicker();
+  });
+  continueButton.addEventListener('click', () => {
+    if (draft === null || attaching) return;
+    // P3-D-13: text-only is the user's EXPLICIT choice — the state
+    // derivation (no image, no failure note) then renders
+    // `data-wb-state="text-only"`: zone hidden, footer attach kept.
+    draft.captureNote = null;
+    handlers.onContinueTextOnly?.(draft);
+    render(draft);
+  });
+  reviewButton.addEventListener('click', () => {
+    if (draft === null) return;
+    // In the degraded state the user must first choose an action — review (and
+    // therefore any send) is inert until a picture or text-only is picked
+    // (P3-D-13: never a silent post from the diagnosis state).
+    if (draft.image === null && draft.captureNote !== null) return;
+    // Review/send is blocked ONLY when the field is emptied (P3-D-02): reveal
+    // the inline error, keep focus in the field, do not navigate.
+    const trimmed = titleInput.value.trim();
+    if (trimmed.length === 0) {
+      draft.title = titleInput.value;
+      showTitleError();
+      titleInput.focus();
+      return;
+    }
+    draft.title = clampCodePoints(trimmed, MAX_TITLE_CHARS);
+    // The same code-point clamp the `input` handler applies: a value written
+    // programmatically can bypass `maxlength`, and an unclamped note would go
+    // straight to the wire (P3-D-02).
+    draft.note = clampCodePoints(noteInput.value, MAX_NOTE_CHARS);
+    handlers.onReview(draft);
+  });
+  discardButton.addEventListener('click', () => {
+    if (draft !== null) handlers.onDiscard(draft);
+  });
+
+  /**
+   * F6 (research): the notice heading is always `composer.image.none`; the
+   * hint is chosen from the existing `status.*` diagnostics so the failure's
+   * diagnosis survives the move from panel to composer — no new copy keys.
+   */
+  const noticeHintText = (current: Draft): string => {
+    switch (current.captureNote) {
+      case 'blank':
+      case 'oversize':
+        return t('status.blankCapture.hint');
+      case 'denied':
+      case 'no-api':
+        return t('status.captureFailed.hint');
+      default:
+        return t('composer.image.none.hint');
+    }
+  };
+
+  /** Refresh every t()-derived label — the locale re-render path (task 3). */
+  const renderCopy = (current: Draft): void => {
+    heading.textContent = t(
+      current.type === 'bug' ? 'composer.heading.bug' : 'composer.heading.feedback',
+    );
+    bugSegment.textContent = t('composer.type.bug');
+    feedbackSegment.textContent = t('composer.type.feedback');
+    bugSegment.setAttribute('aria-pressed', String(current.type === 'bug'));
+    feedbackSegment.setAttribute('aria-pressed', String(current.type === 'feedback'));
+    typeLabel.textContent = t('composer.type.label');
+    titleLabel.textContent = t('composer.title.label');
+    noteLabel.textContent = t('composer.note.label');
+    noteInput.placeholder = t('composer.note.placeholder');
+    preview.setAttribute('aria-label', t('composer.image.label'));
+    // The loading state owns the button while a fetch is in flight (locale
+    // changes mid-fetch must not clobber the spinner + `editor.loading`).
+    if (!annotating) annotateButton.textContent = t('composer.annotate');
+    replaceButton.textContent = t('composer.replace');
+    attachButton.textContent = t('composer.attach');
+    noticeAttachButton.textContent = t('composer.attach');
+    continueButton.textContent = t('composer.continueTextOnly');
+    reviewButton.textContent = t('composer.review');
+    discardButton.setAttribute('aria-label', t('composer.discard'));
+    noticeHeading.textContent = t('composer.image.none');
+    noticeHint.textContent = noticeHintText(current);
+    attachError.textContent = t('composer.attach.error');
+    attachHint.textContent = t('composer.attach.error.hint');
+    editorError.textContent = t('editor.load.error');
+    editorHint.textContent = t('editor.load.error.hint');
+    localePair.setAttribute('aria-label', t('i18n.label'));
+    enButton.textContent = t('i18n.en');
+    esButton.textContent = t('i18n.es');
+    enButton.setAttribute('aria-label', t('i18n.label'));
+    esButton.setAttribute('aria-label', t('i18n.label'));
+    enButton.setAttribute('aria-pressed', String(locale() === 'en'));
+    esButton.setAttribute('aria-pressed', String(locale() === 'es'));
+  };
+
+  const render = (next: Draft | null): void => {
+    if (next === null) {
+      open = false;
+      draft = null;
+      composer.setAttribute('data-hidden', 'true');
+      setEscapeListening(false);
+      return;
+    }
+    const reopened = !open || draft !== next;
+    draft = next;
+    open = true;
+    composer.setAttribute('data-hidden', 'false');
+    composer.setAttribute(
+      'data-wb-state',
+      next.image !== null ? 'image' : next.captureNote !== null ? 'degraded' : 'text-only',
+    );
+    // A fresh draft is a fresh start: a refusal shown on the previous report
+    // never rides into the next one.
+    if (reopened) {
+      clearAttachError();
+      clearEditorError();
+    }
+
+    renderCopy(next);
+    // Inputs are state: set `.value` only when it differs (no focus loss).
+    if (titleInput.value !== next.title) titleInput.value = next.title;
+    if (noteInput.value !== next.note) noteInput.value = next.note;
+    clearTitleError();
+    updateCounter();
+
+    if (next.image !== null) {
+      imageZone.setAttribute('data-wb-zone', 'image');
+      drawPreview(next.image);
+    } else {
+      imageZone.setAttribute('data-wb-zone', 'none');
+    }
+
+    if (reopened) {
+      // Composer opens with focus on the title input (UI-SPEC a11y).
+      titleInput.focus();
+    }
+    setEscapeListening(true);
+  };
+
+  return {
+    element: composer,
+    render,
+    destroy(): void {
+      setEscapeListening(false);
+      composer.remove();
+    },
+  };
+}

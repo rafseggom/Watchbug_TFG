@@ -1,7 +1,10 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * The single verify suite's config (R-12: one Playwright suite, no unit tests).
+ * The single **functional** verify suite's config. R-12's "one Playwright
+ * suite" is amended by R-19: this config stays the CA-01..CA-05 functional
+ * gate, and visual regression lives in `playwright.vrt.config.ts`
+ * (`npm run test:vrt`) so a pixel diff can never red a functional run.
  *
  * Three browser projects, three real code paths:
  *   chromium — the WebP encode path

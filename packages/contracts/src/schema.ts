@@ -31,7 +31,7 @@ import {
  * so both ingest stages (`validateMeta`, then `sanitizeAndValidate`) may
  * re-parse the value without changing it.
  */
-function stripQueryFragment(value: string): string {
+export function stripQueryFragment(value: string): string {
   return value.split(/[?#]/)[0];
 }
 

@@ -51,19 +51,24 @@ export function ReportDetail({ incident, lang }: ReportDetailProps) {
         {t(lang, TYPE_KEY[incident.type])} · {t(lang, STATUS_KEY[incident.status])} · {formatCreatedAt(incident.createdAt)}
       </div>
 
-      <img
-        src={incidentImageUrl(incident.id)}
-        alt={`${t(lang, 'screenshotAlt')}: ${incident.title}`}
-        style={{
-          display: 'block',
-          margin: 'var(--space-4) 0',
-          maxWidth: '100%',
-          maxHeight: 480,
-          border: '1px solid var(--color-border)',
-          borderRadius: 'var(--radius-md)',
-          background: 'var(--color-surface-alt)',
-        }}
-      />
+      {/* CAP-03 tolerance: a text-only report carries `contentType: null` and
+          has no blob behind the route — render no screenshot element at all
+          (never a broken image). Tolerance only; no new panel feature. */}
+      {incident.contentType !== null && (
+        <img
+          src={incidentImageUrl(incident.id)}
+          alt={`${t(lang, 'screenshotAlt')}: ${incident.title}`}
+          style={{
+            display: 'block',
+            margin: 'var(--space-4) 0',
+            maxWidth: '100%',
+            maxHeight: 480,
+            border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius-md)',
+            background: 'var(--color-surface-alt)',
+          }}
+        />
+      )}
 
       <dl style={{ margin: 0 }}>
         <MetaRow label={t(lang, 'labelNote')} value={incident.note} />

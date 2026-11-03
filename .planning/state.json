@@ -11,12 +11,12 @@
     {
       "number": "2",
       "name": "SDK Tracer Bullet: Widget, Capture & Auto-Redaction",
-      "status": "in_progress"
+      "status": "complete"
     },
     {
       "number": "3",
       "name": "Report Composer & Annotation Editor (lazy)",
-      "status": "pending"
+      "status": "complete"
     },
     {
       "number": "4",
@@ -40,9 +40,9 @@
     }
   ],
   "next": {
-    "command": "/gsd:progress --next",
-    "label": "Advance to the next step",
-    "reason": "Phase 02 of 7 · 14% · executing"
+    "command": "/gsd-progress --next",
+    "label": "Advance to the next step (plan phase 4)",
+    "reason": "Phase 4 of 7 — needs a plan"
   },
-  "updated_at": "2026-10-24T14:43:04.207Z"
+  "updated_at": "2026-11-03T18:52:59.780Z"
 }

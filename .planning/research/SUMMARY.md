@@ -1,3 +1,10 @@
+
+> **Superseded by R-19 (2026-10-29):** this document predates the six-type test taxonomy.
+> Every "no unit tests / never unit tests / DONT MAKE A BUNCH OF TESTS / no other test
+> artefact" statement in it is a **historical record of R-12 as it stood then** — not current
+> policy. Current policy lives in `AGENTS.md` → *Testing & QA* and `.planning/REQUIREMENTS.md`
+> (R-19 amends R-12; artifact-level security evidence and the no-coverage-vanity rule survive).
+
 # Project Research Summary
 
 *Synthesised 2026-10-05 from STACK.md, FEATURES.md, ARCHITECTURE.md, PITFALLS.md (all committed together). Primary consumer: `gsd-roadmapper`. Confidence markers are carried through from upstream and never upgraded: **HIGH** = first-party registry/spec/official-doc evidence; **MEDIUM** = cross-checked web sources; **LOW** = single source or first-principles reasoning; **UNVERIFIED** = explicitly not confirmed upstream.*

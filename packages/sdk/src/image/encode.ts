@@ -22,7 +22,11 @@ import {
   MAX_ENCODED_IMAGE_BYTES,
   MAX_IMAGE_DIM,
   MAX_IMAGE_PIXELS,
+  MASK_ALPHA_OPAQUE,
 } from '@watchbug/contracts/constants';
+import { putPatch, MASK_RGB, type MaskPatch } from '../redact/masks.ts';
+import { fillBitmapRects } from '../redact/redactor.ts';
+import type { BitmapRect } from '../redact/geometry.ts';
 
 /** The agreed soft target; the 2 MB contract cap is the hard stop (CAP-05). */
 export const TARGET_ENCODED_IMAGE_BYTES = 800 * 1024;
@@ -102,14 +106,15 @@ async function preferredMimeType(): Promise<string> {
   return webpSupported ? WEBP_MIME : PNG_MIME;
 }
 
-function createCanvas(width: number, height: number): HTMLCanvasElement {
+/** Exported for `capture/manual-file.ts` (CAP-02): the same canvas helpers the ladder uses. */
+export function createCanvas(width: number, height: number): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   canvas.width = Math.max(1, Math.round(width));
   canvas.height = Math.max(1, Math.round(height));
   return canvas;
 }
 
-function context2d(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
+export function context2d(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
   const context = canvas.getContext('2d', { willReadFrequently: true });
   if (context === null) throw new Error('a 2D canvas is unavailable');
   return context;
@@ -125,16 +130,21 @@ function scaledCopy(source: HTMLCanvasElement, width: number, height: number): H
   return canvas;
 }
 
-/** Apply the devicePixelRatio clamp, MAX_IMAGE_DIM and the 16 MP ceiling. */
-function initialDimensions(width: number, height: number): { width: number; height: number } {
+/**
+ * Fit a bitmap inside the contract caps: `MAX_IMAGE_DIM` per side and the
+ * 16 MP `MAX_IMAGE_PIXELS` ceiling, with `MIN_EDGE_PX` as a **scale-preserving**
+ * floor. **No devicePixelRatio clamp** — that one belongs to a *captured*
+ * frame's display geometry; a picked file's pixel grid has nothing to do with
+ * the display (CAP-02, research Pattern 6). `encodeLadder` and
+ * `ManualFileCapture` share this one fitting rule.
+ *
+ * The floor never acts per axis: a 20×400 banner or a 10×10 icon stays
+ * proportional (the aspect ratio is the user's picture, and a one-axis floor
+ * would hand `ManualFileCapture` a ~60 % horizontally distorted upscale — WR-02).
+ */
+export function fitToCaps(width: number, height: number): { width: number; height: number } {
   let nextWidth = width;
   let nextHeight = height;
-
-  const ratio = typeof devicePixelRatio === 'number' ? devicePixelRatio : 1;
-  if (ratio > 2) {
-    nextWidth = Math.round((width * 2) / ratio);
-    nextHeight = Math.round((height * 2) / ratio);
-  }
 
   // No side may exceed MAX_IMAGE_DIM (8192) — beyond that the canvas (and
   // other engines' decoders) start failing silently instead of encoding.
@@ -152,10 +162,37 @@ function initialDimensions(width: number, height: number): { width: number; heig
     nextHeight = Math.round(nextHeight * factor);
   }
 
-  return {
-    width: Math.max(MIN_EDGE_PX, nextWidth),
-    height: Math.max(MIN_EDGE_PX, nextHeight),
-  };
+  // The floor is a second, scale-preserving pass: grow BOTH axes by the one
+  // factor that lifts the shorter side to `MIN_EDGE_PX` (or leave the picture
+  // alone when it already clears the floor). Rounding lands the driving axis on
+  // the floor exactly, since its factor is `MIN_EDGE_PX / thatSide`.
+  if (
+    nextWidth >= 1 &&
+    nextHeight >= 1 &&
+    (nextWidth < MIN_EDGE_PX || nextHeight < MIN_EDGE_PX)
+  ) {
+    const grow = Math.max(MIN_EDGE_PX / nextWidth, MIN_EDGE_PX / nextHeight);
+    if (grow > 1) {
+      nextWidth = Math.round(nextWidth * grow);
+      nextHeight = Math.round(nextHeight * grow);
+    }
+  }
+
+  return { width: Math.max(1, nextWidth), height: Math.max(1, nextHeight) };
+}
+
+/** Apply the devicePixelRatio clamp, then the shared cap fit (encode ladder entry). */
+function initialDimensions(width: number, height: number): { width: number; height: number } {
+  let nextWidth = width;
+  let nextHeight = height;
+
+  const ratio = typeof devicePixelRatio === 'number' ? devicePixelRatio : 1;
+  if (ratio > 2) {
+    nextWidth = Math.round((width * 2) / ratio);
+    nextHeight = Math.round((height * 2) / ratio);
+  }
+
+  return fitToCaps(nextWidth, nextHeight);
 }
 
 /**
@@ -197,4 +234,32 @@ export async function encodeLadder(image: ImageData): Promise<EncodedImage> {
   }
   // Between the soft target and the hard ceiling: still sendable.
   return last;
+}
+
+/**
+ * The single compose-time encode entry (C-2 / PRV-07 / T-03-17): it runs at
+ * Review entry, and the artifact it returns is the one `Send report` transmits
+ * — "what you see is what is sent" made structural.
+ *
+ * The order is the invariant ROADMAP § Phase 3 T3 locks: replay every baked
+ * mask patch FIRST (completing the masking operations), then re-apply T1 as
+ * the last pixel write before the encode, then hand off to `encodeLadder` —
+ * the SDK's only sink. Nothing can sit ink- or draft-side above an
+ * auto-redacted region, and both passes are flat opaque fills, so re-running
+ * T1 over the already-redacted draft is idempotent.
+ *
+ * A `putPatch` / `fillBitmapRects` throw (S-3 fail-closed) propagates to the
+ * caller, which renders the loud no-send state; nothing is ever encoded from a
+ * partially replayed draft.
+ */
+export async function encodeFinal(
+  image: ImageData,
+  t1: readonly BitmapRect[],
+  masks: readonly MaskPatch[],
+): Promise<EncodedImage> {
+  for (const patch of masks) {
+    putPatch(image, patch);
+  }
+  fillBitmapRects(image, t1, MASK_RGB, MASK_ALPHA_OPAQUE);
+  return encodeLadder(image);
 }

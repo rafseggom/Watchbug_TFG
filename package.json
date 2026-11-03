@@ -17,8 +17,17 @@
     "check:compose": "node scripts/check-compose.mjs",
     "gate": "node scripts/gate.mjs",
     "verify": "playwright test",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:contract": "vitest run tests/contract",
+    "test:contract:hermetic": "vitest run tests/contract/report-schema-agreement.test.ts",
+    "test:vrt": "playwright test -c playwright.vrt.config.ts",
+    "test:packaging": "node scripts/check-size.mjs && node scripts/check-compose.mjs && vitest run tests/packaging",
+    "test:all": "npm run test:unit && npm run test:integration && npm run test:contract && npm run test:vrt && npm run test:packaging",
+    "test": "npm run test:unit && npm run test:integration",
     "lint": "npm run typecheck --workspaces --if-present",
     "dev": "tsx watch apps/api/src/index.ts",
+    "uat": "node scripts/manual-uat.mjs",
     "key:gen": "node scripts/gen-key.mjs"
   },
   "devDependencies": {
@@ -29,6 +38,7 @@
     "@types/react-dom": "19.3.0",
     "@types/sanitize-html": "2.16.2",
     "tsx": "4.23.15",
-    "typescript": "7.0.2"
+    "typescript": "7.0.2",
+    "vitest": "5.0.5"
   }
 }

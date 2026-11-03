@@ -12,7 +12,7 @@
  * Geometry and a11y are the UI-SPEC contract: a real 48×48 `<button>` with a
  * 24×24 inline-SVG bug glyph, `aria-label` from the locked string map, and the
  * 2 px / 2 px-offset focus ring. The glyph is built with `createElementNS` —
- * never `innerHTML` (T-02-01: no HTML sink in the SDK).
+ * never an HTML-parse sink (T-02-01: textContent/createElement only).
  */
 
 import { t } from '../strings.ts';
@@ -64,6 +64,8 @@ export interface Launcher {
   readonly element: HTMLButtonElement;
   /** Disabled/dimmed while a status panel is open (UI-SPEC re-entrancy). */
   setDisabled(disabled: boolean): void;
+  /** Re-apply the `t()`-derived accessible label (a locale change re-renders). */
+  render(): void;
   destroy(): void;
 }
 
@@ -115,7 +117,15 @@ export function createLauncher(options: LauncherOptions): Launcher {
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'launcher';
-  button.setAttribute('aria-label', t('launcher.label'));
+  /**
+   * The label is `t()`-derived and re-applied on every render and disable,
+   * so a locale change after mount updates it (WDG-06). The glyph-only button
+   * carries no visible text — the accessible name IS the label.
+   */
+  const refreshLabel = (): void => {
+    button.setAttribute('aria-label', t('launcher.label'));
+  };
+  refreshLabel();
   button.appendChild(createBugGlyph());
 
   const onClick = (): void => {
@@ -133,6 +143,10 @@ export function createLauncher(options: LauncherOptions): Launcher {
     element: button,
     setDisabled(disabled: boolean): void {
       button.disabled = disabled;
+      refreshLabel();
+    },
+    render(): void {
+      refreshLabel();
     },
     destroy(): void {
       button.removeEventListener('click', onClick);

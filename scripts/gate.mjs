@@ -2,10 +2,11 @@
 /**
  * scripts/gate.mjs — static architecture assertions. Zero dependencies.
  *
- * R-12 abolishes unit tests and coverage thresholds. RSK-19 states the
- * compensation explicitly: *"aserciones a nivel de artefacto + puertas grep
- * estáticas + check:size"*. This file is the **static grep gates** half of
- * that contract — it is part of the verification architecture, not optional
+ * **Superseded by R-19 (AGENTS.md Testing & QA):** the six-type taxonomy is
+ * the current verification policy. What R-12 still contributes is stated by
+ * RSK-19: artifact-level assertions + static grep gates + `check:size` are the
+ * security evidence, and this file is the **static grep gates** half of that
+ * contract — it is part of the verification architecture, not optional
  * linting. A gate nobody executes is a comment.
  *
  * Boundary (R-18 reuse-first — do not re-implement what already exists):
@@ -17,10 +18,10 @@
  *   node scripts/gate.mjs                    # run every rule
  *   node scripts/gate.mjs sdk-runtime-deps   # run one rule
  *
- * Exit code 1 if any rule FAILs. A rule whose subject does not exist yet
- * reports SKIP — visible in the summary, never silently. Flip `STRICT` to
- * true at Phase 7 release closeout so a SKIP becomes a FAIL and no rule can
- * quietly never run again.
+ * Exit code 1 if any rule FAILs. A rule whose subject does not exist reports
+ * SKIP — visible in the summary, never silently. `STRICT` is on: a SKIP is a
+ * FAIL, so no rule can quietly never run again. A gate that passes because its
+ * subject disappeared is not a gate.
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, extname, join, relative, resolve } from 'node:path';
@@ -29,8 +30,8 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const rel = (p) => relative(repoRoot, p).replaceAll('\\', '/');
 
-/** @type {boolean} Phase 7 closeout: turn SKIP into FAIL. */
-const STRICT = false;
+/** @type {boolean} A SKIP is a FAIL: absence of the subject is not evidence. */
+const STRICT = true;
 
 /**
  * The only runtime dependencies `packages/sdk` may declare. Everything else is
@@ -149,9 +150,120 @@ const RULES = [
         ]);
       }
       if (sinks === 0) {
-        return skip(['no encode sink yet — `encodeFinal()` lands with the Annotator (Phase 3)']);
+        return fail([
+          'no encode sink found — encodeFinal() has disappeared from the lane; the single-sink invariant is unverified, not satisfied',
+        ]);
       }
       return pass(hits);
+    },
+  },
+
+  {
+    id: 'sdk-no-html-sink',
+    title: 'packages/sdk never parses HTML into the DOM',
+    ref: 'T-02-01 · SEC-05 · UI-SPEC (createElement/textContent only — the composer/editor keep it)',
+    run() {
+      const files = walk(join(repoRoot, 'packages', 'sdk', 'src'));
+      if (files.length === 0) return skip(['packages/sdk/src has no source files yet']);
+
+      // Token census, comments included — the same discipline
+      // `sdk-no-host-storage` and `sdk-single-encode-sink` run: prose that
+      // spells a counted token fails the gate, so the codebase keeps its
+      // comments phrased around it (02-04 Pitfall 1 precedent).
+      const FORBIDDEN = [
+        ['innerHTML', /\binnerHTML\b/],
+        ['outerHTML', /\bouterHTML\b/],
+        ['insertAdjacentHTML', /\binsertAdjacentHTML\b/],
+        ['document.write', /\bdocument\.write(?:ln)?\b/],
+      ];
+      const hits = [];
+      for (const file of files) {
+        readLines(file).forEach((line, i) => {
+          const at = `${rel(file)}:${i + 1}  ${line.trim()}`;
+          for (const [label, re] of FORBIDDEN) {
+            if (re.test(line)) hits.push(`[${label}] ${at}`);
+          }
+        });
+      }
+      if (hits.length > 0) {
+        return fail([
+          'the widget renders through createElement / textContent / createElementNS only — an HTML sink re-opens the stored-XSS surface inside the shadow root (SEC-05)',
+          ...hits,
+        ]);
+      }
+      return pass([`${files.length} SDK source file(s) clean of HTML-parse sinks`]);
+    },
+  },
+
+  {
+    id: 'sdk-lazy-lane-purity',
+    title: 'the core bundle never value-imports the lazy editor lane',
+    ref: 'PRF-02 · RNF-01 · the 45 KB tier (an editor absorbed into core is a regression, not a pass)',
+    run() {
+      const files = walk(join(repoRoot, 'packages', 'sdk', 'src'));
+      if (files.length === 0) return skip(['packages/sdk/src has no source files yet']);
+
+      /** True for a relative specifier that resolves INTO the lazy lane. */
+      const isLazySpec = (spec) => {
+        const path = spec.replace(/^\.\//, '').replace(/^(\.\.\/)+/, '');
+        return (
+          /(?:^|\/)(?:annotator|strings\.editor)\.ts$/.test(path) || /(?:^|\/)annotator\//.test(path)
+        );
+      };
+
+      const offenders = [];
+      const typeOnly = [];
+      for (const file of files) {
+        const relPath = rel(file).replace(/^packages\/sdk\/src\//, '');
+        // The lane itself may import freely; everything else is core.
+        if (relPath === 'annotator.ts' || relPath === 'strings.editor.ts' || relPath.startsWith('annotator/')) {
+          continue;
+        }
+        let statementType = null; // 'type' | 'value' while inside a multi-line import
+        readLines(file).forEach((line, i) => {
+          const at = `${relPath}:${i + 1}  ${line.trim()}`;
+          const start = /^[ \t]*(?:import|export)\b/.test(line);
+          if (start) {
+            statementType = /^[ \t]*(?:import|export)\s+type\b/.test(line) ? 'type' : 'value';
+            // A side-effect import of the lane (`import './annotator/…'`) is a
+            // value import: it ships editor bytes into core.
+            const side = /^[ \t]*import\s+['"]([^'"]+)['"]/.exec(line);
+            if (side && isLazySpec(side[1])) {
+              offenders.push(`side-effect import of the lazy lane →  ${at}`);
+              statementType = null;
+            }
+          }
+          // A LITERAL dynamic import is analyzable — esbuild would inline the
+          // chunk into core (Pitfall 1). The loader's variable specifier is the
+          // only legal shape, and it names no path here. All three literal
+          // quote styles count: a backtick template with no substitution is
+          // constant-folded by esbuild exactly like a string literal, so a
+          // dynamic import written in backticks inlines the lane just the same
+          // (LW-04).
+          const dyn = /\bimport\s*\(\s*(['"`])((?:(?!\1)[^\\]|\\.)*)\1/.exec(line);
+          if (dyn && isLazySpec(dyn[2])) {
+            offenders.push(`literal dynamic import inlines the lane →  ${at}`);
+          }
+          const from = /\bfrom\s+['"]([^'"]+)['"]/.exec(line);
+          if (from && statementType !== null) {
+            if (isLazySpec(from[1])) {
+              if (statementType === 'type') typeOnly.push(at);
+              else offenders.push(`value import of the lazy lane →  ${at}`);
+            }
+            statementType = null;
+          }
+        });
+      }
+      if (offenders.length > 0) {
+        return fail([
+          'the lazy lane must reach core only through the variable-specifier import in widget/loader.ts',
+          ...offenders,
+        ]);
+      }
+      return pass([
+        `${files.length} SDK source file(s) scanned; the only lazy-lane boundary crossings are type-only (erased at build):`,
+        ...(typeOnly.length > 0 ? typeOnly.map((at) => `type-only →  ${at}`) : ['none']),
+      ]);
     },
   },
 ];

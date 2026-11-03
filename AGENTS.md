@@ -187,22 +187,34 @@ npm run dev                     # tsx watch apps/api
 | `scripts/check-size.mjs` | R-01 size gate (`node:zlib`) |
 | `.planning/REQUIREMENTS.md` | 70 v1 requirements with REQ-IDs |
 | `.planning/ROADMAP.md` | 7 phases with requirement traceability |
-| `documentation/resolution-record.md` | Decision register R-01..R-17 plus amendments A-01..A-13 |
+| `documentation/resolution-record.md` | Decision register R-01..R-17 plus amendments A-01..A-13, **R-19** |
 | `documentation/continuity-pack.md` | Session state, open questions, dead-ends |
 
 ---
 
-## Testing & QA (R-12)
+## Testing & QA (R-19 amends R-12)
 
-> **Owner policy, stated twice: "DONT MAKE A BUNCH OF TESTS. Only make e2e as necessary, not unit tests."**
-> There is **no unit-test suite**, no per-function tests, no formatter tests, and **no coverage thresholds**. Do not create them.
+> **R-19 replaces the R-12 "never unit tests" absolute with a six-type taxonomy.**  
+> R-12's artifact-level security rule (CA-02/PRV decoded-bytes assertions stay e2e) and no-coverage-vanity stance are **kept**. The e2e suite is now **structurally capped at ≤20 core user journeys (J-01..J-20)**.
 
-| What | Command | Covers |
-|------|---------|--------|
-| **Size gate** | `npm run check:size` | RNF-01 / CA-03 - the 45 / 25 / 80 KB tiers |
-| **One e2e suite** | `npm run verify` | CA-01..CA-05, about 20 assertions, on chromium + firefox + **webkit** |
+| # | Type | Lives in | Runner | What it may assert | Command |
+|---|------|----------|--------|--------------------|---------|
+| 1 | **Unit** | `tests/unit/` | Vitest | Pure logic in isolation: redaction regexes, size/pixel clamps, i18n resolver, schema mappers, path-only URL strip | `npm run test:unit` |
+| 2 | **Integration / Functional** | `tests/integration/` | Vitest (+ Fastify inject / test DB) | API routes end-to-end without a browser: ingest validation, rate limit, idempotency, sanitisation, auth 401 | `npm run test:integration` |
+| 3 | **E2E** | `e2e/` | Playwright, 3 engines | **≤20 core user journeys** — a real browser is genuinely required (CA-01, CA-02, CA-04) | `npm run verify` |
+| 4 | **VRT (visual regression)** | `tests/vrt/` | Playwright `toHaveScreenshot` | Appearance of flagship UI surfaces — hostile-CSS widget, composer, editor, panel | `npm run test:vrt` |
+| 5 | **Contract** | `tests/contract/` | Vitest + `schema/report.schema.json` | Payloads validate against the single official schema; no drift between Zod and the emitted JSON Schema | `npm run test:contract` |
+| 6 | **Environment / Packaging** | `tests/packaging/` | Node | Build artifacts, size tiers, compose file shape — the gates that already exist, run as tests | `npm run test:packaging` |
 
-webkit is not optional: it exercises the silent WebP-to-PNG fallback. Firefox exercises the no-`ImageCapture` path.
+**Placement rule ("tests con cabeza"):** A test belongs in the cheapest layer that can still fail for the right reason. Only promote to e2e when the behaviour *requires* a real browser (shadow DOM, canvas pixels, capture API, hostile CSS) or is a cross-cutting core journey. `check:size`/`check:compose` remain hard gates regardless of how they're invoked.
+
+**Structural cap:** The e2e suite is capped at ≤20 journeys (J-01..J-20) via `test.describe` blocks. J-15..J-20 are reserved for Phases 4–7.
+
+**Convenience scripts:**
+- `npm run test` — runs unit + integration
+- `npm run test:all` — runs all six types
+
+**webkit is not optional:** it exercises engine-divergent rendering and the `CaptureSource`-seam capture tier. Firefox exercises the no-`ImageCapture` path.
 
 Security properties are asserted at the **artifact level**. CA-02, for example, intercepts the outgoing request, decodes the attached image, and asserts the masked region's original pixel values are absent from the encoded bytes. That is stronger evidence than any unit test, and it is the required form.
 
@@ -235,7 +247,7 @@ Every prioritisation trade-off resolves against this sentence. Capture fidelity 
 - **Panel auth** (SEC-06, R-05): Argon2id (bcrypt acceptable fallback), JWT with a defined TTL in `HttpOnly` / `SameSite=Lax` / `Secure` cookies. Single admin provisioned from `.env`.
 - **Deployment** (INV-03): one `docker-compose.yml`, exactly three services — `api`, static `panel`, persistent `db`. Provider-agnostic. Attachments on a filesystem volume, served **only** through the authenticated API (R-04).
 - **Personal data** (R-09, R-10): `user: {id, name?, email?}` is host-supplied and sent by default with `privacy: { userIdentity: false }` as opt-out. Identity fields auto-purge after N days (default 30, configurable); reports persist anonymised. RGPD Art. 13 notice belongs in integration docs.
-- **Verification** (R-12): **e2e and property assertions only** — one Playwright suite mapping 1:1 to CA-01…CA-05, plus the `check:size` build gate. No unit-test suites, no coverage thresholds.
+- **Verification** (R-19, which amends R-12): six verification types — unit, integration, contract, VRT, packaging and e2e — with e2e capped at ≤20 core user journeys (CA-01…CA-05 on three engines) and `check:size` on every PR. R-12's artifact-level security assertions and no-coverage-vanity stance are kept.
 - **Scope discipline** (R-17): no calendar-driven descoping. Scope is cut by coherence only. All Mentorship Pack quality gates remain hard.
 - **License** (R-07): Apache-2.0. ⚠ Pending confirmation of the degree-awarding institution's IP policy (Q-05) before the repository is made public.
 

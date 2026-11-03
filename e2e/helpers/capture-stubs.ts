@@ -206,8 +206,9 @@ export interface CaptureStubOptions {
    *  - `prompt-rejected` — `getDisplayMedia` rejects with `NotAllowedError`
    *  - `non-tab-surface` — a track reporting `displaySurface: 'window'`
    *  - `beyond-cap` — an ImageData over MAX_IMAGE_PIXELS (seam: canvas-free)
+   *  - `no-display-media` — the navigator carries no `mediaDevices` at all
    */
-  failure?: 'prompt-rejected' | 'non-tab-surface' | 'beyond-cap';
+  failure?: 'prompt-rejected' | 'non-tab-surface' | 'beyond-cap' | 'no-display-media';
 }
 
 /** 4700×3600 = 16,920,000 px — above MAX_IMAGE_PIXELS (16,777,216). */
@@ -229,6 +230,25 @@ function promptRejectedStub(): string {
       return Promise.reject(new DOMException('Permission denied', 'NotAllowedError'));
     }
   });
+})();`;
+}
+
+/**
+ * A navigator with NO `mediaDevices` at all — the CAP-03 no-API shape (iOS
+ * Safari, older engines). The production adapter's first guard clause throws
+ * on it and `runCaptureStage` classifies the failure as `no-api`, which is
+ * exactly the distinction the degraded composer's hint mapping proves.
+ */
+function noDisplayMediaStub(): string {
+  return String.raw`(() => {
+  Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: undefined });
+  // The init script runs at document creation — documentElement may not
+  // exist yet, so the non-vacuity marker is written as soon as it does.
+  var mark = function () {
+    document.documentElement.setAttribute('data-wb-stub-invoked', 'no-display-media');
+  };
+  if (document.documentElement !== null) mark();
+  else document.addEventListener('DOMContentLoaded', mark, { once: true });
 })();`;
 }
 
@@ -440,6 +460,10 @@ export async function installCaptureStub(
     await page.addInitScript({ content: nonTabSurfaceStub() });
     return;
   }
+  if (options.failure === 'no-display-media') {
+    await page.addInitScript({ content: noDisplayMediaStub() });
+    return;
+  }
 
   const beyondCap = options.failure === 'beyond-cap';
   const config: FrameStubConfig = {
@@ -508,8 +532,14 @@ export async function waitForWidget(page: Page): Promise<void> {
  * and the row would fail rather than pass vacuously.
  */
 export async function clickLauncher(page: Page): Promise<void> {
-  const viewport = page.viewportSize() ?? { width: 1280, height: 720 };
-  await page.mouse.click(viewport.width - 48, viewport.height - 48);
+  const centre = await page.evaluate(() => {
+    const host = document.querySelector('watchbug-host');
+    const launcher = host?.shadowRoot?.querySelector('button.launcher') as HTMLButtonElement | null;
+    const rect = launcher?.getBoundingClientRect() ?? null;
+    return rect === null ? null : { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+  });
+  if (centre === null) throw new Error('clickLauncher: the launcher is not mounted');
+  await page.mouse.click(centre.x, centre.y);
 }
 
 /** Everything the panel rows need, read from the open-mode shadow root. */
@@ -537,6 +567,72 @@ export interface WidgetProbe {
   hostDisplay: string;
   hostPosition: string;
   hostZIndex: string;
+  /** The router's screen: `idle | status | composer | editor | review`. */
+  screen: string | null;
+  /** `section.composer` exists and is not hidden. */
+  composerOpen: boolean;
+  /** `data-wb-state` = `image | text-only | degraded`. */
+  composerState: string | null;
+  /** The live title-field value (what the user currently sees). */
+  composerTitle: string;
+  /** The pressed segment's `data-wb-type`. */
+  composerType: string | null;
+  /** The visible title-validation copy ('' while hidden). */
+  composerError: string;
+  /** `section.review` exists and is not hidden. */
+  reviewOpen: boolean;
+  /** The summary title row's value (the draft title exactly as reviewed). */
+  reviewTitle: string;
+  /** The summary type row's value — a localized string, never the wire id. */
+  reviewType: string;
+  /** The decoded outgoing artifact's dimensions, on the review canvas. */
+  reviewImageWidth: number;
+  reviewImageHeight: number;
+  /** `.wrap[lang]` — the declared locale; must agree with the dictionary. */
+  wrapLang: string | null;
+  /** The composer overlay's rendered width in CSS pixels. */
+  composerWidth: number;
+  /** The composer heading's rendered copy (EN/ES assertions). */
+  composerHeading: string;
+  /** The in-field aria-invalid flag on the title input. */
+  composerTitleAriaInvalid: string | null;
+  /** Whether focus currently sits on the title input (blocked-review row). */
+  titleFocused: boolean;
+  /** The `{used} / {max}` readout ('' while hidden below 4,000 code points). */
+  composerCounter: string;
+  composerCounterShown: boolean;
+  /** `canvas.composer-preview` backing-store size — 0 before any frame. */
+  composerPreviewWidth: number;
+  composerPreviewHeight: number;
+  /** The degraded notice's heading/hint copy ('' when the zone has an image). */
+  composerNoticeHeading: string;
+  composerNoticeHint: string;
+  /** Whether a VISIBLE `Attach image` action exists (footer or notice). */
+  composerAttachVisible: boolean;
+  /** Whether the `Continue with text only` action is visible. */
+  composerContinueVisible: boolean;
+  /** Whether the image zone itself is rendered (hidden in text-only state). */
+  composerZoneVisible: boolean;
+  /** The visible attach-refusal copy ('' while hidden). */
+  composerAttachError: string;
+  composerAttachErrorHint: string;
+  /** The review summary's image row — 'No image' on a text-only report. */
+  reviewNoImage: string;
+  /** `section.editor` exists (fullscreen editor owns the screen, 03-05). */
+  editorOpen: boolean;
+  /** The pressed tool rail button's `data-wb-tool` (null while none). */
+  activeTool: string | null;
+  /** The editor top-bar title copy (locale-resolved, WDG-06 editor). */
+  editorTitle: string;
+  /** The annotate button is mid-fetch (spinner + `editor.loading`, disabled). */
+  editorLoading: boolean;
+  /** The annotate button's live `disabled` state (T-03-21: never dead). */
+  annotateDisabled: boolean;
+  /** The visible editor-load refusal copy ('' while hidden). */
+  editorError: string;
+  /** `canvas.editor-canvas` backing-store size — the draft bitmap. */
+  editorCanvasWidth: number;
+  editorCanvasHeight: number;
 }
 
 /** Read the panel/launcher state. `probe` deliberately has no side effects. */
@@ -557,6 +653,17 @@ export async function probeWidget(page: Page): Promise<WidgetProbe> {
     const launcherRect = launcher?.getBoundingClientRect() ?? null;
     const hostStyle = host?.getAttribute('style') ?? '';
     const computed = host === null || host === undefined ? null : getComputedStyle(host);
+
+    const wrap = root?.querySelector('.wrap') as HTMLElement | null;
+    const composerSection = root?.querySelector('section.composer') as HTMLElement | null;
+    const reviewSection = root?.querySelector('section.review') as HTMLElement | null;
+    const composerOpen =
+      composerSection !== null && composerSection.getAttribute('data-hidden') !== 'true';
+    const titleInput = root?.querySelector('.composer-title') as HTMLInputElement | null;
+    const errorShown = root?.querySelector(
+      'span.field-error[data-wb-error="title"][data-shown="true"]',
+    ) as HTMLElement | null;
+    const reviewCanvas = root?.querySelector('canvas.review-image') as HTMLCanvasElement | null;
 
     return {
       hostPresent: host !== null,
@@ -580,6 +687,81 @@ export async function probeWidget(page: Page): Promise<WidgetProbe> {
       hostDisplay: computed?.display ?? '',
       hostPosition: computed?.position ?? '',
       hostZIndex: computed?.zIndex ?? '',
+      screen: wrap?.getAttribute('data-wb-screen') ?? null,
+      composerOpen,
+      composerState: composerSection?.getAttribute('data-wb-state') ?? null,
+      composerTitle: titleInput?.value ?? '',
+      composerType:
+        root?.querySelector('button.segment[aria-pressed="true"]')?.getAttribute('data-wb-type') ??
+        null,
+      composerError: errorShown?.textContent ?? '',
+      reviewOpen:
+        reviewSection !== null && reviewSection.getAttribute('data-hidden') !== 'true',
+      reviewTitle:
+        root?.querySelector('[data-wb-summary="title"] .summary-value')?.textContent ?? '',
+      reviewType:
+        root?.querySelector('[data-wb-summary="type"] .summary-value')?.textContent ?? '',
+      reviewImageWidth: reviewCanvas?.width ?? 0,
+      reviewImageHeight: reviewCanvas?.height ?? 0,
+      wrapLang: wrap?.getAttribute('lang') ?? null,
+      composerWidth:
+        composerSection === null ? 0 : Math.round(composerSection.getBoundingClientRect().width),
+      composerHeading:
+        (root?.querySelector('.composer-heading') as HTMLElement | null)?.textContent ?? '',
+      composerTitleAriaInvalid: titleInput?.getAttribute('aria-invalid') ?? null,
+      titleFocused:
+        titleInput !== null && root !== null && root.activeElement === titleInput,
+      composerCounter:
+        (root?.querySelector('.composer-counter') as HTMLElement | null)?.textContent ?? '',
+      composerCounterShown:
+        root?.querySelector('.composer-counter[data-shown="true"]') !== null,
+      composerPreviewWidth:
+        (root?.querySelector('canvas.composer-preview') as HTMLCanvasElement | null)?.width ?? 0,
+      composerPreviewHeight:
+        (root?.querySelector('canvas.composer-preview') as HTMLCanvasElement | null)?.height ?? 0,
+      composerNoticeHeading:
+        (root?.querySelector('.zone-notice-heading') as HTMLElement | null)?.textContent ?? '',
+      composerNoticeHint:
+        (root?.querySelector('.zone-notice-hint') as HTMLElement | null)?.textContent ?? '',
+      composerAttachVisible:
+        [...(root?.querySelectorAll('button.composer-attach') ?? [])].some(
+          (button) => button.getBoundingClientRect().width > 0,
+        ),
+      composerContinueVisible:
+        (root?.querySelector('button.composer-continue-text')?.getBoundingClientRect().width ?? 0) >
+        0,
+      composerZoneVisible:
+        (root?.querySelector('.image-zone')?.getBoundingClientRect().width ?? 0) > 0,
+      composerAttachError:
+        (root?.querySelector(
+          'span.field-error[data-wb-error="attach"][data-shown="true"]',
+        ) as HTMLElement | null)?.textContent ?? '',
+      composerAttachErrorHint:
+        (root?.querySelector(
+          'span.field-error[data-wb-error="attach-hint"][data-shown="true"]',
+        ) as HTMLElement | null)?.textContent ?? '',
+      reviewNoImage:
+        (root?.querySelector('[data-wb-summary="image"] .summary-value') as HTMLElement | null)
+          ?.textContent ?? '',
+      editorOpen: root?.querySelector('section.editor') !== null,
+      activeTool:
+        root?.querySelector('button.tool[aria-pressed="true"]')?.getAttribute('data-wb-tool') ??
+        null,
+      editorTitle:
+        (root?.querySelector('section.editor .editor-title') as HTMLElement | null)?.textContent ??
+        '',
+      editorLoading: root?.querySelector('button.composer-annotate[data-wb-loading="true"]') !== null,
+      annotateDisabled:
+        (root?.querySelector('button.composer-annotate') as HTMLButtonElement | null)?.disabled ??
+        false,
+      editorError:
+        (root?.querySelector(
+          'span.field-error[data-wb-error="editor"][data-shown="true"]',
+        ) as HTMLElement | null)?.textContent ?? '',
+      editorCanvasWidth:
+        (root?.querySelector('canvas.editor-canvas') as HTMLCanvasElement | null)?.width ?? 0,
+      editorCanvasHeight:
+        (root?.querySelector('canvas.editor-canvas') as HTMLCanvasElement | null)?.height ?? 0,
     };
   });
 }
@@ -659,41 +841,41 @@ export interface HostProbe {
 
 /** Read the host element's geometry, inline contract and stacking result. */
 export async function probeHost(page: Page): Promise<HostProbe> {
-  const viewport = page.viewportSize() ?? { width: 1280, height: 720 };
-  return page.evaluate(
-    ({ x, y }) => {
-      const host = document.querySelector('watchbug-host');
-      const root = host?.shadowRoot ?? null;
-      const launcher = root?.querySelector('button.launcher') as HTMLButtonElement | null;
-      const rect = launcher?.getBoundingClientRect() ?? null;
-      const computed = host === null ? null : getComputedStyle(host);
-      const documentHit = document.elementFromPoint(x, y);
-      const rootHit = root?.elementFromPoint(x, y) ?? null;
-      return {
-        hostPresent: host !== null,
-        hostLastChild: host !== null && document.documentElement.lastElementChild === host,
-        shadowRootOpen: root !== null,
-        hostStyle: host?.getAttribute('style') ?? '',
-        display: computed?.display ?? '',
-        position: computed?.position ?? '',
-        zIndex: computed?.zIndex ?? '',
-        pointerEvents: computed?.pointerEvents ?? '',
-        launcherFound: launcher !== null,
-        launcherWidth: rect === null ? 0 : Math.round(rect.width),
-        launcherHeight: rect === null ? 0 : Math.round(rect.height),
-        rightInset: rect === null ? -1 : Math.round(window.innerWidth - rect.right),
-        bottomInset: rect === null ? -1 : Math.round(window.innerHeight - rect.bottom),
-        launcherDisabled: launcher?.disabled ?? false,
-        documentHitsHost: documentHit === host,
-        // The launcher's centre is covered by its own SVG glyph, so a strict
-        // identity check would fail on a correctly stacked widget. Containment
-        // is the real contract: the hit lands inside the launcher button and
-        // nowhere else in the shadow tree.
-        rootHitsLauncher: launcher !== null && rootHit !== null && launcher.contains(rootHit),
-        rootHitTag: rootHit?.tagName.toLowerCase() ?? '',
-        documentHitTag: documentHit?.tagName.toLowerCase() ?? '',
-      };
-    },
-    { x: viewport.width - 48, y: viewport.height - 48 },
-  );
+  return page.evaluate(() => {
+    const host = document.querySelector('watchbug-host');
+    const root = host?.shadowRoot ?? null;
+    const launcher = root?.querySelector('button.launcher') as HTMLButtonElement | null;
+    const rect = launcher?.getBoundingClientRect() ?? null;
+    const computed = host === null ? null : getComputedStyle(host);
+    // Hit-test the launcher's own centre — no magic viewport offset that could
+    // silently validate the same assumption the click makes.
+    const x = rect === null ? window.innerWidth - 48 : rect.left + rect.width / 2;
+    const y = rect === null ? window.innerHeight - 48 : rect.top + rect.height / 2;
+    const documentHit = document.elementFromPoint(x, y);
+    const rootHit = root?.elementFromPoint(x, y) ?? null;
+    return {
+      hostPresent: host !== null,
+      hostLastChild: host !== null && document.documentElement.lastElementChild === host,
+      shadowRootOpen: root !== null,
+      hostStyle: host?.getAttribute('style') ?? '',
+      display: computed?.display ?? '',
+      position: computed?.position ?? '',
+      zIndex: computed?.zIndex ?? '',
+      pointerEvents: computed?.pointerEvents ?? '',
+      launcherFound: launcher !== null,
+      launcherWidth: rect === null ? 0 : Math.round(rect.width),
+      launcherHeight: rect === null ? 0 : Math.round(rect.height),
+      rightInset: rect === null ? -1 : Math.round(window.innerWidth - rect.right),
+      bottomInset: rect === null ? -1 : Math.round(window.innerHeight - rect.bottom),
+      launcherDisabled: launcher?.disabled ?? false,
+      documentHitsHost: documentHit === host,
+      // The launcher's centre is covered by its own SVG glyph, so a strict
+      // identity check would fail on a correctly stacked widget. Containment
+      // is the real contract: the hit lands inside the launcher button and
+      // nowhere else in the shadow tree.
+      rootHitsLauncher: launcher !== null && rootHit !== null && launcher.contains(rootHit),
+      rootHitTag: rootHit?.tagName.toLowerCase() ?? '',
+      documentHitTag: documentHit?.tagName.toLowerCase() ?? '',
+    };
+  });
 }

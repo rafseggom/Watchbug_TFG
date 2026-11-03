@@ -1,43 +1,43 @@
 ---
 gsd_state_version: "1.0"
-current_phase: 03
-current_phase_name: "Report Composer & Annotation Editor (lazy)"
+current_phase: 4
+current_phase_name: Report Payload & Enrichment
 status: planning
-stopped_at: Phase 02 verified and closed (2026-10-25)
-last_updated: "2026-10-25T15:20:00.000Z"
-last_activity: 2026-10-25
-last_activity_desc: "Phase 02 closed: UAT 5/5, verification passed, blank-probe fix, F-08 and WINDOWS #5 resolved"
-state_head: 91e71d6f201bc2da6f92613da5add2a48ccd29b8
+stopped_at: Phase 3 complete, ready to plan Phase 4
+last_updated: "2026-11-03T18:52:59.706Z"
+last_activity: 2026-11-03
+last_activity_desc: Phase 3 complete, transitioned to Phase 4
+state_head: 7dc8feab4cc85dbd4dcadb4df6977e48356d48c5
 progress:
   total_phases: 7
-  completed_phases: 2
-  total_plans: 9
-  completed_plans: 9
-  percent: 29
+  completed_phases: 3
+  total_plans: 17
+  completed_plans: 17
+  percent: 43
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-10-13)
+See: .planning/PROJECT.md (updated 2026-11-03)
 
 **Core value:** When a bug report lands, the developer can reproduce the bug from it — and neither the report nor its screenshot ever leaves the developer's own infrastructure.
-**Current focus:** Phase 03 — Report Composer & Annotation Editor (lazy) — next to plan
+**Current focus:** Phase 04 — Report Payload & Enrichment
 
 ## Current Position
 
-Phase: 02 (SDK Tracer Bullet: Widget, Capture & Auto-Redaction) — COMPLETE (verified 2026-10-25)
-Plan: 5 of 5
-Status: Phase closed — ready for `/gsd-plan-phase 3`
-Last activity: 2026-10-25 — UAT 5/5, verification `passed`, blank-probe fix, F-08 and WINDOWS #5 resolved
+Phase: 4 — Report Payload & Enrichment
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-11-03 — Phase 3 complete, transitioned to Phase 4
 
-Progress: [██░░░░░░░░] 29%
+Progress: [████░░░░░░] 43%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 9
+- Total plans completed: 17
 - Average duration: —
 - Total execution time: 0 hours
 
@@ -47,6 +47,7 @@ Progress: [██░░░░░░░░] 29%
 |-------|-------|-------|----------|
 | 01 | 4 | - | - |
 | 02 | 5 | - | - |
+| 3 | 8 | - | - |
 
 **Recent Trend:**
 - Last 5 plans: none yet
@@ -66,6 +67,14 @@ Progress: [██░░░░░░░░] 29%
 | Phase 02 P03 | 40min | 3 tasks | 6 files |
 | Phase 02 P04 | 50min | 3 tasks | 6 files |
 | Phase 02 P05 | 60min | 3 tasks | 6 files |
+| Phase 03 P01 | 25min | 3 tasks | 9 files |
+| Phase 03 P03 | 84 min | 3 tasks | 14 files |
+| Phase 03 P02 | 17min | 3 tasks | 12 files |
+| Phase 03 P04 | 48min | 3 tasks | 11 files |
+| Phase 03 P05 | 82 min | 3 tasks | 15 files |
+| Phase 03 P03-06 | 56 min | 3 tasks | 7 files |
+| Phase 03 P07 | 48 min | 3 tasks | 5 files |
+| Phase 03 P08 | 3h 52m | 5 tasks | 72 files |
 
 ## Accumulated Context
 
@@ -75,11 +84,12 @@ Decisions are logged in PROJECT.md Key Decisions table (R-01…R-17) and `docume
 Recent decisions affecting current work:
 
 - [Roadmap] PROJECT_MODE = mvp: every phase emits `**Mode:** mvp` and delivers an end-to-end demonstrable capability. Research build order compressed to 7 phases: contracts+skeleton merged into the ingest tracer; auth/projects split from triage/retention; edge-hardening merged into the release closeout.
-- [Roadmap] Hard sequencing locked: `WidgetHost` isolation strategy and redaction ordering **T1** are fixed in Phase 2 (first build of the widget); **T2/T3** + the C-2 `Annotator` contract (one flattened bitmap, non-undoable masks, single `toBlob` sink) in Phase 3. R-12: verification is one Playwright suite (CA-01…CA-05) + `check:size` — no unit tests, ever.
+- [Roadmap] Hard sequencing locked: `WidgetHost` isolation strategy and redaction ordering **T1** are fixed in Phase 2 (first build of the widget); **T2/T3** + the C-2 `Annotator` contract (one flattened bitmap, non-undoable masks, single `toBlob` sink) in Phase 3. R-12: verification is one Playwright suite (CA-01…CA-05) + `check:size`. **Amended by R-19:** six-type taxonomy, e2e capped at ≤20 journeys — see AGENTS.md Testing & QA.
 - [Phase 1] Scope note: the hardened blob route ships here (C-3/C-4) but DEP-03's "served only through the authenticated API" completes in Phase 5 when auth exists. TTL columns land in the initial migration (M-1/A-02) to avoid schema retrofits.
 - [Phase 4] INT-03's `custom` = init-scoped context riding every report (v1); distinct from ANN-V2-03 per-report custom fields (v2).
 - [Phase 1 · OVERRIDE 2026-10-11 · decision-coverage gate] The `check.decision-coverage-plan` gate returned `passed: false, reason: could-not-parse` because CONTEXT.md's local decision IDs use the `P1-D-NN` grammar, which the parser does not support (it accepts `D-NN`, `D4-NN`, `D-NN — title`). Developer chose "Proceed — parser false positive": the gate's intent is already satisfied — the plan-checker's dimension-7 audit verified all 12 `P1-D-01…P1-D-12` decisions map to plan tasks with no deferred idea implemented and no scope reduction. No plan or CONTEXT.md change was made. **verify-phase must re-surface this:** if its decision-coverage counterpart reports the same `could-not-parse` on `P1-D-NN`, treat it as this same recorded false positive, not as a dropped decision.
 - [Phase 2 · OVERRIDE 2026-10-18 · decision-coverage gate] Same gate, same verdict: `passed: false, reason: could-not-parse` on the `P2-D-NN` grammar (02-CONTEXT.md uses `P2-D-01…P2-D-12`, outside the parser's `D-NN` / `D4-NN` / `D-NN — title` forms). Resolved per the Phase 1 precedent above ("Proceed — parser false positive"): the plan-checker's dimension-7 audit verified all 12 `P2-D-01…P2-D-12` decisions map to plan tasks across 02-01…02-05 with no contradiction, no deferred idea implemented, and no scope reduction (P2-D-05's `selfBrowserSurface` ban explicitly honored; P2-D-01 `type:'bug'` shortcut and P2-D-04 no-locale strings map are the locked decisions themselves). No plan or CONTEXT.md change made. **verify-phase must re-surface this:** if its decision-coverage counterpart reports `could-not-parse` on `P2-D-NN`, treat it as this same recorded false positive, not as a dropped decision.
+- [Phase 3 · OVERRIDE 2026-10-28 · decision-coverage gate] Third identical verdict: `passed: false, reason: could-not-parse` on the `P3-D-NN` grammar (03-CONTEXT.md uses `P3-D-01…P3-D-16`). Developer chose "Proceed — known parser false positive", per the Phase 1 and Phase 2 precedents. Substantive evidence: the plan-checker's dimension-7 audit verified all 16 `P3-D-01…P3-D-16` decisions are cited by an implementing task across 03-01…03-07 (P3-D-01, -10, -11, -12 and -14 appear in more than one plan), that the three discretion areas are decided in plan text (i18n split → 03-03, lazy-load timing → 03-05, text-only form shape → 03-04), that no deferred idea is implemented (mask-undo, host-configurable redaction rules and the DOM-serialize adapter are absent), and that no locked decision is contradicted. The four `costly` decisions (P3-D-01, -04, -09, -14) keep their ratings; P3-D-14's migration is gated by a `checkpoint:decision` in 03-01 Task 1. No plan or CONTEXT.md change made. **verify-phase must re-surface this:** if its decision-coverage counterpart reports `could-not-parse` on `P3-D-NN`, treat it as this same recorded false positive, not as a dropped decision.
 - [Phase 01]: A-13: five type-only @types/* devDependencies owner-approved to make npm run lint pass (question gate; recorded in documentation/resolution-record.md A-13)
 - [Phase 01]: Q-08 tooling gate PASS under typescript 7.0.2 - the documented 6.x fallback was not taken
 - [Phase 01]: rate-limit and cors plugins deferred to plan 01-03 per the plan's own artifact table (ING-05 is 01-03's requirement); installing them in 01-01 caused 429s that broke the e2e suite
@@ -122,6 +132,39 @@ Recent decisions affecting current work:
 - [Phase 02 · cierre 2026-10-25]: F-08 fixed - lang="en" on the widget content root + F-08 e2e row (Phase 3 replaces the literal with the resolved locale)
 - [Phase 02 · cierre 2026-10-25]: WINDOWS #5 fixed - REQUIREMENTS release criteria now state webkit covers engine-divergent rendering + CaptureSource seam, M-3 via forced-PNG stub (A-14), firefox the no-ImageCapture path
 - [Phase 02 · cierre 2026-10-25]: owner decisions confirmed - S-8 strict throw for a cross-origin script without endpoint (soft fallback rejected and closed); FX-02 fail-closed frame transform kept as deliberate backlog
+- [Phase 03]: ﻿03-01: owner-approved migration shape executed - ONE drizzle-kit artifact 0001 carries nullable storage_key/content_type AND the image/jpeg CHECK widening (P3-D-14); decision 'approve' recorded in 03-01-SUMMARY before Task 2
+- [Phase 03]: ﻿03-01: e2e postIncident contract flipped - bytes===undefined now omits the image part entirely (reaching the route's imageless branch); the 8 pre-existing omission callers pinned with bytes: png so no existing row changed shape
+- [Phase 03]: ﻿03-01: one ext-MIME allowlist read in both directions - CONTENT_TYPE_BY_EXT typed Record<ImageExt,string> plus derived EXT_BY_CONTENT_TYPE inverse; blob route 404s on a null key BEFORE any Storage call (Pitfall 8 ternaries eliminated; 03-02 adds the jpeg arm to the same map)
+- [Phase 03]: 03-03: T3 encode order resolved per the plan text: replay mask patches FIRST, re-apply T1 as the last pixel write, then encodeLadder — the PATTERNS section-14 sketch inverts the first two; the plan acceptance criterion governs
+- [Phase 03]: 03-03: capture failures still route to the Phase-2 status panel (blank/oversize to the blank bucket, denied/no-api to the capture bucket) until 03-04 mounts the degraded composer; the failure rows stay green; 03-07 re-points them
+- [Phase 03]: 03-03: i18n split decided: core carries launcher/status/action/composer/review/mask-confirm/i18n copy in BOTH locales; the lazy chunk carries editor.* only (03-05); locale override is session-scoped in memory, never host storage (SEC-03 / UI-SPEC A-1)
+- [Phase 03]: 03-03: encoding happens at Review entry and the review canvas renders the DECODED outgoing blob — shown bytes are sent bytes; Send transmits that same blob with no re-encode (T-03-17)
+- [Phase 03]: 03-02: JPEG admitted on the 3-byte FF D8 FF prefix only — never the JFIF 4-byte form, because libvips output starts SOI-DQT (FF DB); proven by round-trip re-submission of the served bytes at artifact level, no unit test
+- [Phase 03]: 03-02: oversize decode-bomb fixture uses the plan-sanctioned synthetic-SOF route — a real 64x64 chromium JPEG with the SOFn re-declared 8000x8192 (both sides under MAX_IMAGE_DIM so the PIXELS arm is the one that answers); a 64 MP browser canvas is memory-flaky and never needed because the guard reads only the header
+- [Phase 03]: 03-02: validateStructure's JPEG arm passes bytes through UNCHANGED with the written rationale (no entropy-scan walker; the sharp root re-encode is the control; the header guard precedes it); every ingest stage is now an exhaustive switch(ext) with a never-guard default that fails closed — the three plan prohibitions are structurally enforced and flagged human-judgment for the verifier
+- [Phase 03]: 03-02: sharp autoOrient: true is mandatory and carries a never-remove rationale in the harden.ts docblock; the Orientation=6 fixture row proves it (80x40 stored as 40x80, no Exif substring in the served container)
+- [Phase 03]: 03-04: ManualFileCapture is standalone (never a DisplayMediaCapture wrapper, P3-D-13); blankProbe never runs on attachments (F6); attach size refusal is arm-agnostic (decoded-bitmap 'size' or engine 'decode' both satisfy the contract, A4)
+- [Phase 03]: 03-04: capture failures now route to the degraded composer (data-wb-state=degraded) with the F6 hint mapping (denied/no-api to status.captureFailed.hint, blank/oversize to status.blankCapture.hint) - the six failure rows were re-pointed in 03-04 itself, 03-07 keeps only the 41 one-shot rows; the no-CSPRNG exit stays a panel state
+- [Phase 03]: 03-04: SendPayload.blob widened to Blob|null - postOnce omits the image part entirely; the text-only lane files real 201s through 03-01's imageless branch (CAP-03 client half complete)
+- [Phase 03]: 03-05: chunk URL derives ONLY from the core bundle's own URL (T-03-20); the retry passes through a ?retry= buster after a failure because engines cache failed dynamic-import fetches in the module map (probe-disproved the bare memo-clear retry; happy path stays exactly one bare .mjs request)
+- [Phase 03]: 03-05: one-bitmap editor model - open() mutates and resolves the draft's OWN ImageData, flattens committed vector strokes into base.data at Done via one readback; no createImageBitmap in the lane; undo = pop + redraw from base (C-2/A-04 true by construction)
+- [Phase 03]: 03-05: editor locale/ink/maskConfirm are core-resolved and passed in AnnotatorOpenOptions - the chunk carries no dictionary and no colour literal; EDITOR_CSS appends exactly once to the data-wb-core style element (one shadow stylesheet, no adoptedStyleSheets)
+- [Phase 03]: 03-05: check-size lazy lane gates max(.js,.mjs) <= 25 KB with a >= 2 KB anti-inline floor on BOTH twins (min-twin, stronger than floor-on-max); gate.mjs sdk-lazy-lane-purity fails value/side-effect/literal-dynamic core imports of the lane, allows the single type-only crossing in widget/loader.ts
+- [Phase 03]: 03-06: mask bake writes destroyed pixels into the draft own buffer (bakeMask) and stores only the post-mask patch; rebakeMasks replays patches after strokes in every redraw and encodeFinal replays patches before the T1 re-run (T3) - undo/ink cannot resurrect a region because no pre-mask copy exists (C-2/A-04 by construction)
+- [Phase 03]: 03-06: e2e mask drags dispatch whole-CSS-pixel coordinates and assert the helper-predicted committed rect - Firefox/WebKit truncate fractional page.mouse coords to int CSS (measured probe); at DPR 1.25/2/3 fractional dispatch would land the mask 1-3 bitmap px inside the asked rect
+- [Phase 03]: 03-06: pixelate proof asserts the mechanism on a forced-PNG artifact (per-block byte uniformity is unsatisfiable lossy); fill rows keep the real WebP path and reuse analyzeRedaction/expectMaskedAndTargeted unchanged
+- [Phase 03]: 03-07: completeComposer exits at the request-issued edge (data-wb-screen 'status'); callers keep terminal assertions; heavy rows carry walk timeouts (45s/30s), tiers untouched
+- [Phase 03]: 03-07: all 41 Phase-2 one-shot rows migrated through the one shared helper; zero deleted/skipped, 453x3 engines green, count guard unchanged; failure rows verified degraded (03-04 already re-pointed)
+- [Phase 03]: 03-07: PRF-02/PRF-03 closed on emitted artifacts (core 16.9/45, lazy max-twin 6.6/25, floor min-twin 6.3>=2, runtime 23.8/80); gate.mjs five rules incl. new sdk-no-html-sink; ANN-04 census counts open dialogs only
+- [Phase 03]: R-19 amends R-12 rather than deleting it: artifact-level security evidence (CA-02 on encoded bytes) and the no-coverage-vanity rule survive; only the "never unit tests" absolute is replaced by six types
+- [Phase 03]: E2E is capped structurally as a failing test (tests/packaging/journey-cap.test.ts), 14 journeys in use, 20 the hard maximum, J-15..J-20 reserved for Phases 4-7
+- [Phase 03]: VRT keeps its own Playwright config so a pixel diff can never red a functional verify run; baselines are the text-free launcher control so one baseline serves every platform
+- [Phase 03]: The contract test walks the committed JSON artifact with a 60-line draft-2020-12 subset interpreter instead of adding ajv, and fails loudly on any keyword it cannot interpret
+- [Phase 03]: Doc consistency is a test, not a remembered grep (tests/packaging/doc-policy-consistency.test.ts); historical artifacts keep their text and gain a supersession banner
+- [Phase 03]: Ledger reconciliation: 153 row ids carry 148 distinct dispositions because Task-1 tracer rows 1-5 are re-listed by Batch 2a/2b
+- [Phase 03 · cierre 2026-11-03]: manual UAT 7/7 on the REAL display picker. The only defect found was in the harness, not the product: a headed browser launched with an emulated viewport (1280x860) while the real tab surface was 1920x952 made `transformFor()` scale every T1 rect (x1.5 / x1.107) into a frame it did not match, so masks landed off-target. Rule + evidence in `documentation/continuity-pack.md` §11 / dead-end D-11: `viewport: null` + `--force-device-scale-factor` for DPR, and assert `blob.width === innerWidth * devicePixelRatio` before judging redaction.
+- [Phase 03 · cierre 2026-11-03]: verification was STALE (the 03-08 suite refactor changed covered files after the 2026-10-29 report); the verifier regenerated `03-VERIFICATION.md` at 74/74 must-haves with a fresh digest. The three former coincidental-reliance findings are retired because their hardens shipped and the UAT exercised them: CR-01 (generation guard), HG-01 (bake-to-base at UNDO_LIMIT), HG-02 (pixelation floor in bitmap space).
+- [Phase 03 · cierre 2026-11-03]: open hardening candidate, NOT implemented - the SDK assumes `frame = viewport x DPR` with no mismatch guard, so a registration break misplaces masks silently instead of failing closed (SEC-02). Candidate: compare frame/viewport aspect ratios in `runCaptureStage()` and refuse the capture beyond ~1 % drift. Decide at Phase 4/7 planning.
 
 ### Pending Todos
 
@@ -154,6 +197,7 @@ None yet.
 | 261014-m3y | S-4 + S-5: CSP on the panel and R-08 path-only URLs in the contract | 2026-10-15 | abe0e9c | — |
 | 261014-m3z | L-1 server: fix the server-side stopthatslop findings (abortable fetches, lazy sharp) | 2026-10-15 | a4b7396 | — |
 | 261016-nnx | Fix api read rate-limit typecheck error: gate on isExceeded via discriminant narrowing | 2026-10-16 | f12e36d | [261016-nnx-fix-api-read-rate-limit-typecheck-error-](./quick/261016-nnx-fix-api-read-rate-limit-typecheck-error-/) |
+| 261102-u4f | Crear documentation/entorno-trabajo.md — informe del entorno en español con las 11 secciones del inventario, checklist de replicación (sección 10) y gate de secretos (SEC-04 / T-261102-01) | 2026-11-03 | 32f02e0 | [261102-u4f-crear-documentation-entorno-trabajo-md-i/](./quick/261102-u4f-crear-documentation-entorno-trabajo-md-i/) |
 
 ## Deferred Items
 
@@ -166,6 +210,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-25T15:20:00.000Z
-Stopped at: Phase 02 verified and closed (UAT 5/5, `passed`)
-Resume file: .planning/phases/02-sdk-tracer-bullet-widget-capture-auto-redaction/02-VERIFICATION.md
+Last session: 2026-11-03T18:55:00.000Z
+Stopped at: Phase 3 complete, ready to plan Phase 4
+Resume file: None

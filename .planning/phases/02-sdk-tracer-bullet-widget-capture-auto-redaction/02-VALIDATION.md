@@ -10,6 +10,13 @@ created: "2026-10-17"
 validated: "2026-10-24"
 ---
 
+> **Superseded by R-19 (2026-10-29):** this document predates the six-type test taxonomy.
+> Every "no unit tests / never unit tests / DONT MAKE A BUNCH OF TESTS / no other test
+> artefact" statement in it is a **historical record of R-12 as it stood then** — not current
+> policy. Current policy lives in `AGENTS.md` → *Testing & QA* and `.planning/REQUIREMENTS.md`
+> (R-19 amends R-12; artifact-level security evidence and the no-coverage-vanity rule survive).
+
+
 # Phase 2 — Validation Strategy
 
 > Per-phase validation contract for feedback sampling during execution.

@@ -39,9 +39,16 @@ export const incidents = pgTable(
     userEmail: text('user_email'),
     identityPurgeAt: timestamp('identity_purge_at', { withTimezone: true }).notNull(),
     artifactPurgeAt: timestamp('artifact_purge_at', { withTimezone: true }).notNull(),
-    /** Server-generated Storage key — the request never names a file (C-4). */
-    storageKey: text('storage_key').notNull(),
-    contentType: text('content_type').notNull(),
+    /** Server-generated Storage key — the request never names a file (C-4).
+     *  NULL for a CAP-03 text-only report: no screenshot, no blob. The one
+     *  invariant `storageKey === null` has exactly two readers: the blob
+     *  route's 404 branch and `purge.ts`'s skip guard. */
+    storageKey: text('storage_key'),
+    /** Screenshot MIME, or null when the report carries no image (CAP-03).
+     *  `'image/jpeg'` joins the allowlist per P3-D-14 (the CHECK widens for the
+     *  03-02 attach lane; a CHECK over NULL evaluates to UNKNOWN, which passes —
+     *  imageless rows satisfy it for free). */
+    contentType: text('content_type'),
     status: text('status').notNull().default('pending'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -50,7 +57,7 @@ export const incidents = pgTable(
     // never in an application-level check-then-insert.
     uniqueIndex('incidents_project_idempotency_unique').on(t.projectId, t.idempotencyKey),
     check('incidents_type_check', sql`${t.type} in ('bug', 'feedback')`),
-    check('incidents_content_type_check', sql`${t.contentType} in ('image/webp', 'image/png')`),
+    check('incidents_content_type_check', sql`${t.contentType} in ('image/webp', 'image/png', 'image/jpeg')`),
     check('incidents_status_check', sql`${t.status} in ('pending', 'in_progress', 'resolved')`),
     index('incidents_project_created_idx').on(t.projectId, t.createdAt),
   ],

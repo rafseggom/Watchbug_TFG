@@ -1,0 +1,568 @@
+# 03-08 Conversion Ledger
+
+**Purpose:** Every one of the 152 original e2e tests (148 source `test()` declarations + 4 generated) must have exactly one disposition:
+- `kept-in-journey` — remains in the e2e suite as part of a J-01..J-20 core journey
+- `converted(target-file)` — re-homed to unit/integration/contract/VRT/packaging
+- `justified-redundant` — explicitly redundant, justified in this ledger
+
+**No silent drops.** Any row without an entry is a coverage gap.
+
+---
+
+## Baseline Inventory (from `/tmp/opencode/baseline-tests.txt`)
+
+| Spec File | Test Count | Notes |
+|-----------|------------|-------|
+| e2e/sdk.spec.ts | 88 | Widget, capture, redaction, annotation, transport |
+| e2e/hostile.spec.ts | 27 | Oversize, content, naming, rate limits, sanitisation |
+| e2e/ingest.spec.ts | 23 | Schema validation, idempotency, text-only, onboarding |
+| e2e/deploy.spec.ts | 7 | Compose, CSP, health, env vars, boot fail-fast |
+| e2e/read-surface.spec.ts | 3 | Rate limiting, pagination, malformed params |
+| **Total** | **148** | Source declarations |
+
+---
+
+## Conversion Log
+
+### Task 1 — Tracer Foundation (Batch 1c)
+
+| # | Original Spec / Test Title | Disposition | Target File / Justification | Commit |
+|---|----------------------------|-------------|----------------------------|--------|
+| 1 | `ingest.spec.ts` — "R-08/S-5: meta.url is stored path-only — query string and fragment stripped on ingest" | `converted` | `tests/integration/url-stripping.test.ts` (3 tests) | 792ab96 |
+| 2 | `ingest.spec.ts` — "ING-03: same Idempotency-Key replays the same id and stores one row" | `converted` | `tests/integration/ingest-idempotency.test.ts` | 792ab96 |
+| 3 | `ingest.spec.ts` — "ING-03: concurrent pair with one key yields one row" | `converted` | `tests/integration/ingest-idempotency.test.ts` | 792ab96 |
+| 4 | `ingest.spec.ts` — "ING-03 (Q6): missing Idempotency-Key → 400 structured body" | `converted` | `tests/integration/ingest-idempotency.test.ts` | 792ab96 |
+| 5 | `ingest.spec.ts` — "CAP-03 text-only: a meta-only submission stores a row with no screenshot" | `converted` | `tests/integration/ingest-text-only.test.ts` | 792ab96 |
+
+### Task 2 — Batch 2a: `ingest.spec.ts` (23) + `read-surface.spec.ts` (3)
+
+| # | Original Spec / Test Title | Disposition | Target File / Justification | Commit |
+|---|----------------------------|-------------|----------------------------|--------|
+| 6 | `ingest.spec.ts` — "POST /api/incidents: 201, row validates against the published schema, list + image round-trip (ING-01, ENR-06)" | `converted` | `tests/integration/ingest-schema-validation.test.ts` | — |
+| 7 | `ingest.spec.ts` — "webp fixture ingests and serves image/webp" | `converted` | `tests/integration/ingest-schema-validation.test.ts` | — |
+| 8 | `ingest.spec.ts` — "JPEG: a real JPEG ingests, stores image/jpeg and the blob route serves it as a JPEG" | `converted` | `tests/integration/ingest-schema-validation.test.ts` | — |
+| 9 | `ingest.spec.ts` — "JPEG decode-bomb: a >16 MP JPEG is rejected before sharp" | `converted` | `tests/integration/ingest-schema-validation.test.ts` | — |
+| 10 | `ingest.spec.ts` — "JPEG header: a truncated JPEG is rejected" | `converted` | `tests/integration/ingest-schema-validation.test.ts` | — |
+| 11 | `ingest.spec.ts` — "JPEG boundary: a side above MAX_IMAGE_DIM is rejected" | `converted` | `tests/integration/ingest-schema-validation.test.ts` | — |
+| 12 | `ingest.spec.ts` — "format allowlist: SVG and GIF are still rejected and the copy names JPEG" | `converted` | `tests/integration/ingest-schema-validation.test.ts` | — |
+| 13 | `ingest.spec.ts` — "JPEG orientation: an EXIF-rotated photo is stored upright without its EXIF segment" | `converted` | `tests/integration/ingest-schema-validation.test.ts` | — |
+| 14 | `ingest.spec.ts` — "ING-03: same Idempotency-Key replays the same id and stores one row" | `converted` | `tests/integration/ingest-idempotency.test.ts` | — |
+| 15 | `ingest.spec.ts` — "ING-03: concurrent pair with one key yields one row" | `converted` | `tests/integration/ingest-idempotency.test.ts` | — |
+| 16 | `ingest.spec.ts` — "ING-03 (Q6): missing Idempotency-Key → 400 structured body, list unchanged" | `converted` | `tests/integration/ingest-idempotency.test.ts` | — |
+| 17 | `ingest.spec.ts` — "wrong project key → 401; svg → 400 (SEC-03, P1-D-11)" | `converted` | `tests/integration/ingest-auth-project-key.test.ts` | — |
+| 18 | `ingest.spec.ts` — "CAP-03 text-only: a meta-only submission stores a row with no screenshot" | `converted` | `tests/integration/ingest-text-only.test.ts` | — |
+| 19 | `ingest.spec.ts` — "CAP-03 text-only concurrent: one idempotency key, one row, no blob" | `converted` | `tests/integration/ingest-text-only.test.ts` | — |
+| 20 | `ingest.spec.ts` — "CAP-03 text-only: the blob route never 500s" | `converted` | `tests/integration/ingest-text-only.test.ts` | — |
+| 21 | `ingest.spec.ts` — "CAP-03 text-only: the panel lists it" | `kept-in-journey` | J-07 (degraded capture) | — |
+| 22 | `ingest.spec.ts` — "CAP-03 text-only: a meta-only post without X-Project-Key gets the same structured 401" | `converted` | `tests/integration/ingest-auth-project-key.test.ts` | — |
+| 23 | `ingest.spec.ts` — "panel renders the row and its screenshot (P1-D-04, SEC-05 pass 2)" | `kept-in-journey` | J-02 (golden path) | — |
+| 24 | `ingest.spec.ts` — "P1-D-07 / T-01-16: GET /api/setup serves exactly the seeded write-only project key through nginx" | `converted` | `tests/integration/ingest-onboarding.test.ts` | — |
+| 25 | `ingest.spec.ts` — "P1-D-07: with an empty list the panel shows the onboarding curl carrying the real key and the CA-01 wire shape" | `converted` | `tests/integration/ingest-onboarding.test.ts` (onboarding API shape) | — |
+| 26 | `ingest.spec.ts` — "P1-D-07: the emitted onboarding curl runs verbatim and the new report appears after reload" | `converted` | `tests/integration/ingest-onboarding.test.ts` (onboarding API works) | — |
+| 27 | `ingest.spec.ts` — "P1-D-07: a meta part sent with Content-Type: application/json ingests (the curl -F shape)" | `converted` | `tests/integration/ingest-onboarding.test.ts` | — |
+| 28 | `ingest.spec.ts` — "P1-D-05: language defaults from navigator.language and a manual switch survives reload" | `justified-redundant` | Covered by `sdk.spec.ts` J-12 (i18n journey) | — |
+| 29 | `read-surface.spec.ts` — "read surface: GET routes are rate-limited per IP with integer Retry-After" | `converted` | `tests/integration/read-surface-rate-limit.test.ts` | — |
+| 30 | `read-surface.spec.ts` — "read surface: list is bounded and returns x-next-cursor for large sets" | `converted` | `tests/integration/read-surface-rate-limit.test.ts` | — |
+| 31 | `read-surface.spec.ts` — "read surface: malformed limit and cursor return 400" | `converted` | `tests/integration/read-surface-rate-limit.test.ts` | — |
+
+### Task 2 — Batch 2b: `hostile.spec.ts` (27) → 1 kept + 26 converted; J-14 (11) moved in from `sdk.spec.ts`
+
+| # | Original Spec / Test Title | Disposition | Target File / Justification | Commit |
+|---|----------------------------|-------------|----------------------------|--------|
+| 32 | `hostile.spec.ts` — "ING-06 layer 1: image part > MAX_IMAGE_PART_BYTES (4 MB) → 413 structured at the multipart parser" | `converted` | `tests/integration/hostile-size-caps.test.ts` | b1e2b35 |
+| 33 | `hostile.spec.ts` — "ING-06 layer 2: body > MAX_BODY_BYTES (5 MB) → 413 structured from the Content-Length pre-read (direct to API)" | `converted` | `tests/integration/hostile-size-caps.test.ts` | b1e2b35 |
+| 34 | `hostile.spec.ts` — "ING-06 layer 2b: a chunked body with NO Content-Length over MAX_BODY_BYTES is aborted by the streaming counter → 413" | `converted` | `tests/integration/hostile-size-caps.test.ts` | b1e2b35 |
+| 35 | `hostile.spec.ts` — "ING-06 layer 3: the stated nginx limit (client_max_body_size 5m) stops the same body at the panel origin" | `converted` | `tests/integration/hostile-size-caps.test.ts` | b1e2b35 |
+| 36 | `hostile.spec.ts` — "ING-06: an encoded image over MAX_ENCODED_IMAGE_BYTES is rejected 413 (semantic cap, A-06 hard)" | `converted` | `tests/integration/hostile-size-caps.test.ts` | b1e2b35 |
+| 37 | `hostile.spec.ts` — "C-3: SVG, GIF/HTML polyglot and decode-bomb payloads are rejected 400 (structured)" | `converted` | `tests/contract/hostile-payload-control.test.ts` (3 sub-tests) | b1e2b35 |
+| 38 | `hostile.spec.ts` — "C-4: traversal-shaped client filenames are rejected 400 — the name never reaches a path" | `converted` | `tests/contract/hostile-payload-control.test.ts` (3 sub-tests) | b1e2b35 |
+| 39 | `hostile.spec.ts` — "C-3/C-4: the blob route serves the report with the full inert header set and a fixed ASCII name" | `converted` | `tests/contract/hostile-payload-control.test.ts` | b1e2b35 |
+| 40 | `hostile.spec.ts` — "C-4: an unknown incident id is 404 — never 400, and the body shape matches the other 404s" | `converted` | `tests/contract/hostile-payload-control.test.ts` | b1e2b35 |
+| 41 | `hostile.spec.ts` — "ING-04: missing, unknown and malformed project keys all get the same structured 401 and nothing is stored" | `converted` | `tests/integration/hostile-auth-rate-limit.test.ts` | b1e2b35 |
+| 42 | `hostile.spec.ts` — "ING-04 concurrency: a parallel burst of invalid-key requests each receives its own uniform 401 and stores nothing" | `converted` | `tests/integration/hostile-auth-rate-limit.test.ts` | b1e2b35 |
+| 43 | `hostile.spec.ts` — "ING-05 per key: exactly RATE_LIMIT_PER_KEY_PER_MIN requests pass on a fresh key, max+1 is 429 + Retry-After" | `converted` | `tests/integration/hostile-auth-rate-limit.test.ts` | b1e2b35 |
+| 44 | `hostile.spec.ts` — "ING-05 per IP: exactly RATE_LIMIT_PER_IP_PER_MIN requests pass from one forwarded IP, max+1 is 429 + Retry-After" | `converted` | `tests/integration/hostile-auth-rate-limit.test.ts` | b1e2b35 |
+| 45 | `hostile.spec.ts` — "ING-05 per day: the daily project quota trips at RATE_LIMIT_PER_PROJECT_PER_DAY + 1 with Retry-After" | `converted` | `tests/integration/hostile-auth-rate-limit.test.ts` | b1e2b35 |
+| 46 | `hostile.spec.ts` — "CR-01: NBSP-padded X-Project-Key shares the padded key's bucket — padding never mints fresh per-key quota" | `converted` | `tests/integration/hostile-auth-rate-limit.test.ts` | b1e2b35 |
+| 47 | `hostile.spec.ts` — "CR-02 (direct): a forged leftmost X-Forwarded-For entry never becomes req.ip — the asserted rightmost hop owns the per-IP bucket" | `converted` | `tests/integration/hostile-auth-rate-limit.test.ts` | b1e2b35 |
+| 48 | `hostile.spec.ts` — "CR-02 (proxy): nginx overwrites the client X-Forwarded-For — a forged entry cannot ride the panel edge into a fresh per-IP bucket" | `converted` | `tests/integration/hostile-auth-rate-limit.test.ts` | b1e2b35 |
+| 49 | `hostile.spec.ts` — "ING-08 trio: non-allowlisted Origin → 403 + nothing stored; allowlisted Origin → 201 + CORS headers; no Origin → 201" | `converted` | `tests/integration/hostile-auth-rate-limit.test.ts` | b1e2b35 |
+| 50 | `hostile.spec.ts` — "ING-08 concurrency: a mixed parallel burst yields per-request decisions matching each request's own Origin" | `converted` | `tests/integration/hostile-auth-rate-limit.test.ts` | b1e2b35 |
+| 51 | `hostile.spec.ts` — "ING-07 pass 1: hostile text payloads are stored with all markup removed (img-onerror, script, BOM, UTF-7, entity-encoded)" | `converted` | `tests/integration/hostile-sanitisation.test.ts` | b1e2b35 |
+| 52 | `hostile.spec.ts` — "ING-07 pass 1: plain text with angle brackets round-trips exactly; styled fragments keep document order" | `converted` | `tests/integration/hostile-sanitisation.test.ts` | b1e2b35 |
+| 53 | `hostile.spec.ts` — "ING-07 empty edge: a zero-length title is rejected 400; absent optional fields are stored as null" | `converted` | `tests/integration/hostile-sanitisation.test.ts` | b1e2b35 |
+| 54 | `hostile.spec.ts` — "ING-07 encoding edge: caps count Unicode code points (inclusive at the cap, one over is 400) and sanitised output never exceeds its cap" | `converted` | `tests/integration/hostile-sanitisation.test.ts` | b1e2b35 |
+| 55 | `hostile.spec.ts` — "ING-07: control characters are stripped from every user string on write" | `converted` | `tests/integration/hostile-sanitisation.test.ts` | b1e2b35 |
+| 56 | `hostile.spec.ts` — "R-08/S-5: meta.url is stored path-only — query string and fragment stripped on ingest" | `converted` | `tests/integration/hostile-sanitisation.test.ts` | b1e2b35 |
+| 57 | `hostile.spec.ts` — "ING-07 pass 2: stored hostile payloads render as literal text and inject zero elements into the panel DOM" | `kept-in-journey` | J-14 (XSS-render-inert representative) | b1e2b35 |
+| 58 | `hostile.spec.ts` — "ING-07 pass 2: apps/panel/src contains no HTML-rendering sink (dangerouslySetInnerHTML / innerHTML)" | `converted` | `tests/packaging/no-dangerouslySetInnerHTML.test.ts` | b1e2b35 |
+| 59 | `sdk.spec.ts` — "WDG-02: hostile host CSS cannot hide, restyle or break the widget — display/fontsize/unset/transform (4 variants)" | `kept-in-journey` | J-14 (moved to `e2e/hostile.spec.ts`) | b1e2b35 |
+| 60 | `sdk.spec.ts` — "WDG-02: the closed production bundle keeps the inline isolation contract under *:not(html):not(body) { display: none !important }" | `kept-in-journey` | J-14 (moved to `e2e/hostile.spec.ts`) | b1e2b35 |
+| 61 | `sdk.spec.ts` — "CA-04: every hostile rule in the matrix demonstrably applies to its control element" | `kept-in-journey` | J-14 (moved to `e2e/hostile.spec.ts`) | b1e2b35 |
+| 62 | `sdk.spec.ts` — "WDG-03: init and a full report flow leak zero styles, classes or custom properties into the host document" | `kept-in-journey` | J-14 (moved to `e2e/hostile.spec.ts`) | b1e2b35 |
+| 63 | `sdk.spec.ts` — "WDG-05: the widget wins the stacking contest over a hostile max-z-index modal and the flow still completes" | `kept-in-journey` | J-14 (moved to `e2e/hostile.spec.ts`) | b1e2b35 |
+| 64 | `sdk.spec.ts` — "WDG-05: a hostile element painted at the widget coordinates neither captures its hit target nor swallows host clicks" | `kept-in-journey` | J-14 (moved to `e2e/hostile.spec.ts`) | b1e2b35 |
+| 65 | `sdk.spec.ts` — "WDG-05: an empty host page still renders the launcher at 24 px insets and starts the flow" | `kept-in-journey` | J-14 (moved to `e2e/hostile.spec.ts`) | b1e2b35 |
+| 66 | `sdk.spec.ts` — "WDG-05: a z-index tie stays resolved by DOM order and the host is re-appended after a documentElement replacement" | `kept-in-journey` | J-14 (moved to `e2e/hostile.spec.ts`) | b1e2b35 |
+
+### Task 2 — Batch 2c: `deploy.spec.ts` (7) → packaging; spec deleted
+
+| # | Original Spec / Test Title | Disposition | Target File / Justification | Commit |
+|---|----------------------------|-------------|----------------------------|--------|
+| 67 | `deploy.spec.ts` — "panel root returns the SPA shell (DEP-01)" | `converted` | `tests/packaging/deploy-contract.test.ts` — live HTTP 200 + `text/html` + `#root` + external `/assets/*.js` script in the served body, plus the built `apps/panel/dist/index.html` artifact (no inline script / no inline style — the cause of a CSP refusal, replacing the browser console watch). The *rendered* React frame half is covered by the kept J-02/J-07 panel journeys. | 49ee180 |
+| 68 | `deploy.spec.ts` — "panel document ships the full CSP plus the header pair (S-4)" | `converted` | `tests/packaging/deploy-contract.test.ts` — five directive-level assertions + the two header values on the live document response, and the same pair on the proxied `/api/health` response (the nginx `add_header` inheritance guard). | 49ee180 |
+| 69 | `deploy.spec.ts` — "/api/health returns 200 through the nginx proxy (DEP-01, A-10)" | `converted` | `tests/packaging/deploy-contract.test.ts` — status 200 + exact `{status:'ok'}` body. | 49ee180 |
+| 70 | `deploy.spec.ts` — "every env var read by apps/api/src/config.ts is documented in .env.example (DEP-02)" | `converted` | `tests/packaging/deploy-contract.test.ts` — unchanged static scan (>5 reads found; zero undocumented). | 49ee180 |
+| 71 | `deploy.spec.ts` — "boot with WATCHBUG_PROJECT_KEY unset exits non-zero naming the variable (DEP-02)" | `converted` | `tests/packaging/deploy-contract.test.ts` — unchanged spawn of `apps/api/dist/index.mjs`. | 49ee180 |
+| 72 | `deploy.spec.ts` — "boot with the documented placeholder key exits non-zero (DEP-02)" | `converted` | `tests/packaging/deploy-contract.test.ts` — unchanged spawn, asserts `placeholder` in stderr. | 49ee180 |
+| 73 | `deploy.spec.ts` — "boot with a malformed key exits non-zero naming the expected format (DEP-02)" | `converted` | `tests/packaging/deploy-contract.test.ts` — unchanged spawn, asserts `32` + `base62` in stderr. | 49ee180 |
+
+---
+
+### Task 3 — Batch 3a: `sdk.spec.ts` classification (80 declarations) + meta/transport/i18n conversion
+
+**Count correction.** The running total reserved **77** unclassified `sdk.spec.ts`
+rows. The true remainder is **80**: the 88 source declarations in the baseline
+inventory minus the 8 declarations Batch 2b moved to `e2e/hostile.spec.ts`
+(`WDG-02` loop, `WDG-02` closed bundle, `CA-04`, `WDG-03`, `WDG-05` ×4). The
+previous summary counted those 8 moved declarations as **11 instances** (the
+`WDG-02` loop generates 4 tests), so it over-counted `kept` by 3 and
+under-counted `unclassified` by 3. This batch uses **declaration accounting
+throughout** (the units the 148 baseline is built from) and records the instance
+counts separately in the notes.
+
+**Classification policy (applied below, no exceptions):**
+
+| Disposition | Meaning |
+|---|---|
+| `kept-in-journey` | The row's *observable* requires a real browser (shadow DOM, canvas pixels, capture API, network interception through a page) and it is a J-01..J-14 journey or a sub-assertion of one. |
+| `converted` | **Every** claim in the row is reproducible in a cheaper layer. The row is deleted from `sdk.spec.ts`. |
+| `justified-redundant` | Another row proves the same claim with equal or stronger evidence. Must name the superset row. |
+
+A row that mixes a pure-logic claim with a DOM claim is **kept** (the DOM half
+cannot be re-homed) and the pure half is additionally pinned at the cheaper
+layer; that pin is recorded in the row's "Target / justification" cell so the
+authority is never left untested. No row was marked `justified-redundant` in
+this batch: the two closest candidates (`ANN-06` undo-one-of-two and `ANN-06
+masks` undo-with-mask-present) are **not** redundant — only the first proves the
+undo stack pops exactly one entry.
+
+| # | Original Spec / Test Title (short) | Disposition | Target / Justification | Commit |
+|---|---|---|---|---|
+| 74 | `INT-01` — one async script tag boots `window.Watchbug` + isolated host, closed prod bundle | `kept-in-journey` | J-01. Boot of the shipped artifact; needs the IIFE lane in a real page. | |
+| 75 | `INT-01` — one-gesture launcher renders 48×48 inside the open-mode shadow root | `kept-in-journey` | J-01. Enters the shadow root (`watchbug.e2e.js`, R-14) — no browser, no evidence. | |
+| 76 | `WDG-06` — `.wrap lang` matches the resolved locale under the default locale | `kept-in-journey` | J-12. Rendered `lang` + English copy. Rule pinned in `tests/unit/i18n-resolver.test.ts`. | |
+| 77 | `WDG-04` — IIFE adds exactly one global, ESM none, native prototypes untouched | `kept-in-journey` | J-01. INV-02 is a property of the *running* bundles. | |
+| 78 | `INT-02` — launcher gesture files a real report (201) rendered in the panel | `kept-in-journey` | J-02 golden path; the only row that walks the compose stack (`route.continue`) end to end. | |
+| 79 | `INT-05` — ESM build boots the same widget, zero window properties | `kept-in-journey` | J-01. Second bundle lane; global-surface delta is runtime-only. | |
+| 80 | `WDG-01` — launcher is a 48×48 shadow-root button, disabled while panel open | `kept-in-journey` | J-01. Geometry + disabled rendering. | |
+| 81 | `CAP-01` — one gesture drives the engine capture tier to a non-blank frame + 201 | `kept-in-journey` | J-02/J-03. `getDisplayMedia` live path. | |
+| 82 | `CAP-04` — widget host hidden during capture; accent pixels absent from the sent image | `kept-in-journey` | J-03. Pixel-level capture integrity (`analyzeImagePixels`). | |
+| 83 | `CAP-05` — frame wider than `MAX_IMAGE_DIM` scaled to 8192 px before encode | `kept-in-journey` | J-08. Real canvas encode + decode of the delivered bytes. | |
+| 84 | `CAP-05` — oversized 16 MP synthetic frame delivered inside 16 MP / 2 MB | `kept-in-journey` | J-08. Encode ladder under the real engine. | |
+| 85 | `CAP-05` — `deviceScaleFactor: 2` capture decodes non-blank at expected dimensions | `kept-in-journey` | J-08. HiDPI device emulation is browser-only. | |
+| 86 | `CAP-05` — devicePixelRatio above the clamp of 2 is reduced before encode | `kept-in-journey` | J-08. Same ladder, DPR-3 device. | |
+| 87 | `M-3` — forced PNG encode ships `.png` / `image/png` and the real API returns 201 | `kept-in-journey` | J-09. R-11 WebP→PNG fallback through a stubbed encoder. | |
+| 88 | `CAP-03` — a blank capture never posts before the user chooses | `kept-in-journey` | J-07. Blank detection + degraded composer. | |
+| 89 | `P2-D-12` — sparse but real page is not blank; the report is sent | `kept-in-journey` | J-03. Blank-detection negative control (pixels). | |
+| 90 | `P2-D-12` — frame beyond the canvas cap aborts to the blank bucket | `kept-in-journey` | J-07. Failure routing into the degraded composer. | |
+| 91 | `OQ-1` — a non-tab capture surface is refused loudly, nothing sent | `kept-in-journey` | J-03. `preferCurrentTab` surface check. | |
+| 92 | `CAP-01` — rejected capture prompt opens the degraded composer with both actions | `kept-in-journey` | J-07. Permission-denial UI. | |
+| 93 | `P2-D-03` — transient 500 retries with the same `Idempotency-Key` and same encoded bytes | `kept-in-journey` | J-10. The **browser** half is the observable: `Capturing… → Sending… → Retrying (1 of 3)… → Report sent ✓`, launcher disabled for the retry window, and byte-equal parts through the *real* encode pipeline. Transport classification pinned in `tests/integration/transport-retry.test.ts`. | |
+| 94 | `P2-D-03` — contract 400 fails immediately, renders the server message, never retries | `kept-in-journey` | J-10. Browser half: `role="alert"` headline, reason text, Retry/Dismiss buttons, disabled launcher. Classification + `SendError.reason` pinned in `tests/integration/transport-retry.test.ts`. | |
+| 95 | `UI-SPEC backstop` — long server reason truncated to ≤240 chars with an ellipsis in ≤320 px | `kept-in-journey` | J-10. Rendering: the same string inside the 320 px panel. `truncateReason` (the whole clamp) pinned in `tests/unit/status-truncate.test.ts`. | |
+| 96 | `UI-SPEC A-5/A-7` — sent auto-dismisses after 5 s, Escape dismisses a terminal failure | `kept-in-journey` | J-10. Wall-clock timing + `data-hidden` transition + keyboard focus. | |
+| 97 | `PRV-02` — JWT shape masks the whole text node (zero original pixels in rect + 1-px ring) | `kept-in-journey` | J-04. **Security, R-19: stays e2e.** Decoded-bytes artifact evidence. | |
+| 98 | `PRV-02` — JWT lookalike outside the `eyJ` shape stays visible | `kept-in-journey` | J-04. **Security.** Negative control — over-masking is a product bug. | |
+| 99 | `PRV-01` — `input[type=password]` masks at the full element rect | `kept-in-journey` | J-04. **Security.** | |
+| 100 | `PRV-02` — bearer-token shape masks the containing text node | `kept-in-journey` | J-04. **Security.** | |
+| 101 | `PRV-02` — `key=/token=/secret=/password=` assignments mask the containing text node | `kept-in-journey` | J-04. **Security.** | |
+| 102 | `PRV-02` — Luhn-valid card masks while its Luhn-invalid lookalike stays visible | `kept-in-journey` | J-04. **Security** + negative control. | |
+| 103 | `PRV-02` — two Luhn-valid cards in one text node mask the whole node | `kept-in-journey` | J-04. **Security.** | |
+| 104 | `PRV-03` — `data-watchbug-sensitive` element masks at the full element rect | `kept-in-journey` | J-04. **Security.** | |
+| 105 | `S-7 / PRV-02` — secrets in an OPEN shadow root and a same-origin iframe mask | `kept-in-journey` | J-04. **Security.** Root-traversal reach is DOM-only. | |
+| 106 | `S-7 guard` — a transformed same-origin frame is refused loudly, nothing sent | `kept-in-journey` | J-03. Fail-closed geometry guard; needs a real iframe. | |
+| 107 | `WR-03 guard` — with no CSPRNG the flow fails visibly, never a guessable key | `kept-in-journey` | J-11. `crypto.getRandomValues` removal + visible failure state. | |
+| 108 | `H-1` — devicePixelRatio 1 masks in bitmap space (rect + 1-px ring clean) | `kept-in-journey` | J-08. DPR matrix over auto-redaction pixels. | |
+| 109 | `H-1` — devicePixelRatio 1.25 (non-integer scale) masks in bitmap space | `kept-in-journey` | J-08. | |
+| 110 | `H-1` — devicePixelRatio 2 masks in bitmap space | `kept-in-journey` | J-08. | |
+| 111 | `H-1` — devicePixelRatio 3 masks before the DPR-2 encode clamp | `kept-in-journey` | J-08. | |
+| 112 | `P2-D-08` — a partially-matching text node masks its whole rect | `kept-in-journey` | J-04. **Security** (over-mask is the safe direction). Pixels only. | |
+| 113 | `fail-closed` — a redaction scan error lands in the loud capture-failed state, zero POSTs | `kept-in-journey` | J-04. Error injection into the live scan + zero-request assertion. | |
+| 114 | `PRV-05` — the report carries no host cookie, storage or auth material | `kept-in-journey` | J-11. **SEC-03, stays e2e.** Sentinels planted in the real host context. | |
+| 115 | `PRV-06` — `meta.url` is path-only, query + fragment never enter the report | `kept-in-journey` | J-11. Intercepted request from a real page (the artifact-level proof). The helper is pinned in `tests/unit/sdk-meta.test.ts` (url half) and `tests/unit/url-path.test.ts` (API strip). | |
+| 116 | `P2-D-01` — the auto-title is `document.title` truncated to 200 code points, type is bug | `converted` | **`tests/unit/sdk-meta.test.ts`** — `buildMeta` is the production clamp (pure: reads `doc.title` + `loc.pathname`). All 8 tests carry the row's exact fixture (100 ASCII + 200 emoji) and thresholds. Both browser halves it also asserted are covered: `"type":"bug"` on the wire by `INT-02` (row 78) and the clamped prefill by `P3-D-02` (row 120). | |
+| 117 | `self-hosted` — zero third-party requests, only the configured API base | `kept-in-journey` | J-11. Every `page.on('request')` on a real navigation. | |
+| 118 | `S-8` — a cross-origin loading script refuses to init without an explicit `endpoint` | `kept-in-journey` | J-11. Cross-origin script tag in a real page. | |
+| 119 | `PRV-07` — review shows the flattened artifact and Send posts exactly once | `kept-in-journey` | J-02. The one-send guarantee on a live request. | |
+| 120 | `P3-D-02` — title prefills from `document.title` truncated to 200 code points; empty blocks review | `kept-in-journey` | J-02. DOM: `input.value`, aria-invalid, focus retention, recovery. Clamp pinned in `tests/unit/composer-text-clamp.test.ts`. | |
+| 121 | `P3-D-03` — segmented control defaults to bug, switches the heading, reaches the wire | `kept-in-journey` | J-02. `aria-pressed` + heading copy + wire value. | |
+| 122 | `P3-D-04` — composer is a wide overlay replacing the 320 px panel; Escape returns to idle | `kept-in-journey` | J-02. Measured widths + Escape key handling. | |
+| 123 | `P3-D-02 note counter` — hidden at 3,999 code points, visible at 4,000 | `kept-in-journey` | J-02. DOM: `data-shown` flip + counter text. Threshold, code-point counting and the `4000 / 5000` copy pinned in `tests/unit/composer-text-clamp.test.ts`. | |
+| 124 | `WDG-06 es` — the whole core surface renders Spanish copy with `lang="es"` | `kept-in-journey` | J-12. Rendered locale (`test.use({ locale: 'es-ES' })`). Rule pinned in `tests/unit/i18n-resolver.test.ts`. | |
+| 125 | `WDG-06 override` — the composer EN/ES pair switches copy and lang both ways, no host storage | `kept-in-journey` | J-12. Toggle clicks + the no-host-storage assertion. | |
+| 126 | `CAP-02 attach` — a picked PNG reaches the preview, the review and the wire | `kept-in-journey` | J-07. Real file input + decode. | |
+| 127 | `CAP-02 attach` — WebP and JPEG are accepted | `kept-in-journey` | J-07. Magic-byte sniffing on real bytes. | |
+| 128 | `CAP-02 reject` — a non-image is refused with the inline error and no request | `kept-in-journey` | J-07. DOM error copy + zero requests. | |
+| 129 | `CAP-02 reject` — an oversized-pixel file is refused | `kept-in-journey` | J-07. Decode-bomb guard on a real file. | |
+| 130 | `CAP-03` — a denied capture opens the degraded composer with both actions and files text-only | `kept-in-journey` | J-07. Permission denial + text-only lane. | |
+| 131 | `CAP-03 no-API` — a browser without `getDisplayMedia` still files text-only feedback | `kept-in-journey` | J-07. API removal in a real page. | |
+| 132 | `ANN-01` — freehand ink follows the drag path | `kept-in-journey` | J-06. Canvas pixel bands (`analyzeInk`). | |
+| 133 | `PRF-02 lazy` — the annotator chunk is fetched only on Annotate, exactly once, adds no global | `kept-in-journey` | J-06/J-13. Chunk request count + global surface on a live page. | |
+| 134 | `PRF-02 lazy` — loading state, failed load re-enables the button, retry opens the editor | `kept-in-journey` | J-06. Route-abort of the chunk + DOM states. | |
+| 135 | `ANN-02` — an arrow paints a shaft and a wider head | `kept-in-journey` | J-06. Pixel geometry. | |
+| 136 | `ANN-03` — a rectangle outlines its four edges and leaves the interior alone | `kept-in-journey` | J-06. Pixel geometry. | |
+| 137 | `ANN-04` — a text label is click-typed-confirmed without a modal | `kept-in-journey` | J-06. Real typing into the canvas overlay. | |
+| 138 | `ANN-04 empty` — confirming an empty label draws nothing | `kept-in-journey` | J-06. | |
+| 139 | `ANN-04 encoding` — a non-ASCII label is drawn verbatim | `kept-in-journey` | J-06. Canvas glyphs. | |
+| 140 | `ANN-06` — undo removes one stroke and never a mask | `kept-in-journey` | J-06. The **only** row proving the undo stack pops exactly one entry. | |
+| 141 | `ANN-06` — Ctrl/Cmd+Z matches the undo button | `kept-in-journey` | J-06. Keyboard path. | |
+| 142 | `WDG-06 editor` — the editor chrome localises | `kept-in-journey` | J-12. Lazy chunk's own dictionary (`STRINGS_EDITOR`, parity pinned in `tests/unit/i18n-resolver.test.ts`). | |
+| 143 | `PRV-04 CA-02` — a user mask destroys the region and its boundary ring (flat opaque fill) | `kept-in-journey` | J-05. **Security, R-19: stays e2e.** SEC-02 decoded-bytes artifact proof. | |
+| 144 | `ANN-05` — the first mask asks, later masks do not | `kept-in-journey` | J-05. Confirmation dialog state machine. | |
+| 145 | `ANN-05 Not now` — refusing the first mask bakes nothing; Escape does not close the editor | `kept-in-journey` | J-05. Pixel-level "nothing was baked". | |
+| 146 | `ANN-05 mask-mode` — the toggle shows only for the mask tool and defaults to fill | `kept-in-journey` | J-05. DOM visibility + default mode. | |
+| 147 | `PRV-04 pixelate` — block-averaged, grid-snapped and opaque | `kept-in-journey` | J-05. **Security.** R-13 ≥8 px, measured on pixels. | |
+| 148 | `PRV-04 stroke` — a freehand drawn across the mask cannot resurrect it | `kept-in-journey` | J-05. **Security.** Destructive bake proven on decoded bytes. | |
+| 149 | `ANN-06 masks` — undo removes strokes and never a mask | `kept-in-journey` | J-05. The mask survives two undos + a survivor-stroke control. | |
+| 150 | `PRV-04 DPR` — devicePixelRatio 1 masks land where they were dragged | `kept-in-journey` | J-05/J-08. **Security.** User-mask DPR matrix. | |
+| 151 | `PRV-04 DPR` — devicePixelRatio 1.25 (non-integer scale) masks land where dragged | `kept-in-journey` | J-05/J-08. **Security.** | |
+| 152 | `PRV-04 DPR` — devicePixelRatio 2 masks land where they were dragged | `kept-in-journey` | J-05/J-08. **Security.** | |
+| 153 | `PRV-04 DPR` — devicePixelRatio 3 masks before the DPR-2 encode clamp | `kept-in-journey` | J-05/J-08. **Security.** | |
+
+**Batch 3a totals:** `converted` 1 · `kept-in-journey` 79 · `justified-redundant` 0 — 80 of 80.
+The `Commit` column above is left blank for this batch: every row 74–153 was
+touched by the single commit **`6723c68`** (`refactor(03-08): Batch 3a — classify
+sdk.spec.ts and re-home the meta/i18n/transport logic`).
+
+**Rows explicitly NOT converted (and why), because they were on the batch's candidate list:**
+
+- `P2-D-03` (×2) — the transport half is now pinned at the cheaper layer, but the
+  rows are not removable: the retry *status copy sequence*, the disabled launcher
+  during the retry window, the `role="alert"`/`role="status"` pair and the
+  Retry/Dismiss affordances are the J-10 journey and only exist in the shadow DOM.
+- `UI-SPEC backstop` — `truncateReason` is pinned in unit, but the row's claim is
+  that the truncated string *renders inside a 320 px panel*; that is a layout
+  assertion.
+- `P3-D-02` / `P3-D-02 note counter` — the clamp arithmetic and the 4,000
+  threshold are pinned in unit; the `input.value`, `aria-invalid`, focus
+  retention and `data-shown` observations are DOM.
+- `WDG-06` (×4) — `detectLocale`/`t`/dictionary parity pinned in unit; the rows
+  observe rendered copy and `lang`.
+- `PRV-06` — a unit pin already existed (`tests/unit/url-path.test.ts`, Task 1);
+  the sdk row is the artifact-level interception over a real page and stays.
+- `P2-D-01` — **converted** (the batch's one full conversion).
+
+**Verification for this batch:** `npm run test:unit` 5 files / 35 tests green;
+`npm run test:integration` 11 files / 65 tests green (48 previous + 17 new);
+`npm run verify` **279/279 passed** in 4.0 m (93 per engine); `npm run gate`
+5/5; `npm run check:size` PASSED (core 17.2 KB gz / 45, lazy 6.8 / 25, runtime
+24.4 / 80); `packages/sdk` `tsc --noEmit` clean.
+
+---
+
+### Task 3 — Batch 3b: journey grouping for capture fidelity + redaction (36 rows) and one new unit lane
+
+This batch is **structural plus one conversion**. No row changed disposition:
+a row that observes pixels, a capture surface or the wire cannot move to a
+cheaper layer, and Batch 3a already pinned the pure halves of the meta/status/
+composer/i18n rows. What changes is the *shape* — six `test.describe` journey
+blocks now hold 36 of the 80 classified rows — plus the one genuinely pure
+family that had no cheaper pin yet: **redaction pattern matching**.
+
+| Journey block created | Rows moved in | Count |
+|---|---|---|
+| `J-02 — Golden path: capture, compose, review, send, panel` | 78, 81, 119, 120, 121, 122, 123 | 7 |
+| `J-03 — Capture integrity: a real frame, no widget, fail-closed geometry` | 82, 89, 91, 106 | 4 |
+| `J-04 — Automatic redaction (tier 1), proven on decoded bytes` | 97, 98, 99, 100, 101, 102, 103, 104, 105, 112, 113 | 11 |
+| `J-08 — HiDPI capture fidelity: the DPR matrix` | 83, 84, 85, 86, 108, 109, 110, 111 | 8 |
+| `J-09 — WebP→PNG silent fallback (R-11)` | 87 | 1 |
+| `J-11 — Payload privacy and self-hosting (SEC-03)` | 107, 114, 115, 117, 118 | 5 |
+
+**New cheaper-layer pin (not a row conversion): `tests/unit/redaction-patterns.test.ts`, 8 tests.**
+
+| Row | Row disposition | Pure half now pinned at |
+|---|---|---|
+| 97 `PRV-02` JWT shape | `kept-in-journey` | `redaction-patterns.test.ts` — the exact JWT fixture matches the `jwt` family, and as a substring of surrounding prose (P2-D-08 granularity). |
+| 98 `PRV-02` JWT lookalike | `kept-in-journey` | Same file — the `eyJ`-less dotted triple matches **no** family, with a non-vacuity guard that it really is a three-segment triple. |
+| 100 `PRV-02` bearer shape | `kept-in-journey` | Same file — the auth-scheme shape matches inside the row's `Authorization:` prose. |
+| 101 `PRV-02` `key=/token=/secret=/password=` | `kept-in-journey` | Same file — both assignments in the row's fixture match, including `api_key:` (no leading word boundary: recall beats precision, P2-D-09). |
+| 102 `PRV-02` Luhn-valid + lookalike | `kept-in-journey` | Same file — `4111111111111111` and `4242424242424242` pass `luhnValid`, `4242424242424241` fails, and the family therefore masks only the first. |
+| 103 `PRV-02` two glued cards | `kept-in-journey` | Same file — the glued run does **not** pass as one Luhn body and the family still accepts it through group/adjacent-join validation (review CR-02). |
+| 99, 104, 105, 112, 113 | `kept-in-journey` | Nothing to pin: the claim is a DOM rect (password control, `data-watchbug-sensitive` element), root traversal, over-masking a node's rect, or an injected scan failure. |
+| 87, 106, 107, 114, 115, 117, 118 | `kept-in-journey` | Nothing to pin: encoder fallback sniffing, capture geometry, `crypto` removal, planted host sentinels, `referer`/wire bytes, request census, cross-origin script load. |
+
+**Rows reviewed and deliberately NOT converted in this batch:**
+
+- `CAP-05` (×4) and `H-1` (×4) — every claim is a decoded-image dimension or a
+  bitmap-space mask rect. The DPR clamp arithmetic exists only as *observable
+  output* (`427×240` for a 3× frame clamped to 2×); asserting the formula
+  separately would test a copy of the code, not the code.
+- `M-3` — the claim is which MIME/`filename`/magic the delivered part carries.
+  The sniff decision is one branch inside the encode sink, and the artifact is
+  the only honest witness.
+- `CAP-01`/`CAP-04`/`OQ-1`/`S-7 guard`/`P2-D-12` — capture-surface behaviour
+  (`getDisplayMedia` tier, hidden host, refused surface, transformed frame).
+- `P3-D-02`/`PRV-07`/`INT-02` — already pinned at the cheaper layer in Batch 3a
+  (`composer-text-clamp`, `sdk-meta`); the rows keep `input.value`, the review
+  DOM and the one-send guarantee.
+- `WR-03`/`PRV-05`/`PRV-06`/`self-hosted`/`S-8` — security rows over planted
+  host sentinels and live request bytes (R-19: stays e2e).
+
+**Grouping mechanics.** Each moved row keeps its body verbatim (only the
+indentation changed, to sit inside the journey block). The six DPR rows are
+parameterised by nested `test.describe('CAP-05 — deviceScaleFactor: N')` /
+`test.describe('H-1 — deviceScaleFactor: N')` blocks because `test.use()`
+must be scoped to a describe — they are parameterisation for **one** journey,
+not journeys of their own.
+
+**Verification for this batch:** `npx playwright test e2e/sdk.spec.ts
+--project=chromium` **79/79 passed** in 59.9 s (no skips); `npx vitest run`
+**114/114 passed** across 19 files (35 unit + 65 integration + contract +
+packaging, plus the 8 new); `npx playwright test --list` **279 tests in 3
+files** — identical to the pre-batch count, so no row was lost. Two orphaned
+section banners left behind by the moves were collapsed into helper-section
+banners.
+
+---
+
+### Task 3 — Batch 3c: journey grouping for the annotator/mask families (38 rows) and the mask-arithmetic unit lane
+
+Same shape as 3b: **six more journey blocks, 38 rows, zero disposition changes**,
+plus one new cheaper-layer pin for the mask *mechanism*.
+
+| Journey block created | Rows moved in | Count |
+|---|---|---|
+| `J-05 — Manual mask (tier 2/3): the destructive bake` | 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153 | 11 |
+| `J-06 — Full annotation: ink, shapes, labels, undo, lazy recovery` | 132, 134, 135, 136, 137, 138, 139, 140, 141 | 9 |
+| `J-07 — Degraded capture and attachment` | 88, 90, 92, 126, 127, 128, 129, 130, 131 | 9 |
+| `J-10 — Transport resilience: retry, terminal failure, dismissal` | 93, 94, 95, 96 | 4 |
+| `J-12 — i18n: English and Spanish across core and the lazy chunk` | 76, 124, 125, 142 | 4 |
+| `J-13 — Lazy-chunk boundary: one fetch, no global` | 133 | 1 |
+
+**New cheaper-layer pin (not a row conversion): `tests/unit/mask-geometry.test.ts`, 16 tests.**
+
+| Row | Row disposition | Pure half now pinned at |
+|---|---|---|
+| 143 `PRV-04 CA-02` flat opaque fill | `kept-in-journey` | `mask-geometry.test.ts` — `solidFillRegion` paints `MASK_RGB` at `MASK_ALPHA_OPAQUE` over the floored/ceiled rect, forces alpha even when the target's alpha is 0, leaves every outside pixel untouched, and throws on a non-finite rect. |
+| 147 `PRV-04 pixelate` | `kept-in-journey` | Same file — `blockSizeFor` (R-13 floor `max(8, 2× cap height)`, monotonic, ceil never truncates), `snapOutward` (floor left/top, ceil right/bottom, tiles from the bitmap origin, may only grow the area, refuses a non-tiling block), and `pixelateRegion` (rounded block mean, alpha forced opaque, a partial edge block averages its own pixels only — 255/4 = 64, not 255/64 — and never writes outside its rect). |
+| 144, 145, 146, 148, 149, 150–153 | `kept-in-journey` | Nothing to pin: the confirmation state machine is DOM, and the rest are the mask's own pixels in the delivered image at four device scales. |
+| 132, 135–141 | `kept-in-journey` | Nothing to pin: every claim is ink bands read out of the decoded image (and, for ANN-04, real typing into the canvas overlay). The undo stack is not a pure module — `undoStroke()` pops and then `redraw()`s the canvas, so "pops exactly one" is only observable as the middle ink band disappearing. |
+| 88, 90, 92, 126–131 | `kept-in-journey` | Nothing to pin: capture denial, missing API, file-input decode, magic-byte sniffing and the zero-request assertion. |
+| 93, 94, 95, 96 | `kept-in-journey` | Already pinned in Batch 3a (`tests/integration/transport-retry.test.ts` for classification, `tests/unit/status-truncate.test.ts` for the clamp); what remains is the shadow-DOM status sequence and wall-clock timing. |
+| 76, 124, 125, 142 | `kept-in-journey` | Already pinned in Batch 3a (`tests/unit/i18n-resolver.test.ts`); what remains is rendered copy, `lang` and the toggle. |
+| 133 | `kept-in-journey` | Nothing to pin: chunk request counts and the global-surface delta over a live page. The *budget* half is type 6 (`check:size`). |
+
+**One measurement worth recording (no code change).** `blockSizeFor(Number.NaN)`
+returns `NaN` — `Math.max(8, Math.ceil(NaN))` propagates. The floor is still
+guaranteed in production because the only caller passes `capHeightPx(ctx)`,
+which substitutes `LABEL_FONT_PX` for a non-finite or non-positive ascent.
+The unit row asserts the real contract (`NaN` propagates; the guard is at the
+call site) instead of claiming a floor the function does not implement — no
+threshold was relaxed and no production code was touched.
+
+**Grouping mechanics.** `test.use({ locale: 'es-ES' })` (WDG-06 es / editor) and
+`test.use({ deviceScaleFactor: N })` (PRV-04 DPR ×4) must be describe-scoped, so
+those six blocks became nested parameterisation describes inside J-12 / J-05 —
+not journeys of their own. Row order inside each journey follows the ledger's
+row numbering, not the original file order.
+
+**Verification for this batch:** `npx playwright test e2e/sdk.spec.ts
+--project=chromium` **79/79 passed** in 1.0 m (no skips); `npx vitest run`
+**138/138 passed** across 21 files (59 unit + 65 integration + 6 contract + 8
+packaging); `npx playwright test --list` **279 tests in 3 files** — unchanged,
+so no row was lost. Two expectation bugs in the *new* unit file were found and
+fixed against the real code paths before commit (not by weakening anything).
+
+---
+
+### Task 3 — Batch 3d: J-01 in place, the J-14 block, the cap enforced as a test
+
+The closing pass. No row changed disposition and none moved between layers: this
+batch places the last journey, makes the cap executable, and repairs the
+documentation the earlier moves left behind.
+
+**Structural changes.**
+
+1. `e2e/sdk.spec.ts` — the five J-01 rows (74, 75, 77, 79, 80) moved into
+   `test.describe('J-01 — Script tag, boot and the global surface')`, and the
+   thirteen journey blocks were **sorted into numeric order**. The file now has
+   **0** rows at column 0.
+2. `e2e/hostile.spec.ts` — the nine J-14 declarations (rows 57, 59–66) were
+   wrapped in `test.describe('J-14 — Hostile host CSS and render-inert
+   payloads')`. J-14 was the only journey living outside a block after Batch
+   2b moved its rows to their own spec.
+3. `e2e/sdk.spec.ts` prologue — the orphaned family banners (`Tracer rows`,
+   `Status-machine rows`, `Auto-redaction artifact rows`, `Composition rows`,
+   `Self-hosted promise`, `S-8`, `CAP-02/CAP-03`, …) are gone. Each surviving
+   banner now names the **helper cluster** it introduces and the journey that
+   consumes it, and the file opens with a `Shared harness` note stating the
+   one-describe-per-journey contract. The old `R-12: e2e only, no unit tests` (superseded by R-19)
+   paragraph was removed with them — R-19 supersedes it (this plan) and the sentence was
+   the last stale copy in this file.
+4. `tests/packaging/journey-cap.test.ts` (**new, 5 tests, type 6**) — the cap
+   is now a failing test rather than an aspiration: the 13 + 1 block
+   inventory, the exact J-01..J-14 set with no duplicates, **zero** top-level
+   rows in either widget spec, and the absence of J-15..J-20. A reserved number
+   mentioned in *prose* is allowed (that is how the reservation is documented);
+   only a test/describe **titled** with one fails.
+
+**Rows reviewed and deliberately NOT converted in this batch:** the five J-01
+rows are boot/global-surface/geometry observations over the shipped artefacts
+(IIFE + ESM lanes, closed shadow root, 48×48 launcher, disabled-while-open) —
+INV-01/INV-02 are properties of the *running* bundles, and no cheaper layer can
+observe them. J-14 is hostile-CSS isolation (WDG-02/03/05, CA-04) plus the
+render-inert payload row: both need a real page with a hostile stylesheet or a
+stored hostile payload rendered by the panel. Nothing was converted, nothing
+was dropped, no threshold moved.
+
+**Verification for this batch (the Task 3 final gate).**
+
+| Gate | Result |
+|---|---|
+| `npm run verify` (chromium + firefox + webkit) | **279/279 passed** in 4.2 m, **no skips** |
+| `npx vitest run` | **143/143 passed** across 22 files (59 unit + 65 integration + 6 contract + 13 packaging) |
+| `npx playwright test --list` | **279 tests in 3 files** — identical to the pre-Task-3 count |
+| `test.describe('J-NN — ')` blocks | **13** in `sdk.spec.ts` (J-01..J-13, numeric order) + **1** in `hostile.spec.ts` (J-14) = **14 ≤ 14** |
+| Rows outside a journey block | **0** |
+| `J-15`..`J-20` present | **none** |
+| `npm run gate` | **5 passed, 0 failed, 0 skipped** |
+| `npm run check:size` | **PASSED** — core 17.2 / 45 KB gz, lazy 6.8 / 25, runtime 24.4 / 80 |
+
+**EOL note.** `sdk.spec.ts` was already mixed-EOL (4 CRLF lines among 4,340 LF);
+the batch preserved each line verbatim apart from indentation, and git reports
+the usual `LF will be replaced by CRLF` warning from `core.autocrlf`. No file
+content depends on the line ending.
+
+---
+
+## Summary Counts (running)
+
+| Disposition | Count |
+|-------------|-------|
+| kept-in-journey | 90 (2 ingest + 1 hostile XSS-render row + 8 `J-14` declarations moved from `sdk.spec.ts` + 79 `sdk.spec.ts` rows classified in Task 3a) |
+| converted | 57 (20 ingest + 3 read-surface + 26 hostile + 7 deploy + 1 sdk `P2-D-01`) |
+| justified-redundant | 1 (ingest i18n default) |
+| **Unclassified** | **0** |
+
+`57 + 90 + 1 = 148` — the baseline **source declaration** count, with no gaps.
+The `sdk.spec.ts` row is now 80 declarations, not 77: Batch 2b moved 8
+declarations (not 11 — 11 is the *instance* count the `WDG-02` loop inflates
+them to), so `88 − 8 = 80`. Instance counts are reported separately below.
+
+**Row-id reconciliation (audited 2026-10-29).** The disposition tables carry
+**153** numbered rows, not 148, because Batch 1c (the tracer) converted five
+tests that Batch 2a/2b then listed again in full. All five are verifiable
+re-listings, not extra coverage:
+
+| Task 1 row | Re-listed as | Test |
+|---|---|---|
+| #1 | #56 | `R-08/S-5: meta.url is stored path-only …` (row 1 attributes it to `ingest.spec.ts`; the baseline places it in `hostile.spec.ts` — row 56 is the correct attribution) |
+| #2 | #14 | `ING-03: same Idempotency-Key replays the same id …` |
+| #3 | #15 | `ING-03: concurrent pair with one key yields one row` |
+| #4 | #16 | `ING-03 (Q6): missing Idempotency-Key → 400 …` |
+| #5 | #18 | `CAP-03 text-only: a meta-only submission stores a row with no screenshot` |
+
+So `153 − 5 = 148` distinct dispositions, which is exactly
+`57 converted + 90 kept-in-journey + 1 justified-redundant`. The audit below
+asserts the stronger, machine-checkable property: ids are contiguous `1..153`
+with no gaps, no duplicate ids, and every row carries exactly one disposition
+plus a non-empty target/justification.
+
+**Instances per engine (post-Batch 3a, `npx playwright test --list`):**
+
+| Spec | Declarations | Instances |
+|------|--------------|-----------|
+| `e2e/sdk.spec.ts` | 79 | 79 |
+| `e2e/hostile.spec.ts` | 9 | 12 |
+| `e2e/ingest.spec.ts` | 2 | 2 |
+| **Per engine** | **90** | **93** |
+| **× 3 engines** | | **279** |
+
+---
+
+## Journey Mapping (J-01..J-14 widget subset) — final, structural
+
+Every row that stayed in `e2e/` now lives inside exactly one
+`test.describe('J-NN — …')` block. `Rows` are this ledger's numbers; `Count`
+is declarations (instances are reported separately at the bottom).
+
+| Journey block title | Home spec | Rows | Count |
+|---|---|---|---|
+| `J-01 — Script tag, boot and the global surface` | `sdk` | 74, 75, 77, 79, 80 | 5 |
+| `J-02 — Golden path: capture, compose, review, send, panel` | `sdk` (+1 cross-spec) | 78, 81, 119, 120, 121, 122, 123 · *ingest row 23* | 7 (+1) |
+| `J-03 — Capture integrity: a real frame, no widget, fail-closed geometry` | `sdk` | 82, 89, 91, 106 | 4 |
+| `J-04 — Automatic redaction (tier 1), proven on decoded bytes` | `sdk` | 97, 98, 99, 100, 101, 102, 103, 104, 105, 112, 113 | 11 |
+| `J-05 — Manual mask (tier 2/3): the destructive bake` | `sdk` | 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153 | 11 |
+| `J-06 — Full annotation: ink, shapes, labels, undo, lazy recovery` | `sdk` | 132, 134, 135, 136, 137, 138, 139, 140, 141 | 9 |
+| `J-07 — Degraded capture and attachment` | `sdk` (+1 cross-spec) | 88, 90, 92, 126, 127, 128, 129, 130, 131 · *ingest row 21* | 9 (+1) |
+| `J-08 — HiDPI capture fidelity: the DPR matrix` | `sdk` | 83, 84, 85, 86, 108, 109, 110, 111 | 8 |
+| `J-09 — WebP→PNG silent fallback (R-11)` | `sdk` | 87 | 1 |
+| `J-10 — Transport resilience: retry, terminal failure, dismissal` | `sdk` | 93, 94, 95, 96 | 4 |
+| `J-11 — Payload privacy and self-hosting (SEC-03)` | `sdk` | 107, 114, 115, 117, 118 | 5 |
+| `J-12 — i18n: English and Spanish across core and the lazy chunk` | `sdk` | 76, 124, 125, 142 | 4 |
+| `J-13 — Lazy-chunk boundary: one fetch, no global` | `sdk` | 133 | 1 |
+| `J-14 — Hostile host CSS and render-inert payloads` | `hostile` | 57, 59, 60, 61, 62, 63, 64, 65, 66 | 9 |
+
+**Structural count (the part Task 3d had to prove):**
+
+| Claim | Value |
+|---|---|
+| `test.describe('J-NN — …')` blocks in `e2e/sdk.spec.ts` | **13** (J-01..J-13, in numeric order) |
+| … in `e2e/hostile.spec.ts` | **1** (J-14) |
+| Widget journeys total | **14** — at the cap, and below R-19's 20 |
+| Rows declared at column 0 (outside a journey) in either spec | **0** |
+| `J-15`..`J-20` claimed by any test/describe title | **0** (reserved for Phases 4–7) |
+| Instances per engine | **93** (sdk 79 + hostile 12 + ingest 2) |
+| Instances over 3 engines (`npm run verify`) | **279** |
+
+Two rows live *outside* the two widget specs by design: the panel-render
+halves of J-02 (row 23) and J-07 (row 21) stayed in `e2e/ingest.spec.ts`, where
+the whole ingest/panel stack already runs. Their titles name the journey
+(`"J-02 panel renders the row and its screenshot"`, `"J-07 CAP-03 text-only:
+the panel lists it"`) but they are not wrapped in a describe, so a journey is
+never described twice across the suite.
+
+The cap is **enforced**, not just measured: `tests/packaging/journey-cap.test.ts`
+(type 6) asserts the 13 + 1 block inventory, the exact J-01..J-14 set with no
+duplicates, zero top-level rows in either spec, and the absence of J-15..J-20.
+A 15th widget journey or a stray top-level row now fails `npm run
+test:packaging` in milliseconds.
+
+---
+
+## Notes
+
+- Security rows (PRV-01..04, CA-02 decoded-bytes) **stay e2e** per R-19 — artifact-level evidence must not be downgraded.
+- The ledger will be updated after each batch checkpoint.
+- Final audit in Task 5 must show 148 declarations accounted for with no gaps
+  (152 was the earlier instance-based figure; the ledger now reconciles on
+  declarations and reports instances separately).
+- **Batch 3a** (Task 3): all 80 remaining `sdk.spec.ts` declarations classified;
+  1 fully converted (`P2-D-01` → `tests/unit/sdk-meta.test.ts`), 79 kept with
+  their pure-logic halves pinned at the cheaper layer:
+  `tests/unit/sdk-meta.test.ts` (8), `tests/unit/composer-text-clamp.test.ts` (7),
+  `tests/unit/status-truncate.test.ts` (5), `tests/unit/i18n-resolver.test.ts` (8),
+  `tests/integration/transport-retry.test.ts` (17).
+  Two production functions gained an `export` so the unit lane imports the real
+  code instead of a copy: `codePoints` / `clampCodePoints` in
+  `packages/sdk/src/widget/composer.ts` (no behaviour change; the module is
+  already imported by the built bundle unchanged).
+- **Batch 3a non-conversions and why** — recorded per row above. The short
+  version: every remaining row observes something only the browser produces
+  (shadow DOM, canvas `ImageData`, `getDisplayMedia`, chunk fetches, planted
+  host sentinels). Rows whose *only* claim was pure logic were converted; rows
+  that mix a pure claim with a DOM claim keep the DOM row and pin the pure claim
+  at the cheaper layer. No threshold was weakened and no security row
+  (`PRV-01..07`, `CA-02`/`PRV-04` decoded-bytes) moved out of e2e.
+- Task 1 entries 2-5 were reclassified from `kept-in-journey` to `converted` after Batch 2a clarified journey scope: J-10 (transport resilience) and J-07 (text-only panel) are browser journeys, but the idempotency and text-only API tests are HTTP-surface and belong in integration. They are the **same** declarations later listed as Batch 2a rows 14-16/18 — the tracer batch adds no test beyond the 148 baseline.
+- `read-surface.spec.ts` deleted entirely — all 3 tests re-homed to `tests/integration/read-surface-rate-limit.test.ts`.
+- Batch 2b: `hostile.spec.ts` (27 tests) → 1 kept (`ING-07 pass 2` render-inert) + 26 converted; J-14 (11 tests) physically moved from `sdk.spec.ts` to the new `e2e/hostile.spec.ts`, which is now 12 tests. Integration/contract/packaging gained 21 new tests (48 integration, 6 contract, 1 packaging).
+- Batch 2b re-homes map to five files: `hostile-size-caps` (5), `hostile-auth-rate-limit` (10), `hostile-sanitisation` (6), `hostile-payload-control` (6), `no-dangerouslySetInnerHTML` (1).
+- Batch 2c: `deploy.spec.ts` (7 tests) re-homed **entirely** to `tests/packaging/deploy-contract.test.ts` and the spec deleted — no row was a core user journey. Research's J-21 (first-run `docker-compose` + onboarding curl) is deliberately type 6 per the plan, so the journey cap stays at exactly 20 with J-15..J-20 reserved for Phases 4–7. `e2e/` is now three specs — `sdk` 80 instances (77 declarations + 3 generated `for`-loop variants), `hostile` 12, `ingest` 2 = 94 per engine, 282 over 3 engines, confirmed by `npx playwright test --list`.
+- Batch 2c coverage audit: every original assertion survives. The two browser-only halves have named successors rather than drops — the rendered "Watchbug" heading/app frame is exercised by the kept J-02/J-07 panel journeys, and the "no CSP refusal" console watch is replaced by its artifact-level *cause* (the shipped `apps/panel/dist/index.html` carries no inline `<script>`/`<style>`, which is what `default-src 'self'` would refuse). Every live row targets the same `http://127.0.0.1:8080` same-origin surface the deleted spec used.
+- Batch 2c environment note: the three live rows need the compose stack, exactly as the integration suite needs the published API. `test:packaging` now runs `check:size` → `check:compose` → `vitest run tests/packaging` so the type-6 suite is actually executed by the command that names it (previously only the two gate scripts ran, leaving the packaging tests uninvoked by their own script). Verified: `test:packaging` 8/8 green, `npx vitest run tests/integration tests/contract tests/packaging` 62/62 (55 previous + 7 new), `npm run verify` 282/282, `gate` 5/5, `check:size` PASS.
+- Batch 2c docs: `.github/workflows/ci.yml`'s host-build comment referenced `deploy.spec.ts` as the spawner of `apps/api/dist/index.mjs`; it now names `tests/packaging/deploy-contract.test.ts`.
+- **Commit map** (the `Commit` column is left as `—` where a row's batch hash is recorded here instead): Task 1 / Batch 1c = `792ab96`; Batch 2a (rows 6–20, 22, 24–27, 29–31) = `132a2c5`; Batch 2b (rows 32–66) = `b1e2b35`, ledger hash backfill = `78d632e`; Batch 2c (rows 67–73) = `49ee180`; Batch 3a (rows 74–153) = `6723c68`; Batch 3b (J-02/03/04/08/09/11 + `tests/unit/redaction-patterns.test.ts`) = `837e6e8`; Batch 3c (J-05/06/07/10/12/13 + `tests/unit/mask-geometry.test.ts`) = `e671c19`; Batch 3d (J-01, J-14 block, prologue banners, `tests/packaging/journey-cap.test.ts`) = the `refactor(03-08): Batch 3d …` commit, whose hash is recorded in `03-08-SUMMARY.md`.
+- **Batches 3b–3d in one line:** the widget suite is now *shaped* like the journey table — 13 describes in `sdk.spec.ts` plus J-14 in `hostile.spec.ts`, 0 rows outside a block, and `tests/packaging/journey-cap.test.ts` fails if that ever stops being true. Two new unit lanes (24 tests) pin the pure halves that were previously only implied by pixel rows: redaction pattern matching (J-04) and mask arithmetic (J-05). No row was deleted, no threshold weakened, no security row left e2e.
+- **Batch 3d measurement:** the four `WDG-06`/`PRV-04`/`CAP-05`/`H-1` `test.use()` groups are *nested* parameterisation describes (`deviceScaleFactor: N`, `locale: es-ES`) inside their journey. They are not journeys, which is why the J-NN count is 14 and not 22; the cap test counts only `J-NN — ` titles by construction.
