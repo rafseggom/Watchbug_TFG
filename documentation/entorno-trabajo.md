@@ -92,7 +92,7 @@ En una máquina nueva se copian estos archivos al mismo directorio tras instalar
 | `cyclomatic-complexity` | Análisis de complejidad ciclomática. |
 | `informe-analisis` | Custom Watchbug: genera `documentation/phase<N>/NN-INFORME-ANALISIS.md`. |
 
-Instalación en una máquina nueva: copiar las siete entradas (seis skills) a
+Instalación en una máquina nueva: copiar las seis skills a
 `~/.config/opencode/skills/`.
 
 ### 6.2 `~/.agents/skills/` — ~65 skills (directorio cross-agent)
