@@ -26,6 +26,7 @@
     "test": "npm run test:unit && npm run test:integration",
     "lint": "npm run typecheck --workspaces --if-present",
     "dev": "tsx watch apps/api/src/index.ts",
+    "uat": "node scripts/manual-uat.mjs",
     "key:gen": "node scripts/gen-key.mjs"
   },
   "devDependencies": {
