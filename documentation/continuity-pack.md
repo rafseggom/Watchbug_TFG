@@ -73,11 +73,13 @@ prefix still routed the two living docs into the historical bucket.
    remediation lands, re-run it against the state that motivated it and record
    the RED output; a fix that was never seen failing is a claim, not evidence.
 
-**Deliberately not fixed here.** `PROJECT.md`'s Validated/Active lists still
-carry items already complete (RF-01, RF-05, CA-04). That is a phase-transition
-re-baseline, not a consistency defect, and belongs to the Phase-4 transition.
-No decision was added to `resolution-record.md`: R-19 already states the
-taxonomy; only its enforcement and its copies were wrong.
+**Follow-up in the same handover.** The `PROJECT.md` Validated/Active re-baseline
+was first deferred to the Phase-4 transition and then completed here, because the
+branch was being handed over: RF-01, RF-05 and CA-04 moved to Validated with their
+requirement IDs, so the Active list matches the 41/29 Complete/Pending split in
+`REQUIREMENTS.md` traceability. No decision was added to
+`resolution-record.md`: R-19 already states the taxonomy; only its enforcement
+and its copies were wrong.
 
 ---
 

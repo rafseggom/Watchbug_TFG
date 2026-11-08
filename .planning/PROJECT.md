@@ -26,15 +26,18 @@ Every prioritisation trade-off resolves against this sentence. Capture fidelity 
   (WDG-06: locale resolver, whole core surface + editor chrome in EN/ES, session-scoped manual override with no host storage)
 - ✓ The client respects the tiered size budget and never blocks the main thread (RNF-01, CA-03, R-01) — Phase 3
   (lazy editor lane + runtime tier closed on emitted artifacts: core 17.2/45, lazy 6.8/25 with a 2 KB floor, runtime 24.4/80 KB gz; async script tag)
+- ✓ The report (image + JSON metadata) is transmitted over HTTP and persisted by the backend (RF-05, CA-01) — Phase 1
+  (ING-01, ING-03…08 and ENR-06 closed; the payload validates against `schema/report.schema.json` on the real ingest path)
+- ✓ A developer can add Watchbug to any web app with one script tag and get a working floating widget (RF-01, RNF-01, RNF-02) — Phase 2
+  (INT-01/INT-05, WDG-01 and PRF-01…04 closed; phase close at `npm run verify` 315/315)
+- ✓ The widget is immune to hostile host CSS and never contaminates the host page's styles or globals (RNF-02, INV-01, INV-02, CA-04) — Phase 2
+  (WDG-02…05 closed; the CA-04 fixture injects aggressive global CSS and asserts the launcher stays interactive)
 
 ### Active
 
-- [ ] A developer can add Watchbug to any web app with one script tag and get a working floating widget (RF-01, RNF-01, RNF-02)
-- [ ] An end user can file a bug report carrying an annotated screenshot, console logs and environment metadata (RF-01, RF-03)
+- [ ] An end user can file a bug report carrying console logs and environment metadata on top of the annotated screenshot (RF-01, RF-03)
 - [ ] An end user can file plain feedback without being forced to attach console logs (RF-02)
-- [ ] The report (image + JSON metadata) is transmitted over HTTP and persisted by the backend (RF-05, CA-01)
 - [ ] A developer can authenticate to the panel and triage reports: list, filter by bug/feedback, change state (Pending / In Progress / Resolved), inspect collected metadata (RF-06, RF-07, SEC-06)
-- [ ] The widget is immune to hostile host CSS and never contaminates the host page's styles or globals (RNF-02, INV-01, INV-02, CA-04)
 - [ ] Unauthenticated requests to panel API routes return `401 Unauthorized` (CA-05)
 - [ ] A deployment can hold multiple projects, each with its own public write-only key (R-06)
 
@@ -125,4 +128,4 @@ This document evolves at phase transitions and milestone boundaries.
 **Cross-cutting:** dead-ends discovered during execution go to `documentation/continuity-pack.md` §4 (ASE *Anti-Amnesia*), and any decision that touches a `mission-brief.md` §3 restricted item requires a Consultation Request Pack first.
 
 ---
-*Last updated: 2026-11-08 — doc-consistency sync (R-18/R-19 into Out of Scope, Context and Key Decisions); content baseline Phase 3 (2026-11-03).*
+*Last updated: 2026-11-08 — doc-consistency sync (R-18/R-19 into Out of Scope, Context and Key Decisions) and Validated/Active re-baselined against the requirement traceability; content baseline Phase 3 (2026-11-03).*

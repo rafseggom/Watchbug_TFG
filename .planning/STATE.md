@@ -20,7 +20,7 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-11-03)
+See: .planning/PROJECT.md (updated 2026-11-08)
 
 **Core value:** When a bug report lands, the developer can reproduce the bug from it — and neither the report nor its screenshot ever leaves the developer's own infrastructure.
 **Current focus:** Phase 04 — Report Payload & Enrichment
