@@ -2,7 +2,82 @@
 
 State preserved across session resets. Read this at the start of every session (ASE §4D, *Anti-Amnesia*).
 
-**Last updated:** 2026-11-03 — Fase 3 en UAT manual (UAT 1 re-ejecutado tras corregir el arnés: §11).
+**Last updated:** 2026-11-08 — §12: la política R-19 no llegó a sus copias y el gate de política documental clasificaba por ruta. Fase 3 cerrada (UAT 7/7).
+
+---
+
+## 12. Documentation drift — R-19 reached the policy but not its copies (2026-11-08)
+
+> R-19 amends R-12 (`resolution-record.md` §1 row + §2 block). This section
+> records how that amendment failed to reach the documents it governs, and what
+> makes the failure repeatable.
+
+**Symptom.** Asked where R-19 was defined, the answer was unambiguous
+(`documentation/resolution-record.md` §1 row + §2 block). But two of the
+documents that R-19 governs still stated the retired policy verbatim:
+
+| File | Line | Stated | Contradicted by |
+|---|---|---|---|
+| `.planning/PROJECT.md` | 51 (Out of Scope) | unit suites out of scope, `R-12` | `PROJECT.md:80` (six-type taxonomy) in the same file |
+| `.planning/REQUIREMENTS.md` | 19 | "demonstrated by the e2e suite (R-12) or the size gate" | R-19's placement rule |
+| `.planning/REQUIREMENTS.md` | 21 | table header "amended per R-12" | R-19 is what amends R-12, not the reverse |
+| `.planning/REQUIREMENTS.md` | 38 | release gate = e2e + `check:size` only | `ROADMAP.md` release gate = the six types |
+| `AGENTS.md` | 122 (invariants table) | `E2E and property assertions ONLY` | `AGENTS.md:195` (Testing & QA) in the same file |
+| `.planning/PROJECT.md` | Key Decisions | ended at R-17 | its own §Evolution requires logging to the table **and** the record |
+
+**Two independent root causes — fixing either one alone would not have helped.**
+
+1. **The propagation was phrase-shaped, not fact-shaped.** The 03-08 amendment
+   declared three targets (`AGENTS.md`, `ROADMAP.md`, `resolution-record.md`)
+   and then patched only the sentences that *literally matched* the retired
+   wording. Proof: the same Out-of-Scope row was corrected in `REQUIREMENTS.md`
+   (commit `792ab96`) and left untouched, word for word, in `PROJECT.md` — the
+   convergence commit `a7abdfb` ("every document that stated R-12") rewrote
+   exactly one line of `PROJECT.md`, the `Verification` constraint.
+2. **The gate classified by path, not by role.** `doc-policy-consistency.test.ts`
+   granted the lenient file-level marker to everything under `.planning/`. That
+   rule is right for frozen artifacts (`phases/`, `quick/`, `quick-batches/`,
+   `research/`) and wrong for `PROJECT.md` and `REQUIREMENTS.md`, which live
+   there but are governing documents. One `(R-19 amends R-12)` anywhere in a
+   294-line file excused every contradiction in that file, in either direction. The gate's own
+   "governing documents agree" test also omitted `PROJECT.md`: the only
+   document that contradicted the policy was the one test that never read it.
+
+This qualifies finding **S-4.2** in `documentation/phase3/03-INFORME-ANALISIS.md`
+§9: the per-section marker was implemented as described, but the `.planning/`
+prefix still routed the two living docs into the historical bucket.
+
+**Fix (branch `gsd/phase-4`).**
+
+- The gate now uses a **positive** list of historical directories and files;
+  anything else — including unknown files under `.planning/` — defaults to the
+  stricter section-marker rule, so nothing becomes historical by accident.
+- Two retired phrasings added to the pattern list (the "unit suites out of
+  scope" and "e2e … only" variants) because a gate that knows one wording of a
+  claim does not check the claim.
+- `PROJECT.md` added to the governing-documents test.
+- The six contradictions above corrected at the source.
+
+**Rules for the next policy amendment (R-20 onward).**
+
+1. **Amend by fact, not by sentence.** Grep for the *claim* (what is true), not
+   for the wording you are deleting. Enumerate the documents that assert it and
+   fix all of them in the same commit.
+2. **Never let an amendment's scope be "the three places we remembered".** The
+   declared targets are a starting list; the grep over claim variants is the
+   real scope.
+3. **Living vs. historical is a role, not a directory.** A document that
+   describes current policy must qualify an obsolete quote in its own section;
+   only frozen artifacts earn a file-level banner.
+4. **A green gate with a documented gap is worse than a red gate.** When a
+   remediation lands, re-run it against the state that motivated it and record
+   the RED output; a fix that was never seen failing is a claim, not evidence.
+
+**Deliberately not fixed here.** `PROJECT.md`'s Validated/Active lists still
+carry items already complete (RF-01, RF-05, CA-04). That is a phase-transition
+re-baseline, not a consistency defect, and belongs to the Phase-4 transition.
+No decision was added to `resolution-record.md`: R-19 already states the
+taxonomy; only its enforcement and its copies were wrong.
 
 ---
 

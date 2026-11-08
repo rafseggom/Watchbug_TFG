@@ -28,6 +28,12 @@ const RETIRED_ABSOLUTES: Array<{ name: string; pattern: RegExp }> = [
   { name: 'DONT MAKE A BUNCH OF TESTS', pattern: /DONT MAKE A BUNCH/i },
   { name: 'no other test artefact', pattern: /no other test artefact/i },
   { name: 'unit-test suite abolished', pattern: /unit-test suite abolished/i },
+  // Added 2026-11-08. The five patterns above were written against the sentence
+  // that lived in AGENTS.md; the same claim was also present, worded differently,
+  // in two governing docs and matched none of them. A gate that only knows one
+  // phrasing of a claim does not check the claim.
+  { name: 'unit-test suites out of scope', pattern: /unit[ -]test suites? and coverage thresholds/i },
+  { name: 'e2e and property assertions only', pattern: /e2e and property assertions only/i },
 ];
 
 /** A file declares the amendment with any of these. */
@@ -49,6 +55,28 @@ const EXEMPT: Array<{ path: string; reason: string }> = [
       'The specification of the amendment itself. It must quote the retired absolute verbatim to name what it replaces, and it contains the grep pattern the gate paraphrases; marking it "predates R-19" would be false.',
   },
 ];
+
+/**
+ * Frozen history: these artifacts were written under the retired policy and
+ * quote it as evidence. They are allowed a file-level banner.
+ *
+ * Everything else is treated as a living document and must qualify a quote in
+ * the section that contains it. The list is positive on purpose — a new file
+ * defaults to the stricter rule, so nothing becomes historical by accident.
+ *
+ * `.planning/` is NOT a synonym for "historical". PROJECT.md, REQUIREMENTS.md,
+ * ROADMAP.md and CONVENTIONS.md are governing docs that happen to live there;
+ * classifying by path put the two most-drifted documents in the lenient bucket,
+ * where one marker anywhere in a 294-line file excused every contradiction
+ * below it (found 2026-11-08, see continuity-pack §12). STATE.md and WINDOWS.md
+ * stay historical: they are running journals of decisions already taken and of
+ * platform incidents, not policy.
+ */
+const HISTORICAL_DIRECTORIES = ['.planning/phases/', '.planning/quick/', '.planning/quick-batches/', '.planning/research/'];
+const HISTORICAL_FILES = new Set(['.planning/STATE.md', '.planning/WINDOWS.md']);
+
+const isHistorical = (file: string): boolean =>
+  HISTORICAL_FILES.has(file) || HISTORICAL_DIRECTORIES.some((prefix) => file.startsWith(prefix));
 
 const SCAN_ROOTS = ['AGENTS.md', 'README.md', 'package.json', '.github', 'documentation', 'scripts', '.planning'];
 const SCAN_EXTENSIONS = ['.md', '.mjs', '.ts', '.yml', '.yaml', '.json'];
@@ -102,11 +130,11 @@ for (const file of files) {
 
   // Historical planning artifacts were written under the old policy and quote
   // it in their evidence blocks; a marker anywhere in the file is accepted
-  // for them. Governing docs (AGENTS.md, documentation, scripts, .github,
-  // package.json) must qualify the absolute in its own section, so a banner
-  // cannot launder a later contradiction.
-  const fileLevelMarker =
-    slash.startsWith('.planning/') && lines.some((line) => SUPERSESSION_MARKERS.some((m) => m.test(line)));
+  // for them. Everything else — including the governing docs under .planning/ —
+  // must qualify the absolute in its own section, so a banner cannot launder a
+  // later contradiction.
+  const historicalFileMarker =
+    isHistorical(slash) && lines.some((line) => SUPERSESSION_MARKERS.some((m) => m.test(line)));
   const sectionStartAt = (index: number): number => {
     for (let at = index; at >= 0; at -= 1) {
       if (/^#{1,6}\s/.test(lines[at])) return at;
@@ -129,7 +157,7 @@ for (const file of files) {
     // the same line as an inline qualifier, or — for historical .planning
     // artifacts only — as a file-level banner before the quote.
     if (hasMarkerInSection(index) || SUPERSESSION_MARKERS.some((m) => m.test(line))) continue;
-    if (fileLevelMarker) continue;
+    if (historicalFileMarker) continue;
     violations.push({ file: slash, line: index + 1, absolute: absolute.name, text: line.trim().slice(0, 180) });
   }
 
@@ -149,12 +177,20 @@ describe('R-19 doc consistency: no document states the retired absolute unqualif
   });
 
   it('the governing documents agree with each other', () => {
-    const governing = ['AGENTS.md', 'documentation/resolution-record.md', '.planning/ROADMAP.md', '.planning/REQUIREMENTS.md'];
+    // PROJECT.md was missing from this list until 2026-11-08: the one document
+    // that contradicted R-19 was the one the "they agree" test never read.
+    const governing = [
+      'AGENTS.md',
+      'documentation/resolution-record.md',
+      '.planning/PROJECT.md',
+      '.planning/ROADMAP.md',
+      '.planning/REQUIREMENTS.md',
+    ];
     for (const file of governing) {
       const text = readFileSync(resolve(repoRoot, file), 'utf8');
       expect(text, `${file} must mention R-19`).toMatch(/R-19/);
       expect(text, `${file} must name the amendment relationship`).toMatch(
-        /R-19 (?:replaces|supersedes|amends|amends R-12)|R-19 amends R-12|amended by R-19|Superseded by R-19|R-19 replaces/i,
+        /R-19[ ,]*(?:which )?(?:amends|amending|replaces|supersedes)[^.\n]{0,10}R-12|amended by R-19|Superseded by R-19/i,
       );
     }
   });

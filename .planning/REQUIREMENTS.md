@@ -1,9 +1,10 @@
 # Requirements: Watchbug SDK
 
 **Defined:** 2026-10-05
+**Last revised:** 2026-11-08 — R-19 six-type taxonomy synced into the AC preamble, the release gate and the traceability footer.
 **Core Value:** When a bug report lands, the developer can reproduce the bug from it — and neither the report nor its screenshot ever leaves the developer's own infrastructure.
 
-**Scope source:** `documentation/mission-brief.md` RF-01…08 · `.planning/research/FEATURES.md` · `.planning/research/SUMMARY.md` · `documentation/resolution-record.md` §2 + §5 amendments.
+**Scope source:** `documentation/mission-brief.md` RF-01…08 · `.planning/research/FEATURES.md` · `.planning/research/SUMMARY.md` · `documentation/resolution-record.md` §1 register + §2 detail + §5 amendments.
 
 ## User Stories
 
@@ -16,9 +17,9 @@
 
 ## Acceptance Criteria
 
-These are the property-level invariants from `mission-brief.md` §5. Each must be demonstrated by the e2e suite (R-12) or the size gate.
+These are the property-level invariants from `mission-brief.md` §5. Each must be demonstrated in the cheapest layer that can prove it — the e2e suite (capped at ≤20 core journeys, R-19), `npm run check:size`, or the matching type of the six-type taxonomy (R-19 amends R-12).
 
-| ID | Property | Verification (amended per R-12) |
+| ID | Property | Verification (R-19 six-type taxonomy) |
 |----|----------|--------------------------------|
 | CA-01 | Every sent report validates against the single official JSON schema. `consoleLogs` mandatory for `bug`, optional for `feedback`. | Schema contract assertions against `schema/report.schema.json`, driven through the real ingest path |
 | CA-02 | Masked pixels are replaced by **flat opaque fill**, irreversibly, in the final canvas **before** Base64/PNG encoding. | e2e applies a mask, **intercepts the outgoing request**, decodes the attached image and asserts the region's original pixel values are absent from the encoded bytes |
@@ -35,7 +36,7 @@ A requirement is **Complete** when:
 3. Its security-sensitive behaviour is verified at the **artifact level** (encoded bytes, HTTP response, stored row), not at a function boundary.
 4. It is committed, and the change is reflected in `.planning/ROADMAP.md` traceability.
 
-**Release criteria:** `npm run check:size` passes · the e2e suite passes CA-01…CA-05 on all three Playwright browser projects (chromium, firefox, **webkit** — webkit covers engine-divergent rendering and the `CaptureSource`-seam capture tier; the silent WebP→PNG fallback is covered by the forced-PNG stub because this platform's WebKit encodes real WebP (A-14); firefox covers the no-`ImageCapture` path) · `docker-compose up` brings up three working services from a clean machine using only `.env.example` as a guide · no secret exists in the repository.
+**Release criteria:** `npm run test:all` passes — unit, integration, contract, VRT and packaging — **and** `npm run verify` passes the e2e journeys (R-19), with e2e covering CA-01…CA-05 on all three Playwright browser projects (chromium, firefox, **webkit** — webkit covers engine-divergent rendering and the `CaptureSource`-seam capture tier; the silent WebP→PNG fallback is covered by the forced-PNG stub because this platform's WebKit encodes real WebP (A-14); firefox covers the no-`ImageCapture` path) · `npm run check:size` passes · `docker-compose up` brings up three working services from a clean machine using only `.env.example` as a guide · no secret exists in the repository.
 
 ---
 
@@ -291,4 +292,4 @@ Which phases cover which requirements. **Updated during roadmap creation** — e
 
 ---
 *Requirements defined: 2026-10-05*
-*Last updated: 2026-10-05 after initial definition*
+*Last updated: 2026-11-08 — R-19 taxonomy synced into the AC preamble, the release gate and the footer (doc-consistency audit).*

@@ -119,7 +119,7 @@ Reserved ports are **seams only**. Never build an adapter for an out-of-scope fe
 | **RNF-02: Total Isolation** | Host CSS cannot break the widget. |
 | **RNF-03: i18n** | English + Spanish. |
 | **R-13: Masking primitive** | **Flat opaque fill (alpha 255)** is the only automatic primitive. Pixelation opt-in only at block size at least `max(8 px, 2x cap-height)`, grid-snapped. **Gaussian blur is prohibited** - it is partially invertible by deconvolution. |
-| **R-12: Verification policy** | **E2E and property assertions ONLY.** See Testing & QA below. |
+| **R-12 → R-19: Verification policy** | **Six-type taxonomy**: unit, integration, contract, VRT, packaging and e2e; e2e capped at ≤20 core journeys. R-19 amends R-12. See Testing & QA below. |
 
 ---
 
@@ -212,7 +212,7 @@ npm run dev                     # tsx watch apps/api
 
 **Convenience scripts:**
 - `npm run test` — runs unit + integration
-- `npm run test:all` — runs all six types
+- `npm run test:all` — runs unit + integration + contract + VRT + packaging; the e2e type is `npm run verify`
 
 **webkit is not optional:** it exercises engine-divergent rendering and the `CaptureSource`-seam capture tier. Firefox exercises the no-`ImageCapture` path.
 
